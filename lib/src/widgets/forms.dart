@@ -17,7 +17,7 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
-import 'package:vector_math/vector_math_64.dart';
+import 'package:pdf_plus/src/utils/vector_math/vector_math_64.dart';
 
 import '../../pdf.dart';
 import '../pdf/format/indirect.dart';

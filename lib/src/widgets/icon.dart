@@ -15,7 +15,7 @@
  */
 
 import 'package:meta/meta.dart';
-import 'package:vector_math/vector_math_64.dart';
+import 'package:pdf_plus/src/utils/vector_math/vector_math_64.dart';
 
 import '../../pdf.dart';
 import 'basic.dart';

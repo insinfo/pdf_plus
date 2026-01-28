@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.12.0
+
+- 
+
 ## 3.11.4
 
 - Improve performance of table layout [Pieter van Loon]

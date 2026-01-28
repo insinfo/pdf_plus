@@ -18,8 +18,9 @@ import 'dart:collection';
 import 'dart:math' as math;
 
 import 'package:meta/meta.dart';
-import 'package:path_parsing/path_parsing.dart';
-import 'package:vector_math/vector_math_64.dart';
+
+import 'package:pdf_plus/src/utils/path_parsing/path_parsing.dart';
+import 'package:pdf_plus/src/utils/vector_math/vector_math_64.dart';
 
 import 'color.dart';
 import 'format/array.dart';

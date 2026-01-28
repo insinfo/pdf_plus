@@ -16,7 +16,7 @@
 
 import 'dart:typed_data';
 
-import 'package:xml/xml.dart';
+import 'package:pdf_plus/src/utils/xml/xml.dart';
 
 import '../../pdf.dart';
 import '../pdf/io/event_loop_balancer.dart';

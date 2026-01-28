@@ -17,6 +17,8 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:pdf_plus/src/pdf/global_constants.dart';
+
 import '../io/event_loop_balancer.dart';
 import 'array.dart';
 import 'base.dart';
@@ -101,8 +103,6 @@ class PdfXrefTable extends PdfDataType with PdfDiagnostic {
   final objects = <PdfObjectBase>{};
 
   final int lastObjectId;
-
-  static const String libraryName = 'https://github.com/DavBfr/dart_pdf';
 
   /// Writes a block of references to the Pdf file
   void _writeBlock(PdfStream s, int firstId, List<PdfXref> block) {

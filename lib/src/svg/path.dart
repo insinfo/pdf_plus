@@ -16,7 +16,7 @@
 
 import 'dart:math' as math;
 
-import 'package:xml/xml.dart';
+import 'package:pdf_plus/src/utils/xml/xml.dart';
 
 import '../../pdf.dart';
 import 'brush.dart';

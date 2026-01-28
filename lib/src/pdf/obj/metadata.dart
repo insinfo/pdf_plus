@@ -17,7 +17,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:xml/xml.dart';
+import 'package:pdf_plus/src/utils/xml/xml.dart';
 
 import '../document.dart';
 import '../format/dict_stream.dart';

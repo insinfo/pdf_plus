@@ -18,8 +18,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:image/image.dart' as im;
-import 'package:vector_math/vector_math_64.dart';
-import 'package:xml/xml.dart';
+import 'package:pdf_plus/src/utils/vector_math/vector_math_64.dart';
+import 'package:pdf_plus/src/utils/xml/xml.dart';
 
 import '../../pdf.dart';
 import 'brush.dart';

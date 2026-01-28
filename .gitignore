@@ -10,8 +10,7 @@ pubspec.lock
 # If you don't generate documentation locally you can remove this line.
 doc/api/
 
-*.pdf
-*.ttf
+
 .DS_Store
 .dart_tool/
 
@@ -57,3 +56,9 @@ package.json
 GeneratedPluginRegistrant.*
 test/social_preview.png
 test/fonts.json
+
+
+test/tmp/
+
+# *.pdf
+# *.ttf

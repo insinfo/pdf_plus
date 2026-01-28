@@ -164,7 +164,8 @@ class PdfColor {
 
   /// Create a copy of this color with different values
   PdfColor withValues(double? alpha, double? red, double? green, double? blue) {
-    return PdfColor(red ?? this.red, green ?? this.green, blue ?? this.blue, alpha ?? this.alpha);
+    return PdfColor(red ?? this.red, green ?? this.green, blue ?? this.blue,
+        alpha ?? this.alpha);
   }
 
   /// Get the int32 representation of this color

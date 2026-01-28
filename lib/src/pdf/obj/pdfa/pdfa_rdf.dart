@@ -1,4 +1,4 @@
-import 'package:xml/xml.dart';
+import 'package:pdf_plus/src/utils/xml/xml.dart';
 
 import 'pdfa_date_format.dart';
 

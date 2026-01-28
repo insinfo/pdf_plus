@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-export 'package:barcode/barcode.dart';
+export 'package:pdf_plus/src/utils/barcode/barcode.dart';
 
 export 'src/widgets/annotations.dart';
 export 'src/widgets/barcode.dart';

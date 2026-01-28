@@ -14,10 +14,12 @@
  * limitations under the License.
  */
 
+import 'package:pdf_plus/src/pdf/global_constants.dart';
+
 import '../document.dart';
 import '../format/dict.dart';
 import '../format/string.dart';
-import '../format/xref.dart';
+
 import 'object.dart';
 
 /// Information object
@@ -40,10 +42,9 @@ class PdfInfo extends PdfObject<PdfDict> {
             if (subject != null) '/Subject': PdfString.fromString(subject),
             if (keywords != null) '/Keywords': PdfString.fromString(keywords),
             if (producer != null)
-              '/Producer': PdfString.fromString(
-                  '$producer (${PdfXrefTable.libraryName})')
+              '/Producer': PdfString.fromString('$producer (${libraryName})')
             else
-              '/Producer': PdfString.fromString(PdfXrefTable.libraryName),
+              '/Producer': PdfString.fromString(libraryName),
             '/CreationDate': PdfString.fromDate(DateTime.now()),
           }),
         );

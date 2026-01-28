@@ -1,4 +1,4 @@
-import 'package:bidi/bidi.dart' as bidi;
+import 'package:pdf_plus/src/utils/bidi/export.dart' as bidi;
 /*
  * Copyright (C) 2017, David PHAM-VAN <dev.nfet.net@gmail.com>
  *
