@@ -2,7 +2,8 @@
 
 ## 3.12.0
 
-- 
+- Reduce dependencies.
+- Target Dart ^3.6.0.
 
 ## 3.11.4
 
