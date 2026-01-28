@@ -18,7 +18,7 @@ class MatchesGoldenString extends Matcher {
 
   @override
   bool matches(dynamic item, Map<dynamic, dynamic> matchState) {
-    final goldenFile = File('test/goldens/$name');
+    final goldenFile = File('test/barcode/goldens/$name');
     if (_updateGoldenFlag) {
       final directory = goldenFile.parent;
       if (!directory.existsSync()) {
