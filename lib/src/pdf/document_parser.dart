@@ -18,14 +18,45 @@ import 'dart:typed_data';
 
 import 'document.dart';
 import 'format/object_base.dart';
+import 'io/pdf_random_access_reader.dart';
+import 'io/pdf_random_access_reader_cache.dart';
 
 /// Base class for loading an existing PDF document.
 abstract class PdfDocumentParserBase {
   /// Create a Document loader instance
-  PdfDocumentParserBase(this.bytes);
+  PdfDocumentParserBase(
+    PdfRandomAccessReader reader, {
+    bool enableCache = true,
+    int cacheBlockSize = 256 * 1024,
+    int cacheMaxBlocks = 32,
+  }) : reader = enableCache
+            ? PdfCachedRandomAccessReader(
+                reader,
+                blockSize: cacheBlockSize,
+                maxBlocks: cacheMaxBlocks,
+              )
+            : reader;
+
+  /// Create a Document loader instance from bytes
+  PdfDocumentParserBase.fromBytes(
+    Uint8List bytes, {
+    bool enableCache = true,
+    int cacheBlockSize = 256 * 1024,
+    int cacheMaxBlocks = 32,
+  }) : reader = enableCache
+            ? PdfCachedRandomAccessReader(
+                PdfMemoryRandomAccessReader(bytes),
+                blockSize: cacheBlockSize,
+                maxBlocks: cacheMaxBlocks,
+              )
+            : PdfMemoryRandomAccessReader(bytes);
+
+  /// Random access reader
+  final PdfRandomAccessReader reader;
 
   /// The existing PDF document content
-  final Uint8List bytes;
+  Uint8List get bytes => _cachedBytes ??= reader.readAll();
+  Uint8List? _cachedBytes;
 
   /// The objects size of the existing PDF document
   int get size;

@@ -59,6 +59,11 @@ test/fonts.json
 
 
 test/tmp/
+insinfo_dart_pdf/
+insinfo_dart_pdf
+referencias/
+tmp/
 
+tool/pdf_info.exe
 # *.pdf
 # *.ttf
