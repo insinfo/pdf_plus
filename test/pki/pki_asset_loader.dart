@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:asn1lib/asn1lib.dart';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:pdf_plus/signing.dart' as pdf;
+import 'package:pdf_plus/src/pki/pki_jks_utils.dart';
 
 class AssetTrustedRootsProvider implements pdf.TrustedRootsProvider {
   AssetTrustedRootsProvider(this._roots);
@@ -38,10 +39,14 @@ class TruststoreAssetsLoader {
 
   List<Uint8List> _loadRootsFromFile(File file) {
     final path = file.path.toLowerCase();
+    final bytes = file.readAsBytesSync();
     if (path.endsWith('.bks')) {
       return <Uint8List>[];
     }
-    final bytes = file.readAsBytesSync();
+    if (path.endsWith('.jks')) {
+      final result = parseJksCertificates(bytes, password: '12345678');
+      return result.certificates;
+    }
     if (_looksLikePem(bytes)) {
       final pemText = utf8.decode(bytes, allowMalformed: true);
       final parsed = _pemBlocksToDer(pemText);

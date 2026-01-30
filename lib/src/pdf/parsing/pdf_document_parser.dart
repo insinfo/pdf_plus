@@ -3217,8 +3217,9 @@ List<PdfSignatureFieldInfo> _extractSignatureFieldsFromBytes(Uint8List bytes) {
   for (final range in ranges) {
     final gapStart = range[0] + range[1];
     final gapEnd = range[2];
-    final windowStart = gapStart - 4096 >= 0 ? gapStart - 4096 : 0;
-    final windowEnd = gapEnd + 4096 <= bytes.length ? gapEnd + 4096 : bytes.length;
+    const windowSize = 524288;
+    final windowStart = gapStart - windowSize >= 0 ? gapStart - windowSize : 0;
+    final windowEnd = gapEnd + windowSize <= bytes.length ? gapEnd + windowSize : bytes.length;
     final window = bytes.sublist(windowStart, windowEnd);
 
     final fieldName = _scanPdfStringValue(window, const <int>[

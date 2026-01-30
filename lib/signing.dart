@@ -6,6 +6,7 @@ export 'src/pdf/signing/pdf_rsa_signer.dart';
 export 'src/pdf/signing/pem_utils.dart';
 export 'src/pdf/validation/pdf_signature_validator.dart';
 export 'src/pdf/validation/pdf_iti_report.dart';
+export 'src/pdf/validation/pdf_lpa.dart';
 export 'src/pdf/validation/pdf_ltv_service.dart';
 export 'src/pdf/validation/pdf_dss.dart';
 

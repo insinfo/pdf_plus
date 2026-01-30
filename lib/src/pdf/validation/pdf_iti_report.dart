@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart' as crypto;
 
 import 'pdf_signature_validator.dart';
+import 'pdf_lpa.dart';
 
 class PdfItiComplianceMetadata {
   PdfItiComplianceMetadata({
@@ -81,6 +82,18 @@ class PdfItiComplianceReport {
   final PdfItiPolicyInfo? policyInfo;
   final PdfItiLpaInfo? lpaInfo;
 
+  static List<PdfItiSignatureReport> _buildSignatureReports(
+    List<PdfSignatureInfoReport> infos,
+    PdfLpa? lpa,
+  ) {
+    return infos.map((sig) {
+      final oid = sig.signaturePolicyOid;
+      final policy = oid != null && lpa != null ? lpa.findPolicy(oid) : null;
+      final label = policy != null ? _policyFileName(policy) : null;
+      return PdfItiSignatureReport.fromInfo(sig, policyLabel: label);
+    }).toList();
+  }
+
   factory PdfItiComplianceReport.fromValidation({
     required Uint8List pdfBytes,
     required PdfSignatureValidationReport validationReport,
@@ -89,12 +102,57 @@ class PdfItiComplianceReport {
     String fileType = 'PDF',
     PdfItiPolicyInfo? policyInfo,
     PdfItiLpaInfo? lpaInfo,
+    PdfLpa? lpa,
+    String? lpaName,
+    bool? lpaOnline,
+    bool? paOnline,
   }) {
     final hash = crypto.sha256.convert(pdfBytes).toString();
-    final signatures = validationReport.signatures
-        .map((sig) => PdfItiSignatureReport.fromInfo(sig))
-        .toList();
+    final signatures = _buildSignatureReports(validationReport.signatures, lpa);
     final anchored = signatures.where((s) => s.chainTrusted == true).length;
+
+    PdfItiPolicyInfo? computedPolicy = policyInfo;
+    PdfItiLpaInfo? computedLpa = lpaInfo;
+    if (computedPolicy == null || computedLpa == null) {
+      final policyOid = validationReport.signatures
+          .map((s) => s.signaturePolicyOid)
+          .firstWhere((oid) => oid != null && oid.isNotEmpty, orElse: () => null);
+      final policy = policyOid != null && lpa != null ? lpa.findPolicy(policyOid) : null;
+      final now = DateTime.now();
+      if (computedPolicy == null) {
+        final validInLpa = policy != null;
+        final revoked = policy?.revocationDate != null;
+        final notBefore = policy?.notBefore;
+        final notAfter = policy?.notAfter;
+        final inPeriod = notBefore != null && notAfter != null
+            ? (now.isAfter(notBefore) || now.isAtSameMomentAs(notBefore)) &&
+                (now.isBefore(notAfter) || now.isAtSameMomentAs(notAfter))
+            : null;
+        final paValid = validInLpa && revoked == false && (inPeriod ?? true);
+        final paExpired = notAfter != null ? now.isAfter(notAfter) : null;
+        computedPolicy = PdfItiPolicyInfo(
+          paValid: validInLpa ? paValid : null,
+          paValidFrom: notBefore,
+          paValidTo: notAfter,
+          paExpired: validInLpa ? paExpired : null,
+          paValidInLpa: validInLpa ? true : null,
+          paOnline: paOnline,
+          paOidLabel: policy != null ? _policyLabel(policy) : null,
+        );
+      }
+      if (computedLpa == null) {
+        final nextUpdate = lpa?.nextUpdate;
+        final valid = nextUpdate != null ? !now.isAfter(nextUpdate) : null;
+        computedLpa = PdfItiLpaInfo(
+          lpaValid: valid,
+          nextIssue: nextUpdate,
+          lpaExpired: nextUpdate != null ? now.isAfter(nextUpdate) : null,
+          lpaName: lpaName,
+          lpaOnline: lpaOnline,
+          lpaVersion: lpa?.version?.toString(),
+        );
+      }
+    }
 
     return PdfItiComplianceReport(
       metadata: metadata,
@@ -104,8 +162,8 @@ class PdfItiComplianceReport {
       signatureCount: signatures.length,
       anchoredSignatureCount: anchored,
       signatures: signatures,
-      policyInfo: policyInfo,
-      lpaInfo: lpaInfo,
+      policyInfo: computedPolicy,
+      lpaInfo: computedLpa,
     );
   }
 
@@ -300,7 +358,10 @@ class PdfItiSignatureReport {
   final List<PdfItiAttributeReport> optionalAttributes;
   final bool? chainTrusted;
 
-  factory PdfItiSignatureReport.fromInfo(PdfSignatureInfoReport info) {
+  factory PdfItiSignatureReport.fromInfo(
+    PdfSignatureInfoReport info, {
+    String? policyLabel,
+  }) {
     final signerCert = info.signerCertificate;
     final signerName =
         signerCert?.subject ?? info.signatureField?.name ?? 'Não informado';
@@ -335,7 +396,7 @@ class PdfItiSignatureReport {
     final signingTime = _formatDateTimeBrt(info.signingTime) ??
         (info.signatureField?.signingTimeRaw ?? 'Não informado');
 
-    final signaturePolicy = info.signaturePolicyOid ?? 'Não informado';
+    final signaturePolicy = policyLabel ?? info.signaturePolicyOid ?? 'Não informado';
 
     final requiredAttrsOk =
         info.signedAttrsReport?.missingRequiredOids.isEmpty == true &&
@@ -460,6 +521,21 @@ String _oidToAttributeName(String oid) {
     '1.2.840.113549.1.9.16.2.47': 'IdAaSigningCertificateV2',
   };
   return names[oid] ?? oid;
+}
+
+String _policyLabel(PdfLpaPolicyInfo policy) {
+  final uri = policy.policyUri.trim();
+  if (uri.isEmpty) return policy.policyOid;
+  final name = uri.split('/').last;
+  if (name.isEmpty) return policy.policyOid;
+  return '$name (${policy.policyOid})';
+}
+
+String _policyFileName(PdfLpaPolicyInfo policy) {
+  final uri = policy.policyUri.trim();
+  if (uri.isEmpty) return policy.policyOid;
+  final name = uri.split('/').last;
+  return name.isEmpty ? policy.policyOid : name;
 }
 
 String _formatBool(bool? value) {

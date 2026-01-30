@@ -368,13 +368,22 @@ class PdfSignatureValidator {
         continue;
       }
 
-      final certInfos =
+        final certInfos =
           includeCertificates ? _extractCertificatesInfo(contents) : null;
       final signerCertInfo =
           includeCertificates ? _extractSignerCertificateInfo(contents) : null;
 
       cmsValid = _verifyCmsSignature(contents);
       signingTime = _extractSigningTimeFromCms(contents);
+      if (signingTime == null && fieldInfo?.signingTimeRaw != null) {
+        signingTime = _parsePdfDate(fieldInfo!.signingTimeRaw!);
+      }
+      if (signingTime == null) {
+        final raw = _scanSigningTimeNearByteRange(pdfBytes, range);
+        if (raw != null) {
+          signingTime = _parsePdfDate(raw);
+        }
+      }
       signaturePolicyOid = _extractSignaturePolicyOid(contents);
       signedAttrsOids = _extractSignedAttrsOids(contents);
       signedAttrsReport = _buildSignedAttrsReport(signedAttrsOids);
@@ -388,12 +397,17 @@ class PdfSignatureValidator {
         message = 'Atributo messageDigest não encontrado no CMS.';
       }
 
+      _ChainResult? chainResult;
       if (roots.isNotEmpty) {
-        certValid = await _verifySignerCertTrustedWithAia(
+        chainResult = await _buildCertificateChainFromCms(
           cmsBytes: contents,
           roots: roots,
           fetcher: certificateFetcher,
         );
+        certValid = chainResult.trusted;
+        if (includeCertificates && certInfos != null) {
+          _mergeCertificateInfos(certInfos, chainResult.chain);
+        }
       }
 
       final chainTrusted = certValid;
@@ -516,83 +530,238 @@ List<Uint8List> _pemBlocksToDer(String pem, String label) {
   return out;
 }
 
-bool _verifySignerCertTrusted(Uint8List cmsBytes, List<Uint8List> roots) {
-  try {
-    final signerCertDer = _extractSignerCertDer(cmsBytes);
-    if (signerCertDer == null) return false;
-
-    final signerTbs = _readTbsCertificate(signerCertDer);
-    if (signerTbs == null) return false;
-    final signerIssuer = signerTbs.issuer;
-
-    for (final root in roots) {
-      final rootTbs = _readTbsCertificate(root);
-      if (rootTbs == null) continue;
-      if (!_listEquals(signerIssuer, rootTbs.subject)) {
-        continue;
+void _mergeCertificateInfos(
+  List<PdfSignatureCertificateInfo> infos,
+  List<Uint8List> chain,
+) {
+  for (final cert in chain) {
+    final info = _parseCertificateInfo(cert);
+    if (info == null) continue;
+    final exists = infos.any((existing) {
+      if (existing.serial != null && info.serial != null) {
+        return existing.serial == info.serial &&
+            existing.issuer == info.issuer &&
+            existing.subject == info.subject;
       }
-      final rootKey = _rsaPublicKeyFromCert(root);
-      if (rootKey == null) continue;
-      if (_verifyX509Signature(signerCertDer, rootKey)) {
-        return true;
-      }
+      return existing.subject == info.subject && existing.issuer == info.issuer;
+    });
+    if (!exists) {
+      infos.add(info);
     }
-    return false;
-  } catch (_) {
-    return false;
   }
 }
 
-Future<bool> _verifySignerCertTrustedWithAia({
+Future<_ChainResult> _buildCertificateChainFromCms({
   required Uint8List cmsBytes,
   required List<Uint8List> roots,
   PdfCertificateFetcher? fetcher,
 }) async {
-  if (_verifySignerCertTrusted(cmsBytes, roots)) return true;
-  if (fetcher == null) return false;
-
-  final signerCertDer = _extractSignerCertDer(cmsBytes);
-  if (signerCertDer == null) return false;
-  final signerTbs = _readTbsCertificate(signerCertDer);
-  if (signerTbs == null) return false;
-
-  final aiaUrls = _extractAiaCaIssuersUrls(signerCertDer);
-  if (aiaUrls.isEmpty) return false;
-
-  final fetchedCerts = <Uint8List>[];
-  for (final url in aiaUrls) {
-    try {
-      final bytes = await fetcher.fetchBytes(url);
-      if (bytes == null || bytes.isEmpty) continue;
-      fetchedCerts.addAll(_extractCertificatesFromBytes(bytes));
-    } catch (_) {}
+  final parsed = _parseCmsSignerInfoAndCert(cmsBytes);
+  if (parsed == null || parsed.certs.isEmpty || parsed.signerInfo == null) {
+    return _ChainResult(trusted: false, chain: const <Uint8List>[]);
   }
 
-  if (fetchedCerts.isEmpty) return false;
+  final signerId = _parseSignerIdentifier(parsed.signerInfo!);
+  final signerCert = _findSignerCert(parsed.certs, signerId);
+  if (signerCert == null) {
+    return _ChainResult(trusted: false, chain: const <Uint8List>[]);
+  }
 
-  for (final intermediate in fetchedCerts) {
-    final interTbs = _readTbsCertificate(intermediate);
-    if (interTbs == null) continue;
-    if (!_listEquals(signerTbs.issuer, interTbs.subject)) continue;
+  final pool = <Uint8List>[...parsed.certs, ...roots];
+  final fetched = <Uint8List>[];
+  final chain = <Uint8List>[signerCert];
 
-    final interKey = _rsaPublicKeyFromCert(intermediate);
-    if (interKey == null) continue;
-    if (!_verifyX509Signature(signerCertDer, interKey)) continue;
+  Uint8List current = signerCert;
+  for (int depth = 0; depth < 10; depth++) {
+    final tbs = _readTbsCertificate(current);
+    if (tbs == null) break;
 
-    // Validate intermediate against roots.
+    if (_nameEquals(tbs.issuer, tbs.subject)) {
+      if (_isTrustedAnchor(current, roots)) {
+        return _ChainResult(trusted: true, chain: chain);
+      }
+      final selfKey = _rsaPublicKeyFromCert(current);
+      if (selfKey != null && _verifyX509Signature(current, selfKey)) {
+        if (_isTrustedAnchor(current, roots)) {
+          return _ChainResult(trusted: true, chain: chain);
+        }
+      }
+    }
+
     for (final root in roots) {
       final rootTbs = _readTbsCertificate(root);
       if (rootTbs == null) continue;
-      if (!_listEquals(interTbs.issuer, rootTbs.subject)) continue;
+      if (!_nameEquals(tbs.issuer, rootTbs.subject)) continue;
       final rootKey = _rsaPublicKeyFromCert(root);
       if (rootKey == null) continue;
-      if (_verifyX509Signature(intermediate, rootKey)) {
+      if (_verifyX509Signature(current, rootKey)) {
+        if (!_containsCert(chain, root)) {
+          chain.add(root);
+        }
+        return _ChainResult(trusted: true, chain: chain);
+      }
+    }
+
+    final authorityKeyId = _readAuthorityKeyIdentifier(current);
+    final issuer = _findIssuerInPool(
+      pool,
+      tbs.issuer,
+      exclude: current,
+      authorityKeyId: authorityKeyId,
+    );
+    if (issuer != null) {
+      final issuerKey = _rsaPublicKeyFromCert(issuer);
+      if (issuerKey != null && _verifyX509Signature(current, issuerKey)) {
+        if (!_containsCert(chain, issuer)) {
+          chain.add(issuer);
+        }
+        current = issuer;
+        continue;
+      }
+      if (_isTrustedAnchor(issuer, roots)) {
+        if (!_containsCert(chain, issuer)) {
+          chain.add(issuer);
+        }
+        return _ChainResult(trusted: true, chain: chain);
+      }
+    }
+
+    if (fetcher != null) {
+      final aiaUrls = _extractAiaCaIssuersUrls(current);
+      var added = false;
+      for (final url in aiaUrls) {
+        try {
+          final bytes = await fetcher.fetchBytes(url);
+          if (bytes == null || bytes.isEmpty) continue;
+          for (final cert in _extractCertificatesFromBytes(bytes)) {
+            if (_containsCert(pool, cert)) continue;
+            pool.add(cert);
+            fetched.add(cert);
+            added = true;
+          }
+        } catch (_) {}
+      }
+      if (added) continue;
+    }
+
+    break;
+  }
+
+  final trusted =
+      chain.any((cert) => _isTrustedAnchor(cert, roots)) || _chainHasSelfSigned(chain);
+  return _ChainResult(trusted: trusted, chain: chain);
+}
+
+bool _chainHasSelfSigned(List<Uint8List> chain) {
+  for (final cert in chain) {
+    final tbs = _readTbsCertificate(cert);
+    if (tbs == null) continue;
+    if (_nameEquals(tbs.subject, tbs.issuer)) return true;
+  }
+  return false;
+}
+
+bool _containsCert(List<Uint8List> list, Uint8List cert) {
+  for (final existing in list) {
+    if (_listEquals(existing, cert)) return true;
+  }
+  return false;
+}
+
+bool _isTrustedAnchor(Uint8List cert, List<Uint8List> roots) {
+  if (_containsCert(roots, cert)) return true;
+  final tbs = _readTbsCertificate(cert);
+  final certSubjectText = _parseCertificateInfo(cert)?.subject;
+  for (final root in roots) {
+    final rootTbs = _readTbsCertificate(root);
+    if (tbs != null && rootTbs != null) {
+      if (_nameEquals(tbs.subject, rootTbs.subject)) return true;
+    }
+    if (certSubjectText != null) {
+      final rootSubjectText = _parseCertificateInfo(root)?.subject;
+      if (rootSubjectText != null && rootSubjectText == certSubjectText) {
         return true;
       }
     }
   }
-
   return false;
+}
+
+Uint8List? _findIssuerInPool(
+  List<Uint8List> pool,
+  Uint8List issuerName, {
+  Uint8List? exclude,
+  Uint8List? authorityKeyId,
+}) {
+  final issuerNameText = _formatX509NameFromDer(issuerName);
+  final issuerNameNormalized = _normalizeX509NameFromDer(issuerName);
+  for (final cert in pool) {
+    if (exclude != null && _listEquals(cert, exclude)) continue;
+    final tbs = _readTbsCertificate(cert);
+    if (tbs != null) {
+      if (_nameEquals(tbs.subject, issuerName)) return cert;
+      if (issuerNameNormalized != null) {
+        final subjectNormalized = _normalizeX509NameFromDer(tbs.subject);
+        if (subjectNormalized != null && subjectNormalized == issuerNameNormalized) {
+          return cert;
+        }
+      }
+      if (authorityKeyId != null) {
+        final subjectKeyId = _readSubjectKeyIdentifier(cert);
+        if (subjectKeyId != null && _listEquals(subjectKeyId, authorityKeyId)) {
+          return cert;
+        }
+      }
+      continue;
+    }
+    if (issuerNameText != null) {
+      final info = _parseCertificateInfo(cert);
+      if (info?.subject == issuerNameText) return cert;
+    }
+  }
+  return null;
+}
+
+bool _nameEquals(Uint8List a, Uint8List b) {
+  if (_listEquals(a, b)) return true;
+  final aName = _formatX509NameFromDer(a);
+  final bName = _formatX509NameFromDer(b);
+  if (aName == null || bName == null) return false;
+  if (aName == bName) return true;
+  final aNorm = _normalizeX509NameFromDer(a);
+  final bNorm = _normalizeX509NameFromDer(b);
+  if (aNorm == null || bNorm == null) return false;
+  if (aNorm == bNorm) return true;
+  return _nameIsSubset(a, b) || _nameIsSubset(b, a);
+}
+
+String? _formatX509NameFromDer(Uint8List nameDer) {
+  try {
+    final obj = ASN1Parser(nameDer).nextObject();
+    final seq = obj is ASN1Sequence ? obj : _asAsn1Sequence(obj);
+    if (seq == null) return null;
+    return _formatX509Name(seq);
+  } catch (_) {
+    return null;
+  }
+}
+
+String? _normalizeX509NameFromDer(Uint8List nameDer) {
+  try {
+    final obj = ASN1Parser(nameDer).nextObject();
+    final seq = obj is ASN1Sequence ? obj : _asAsn1Sequence(obj);
+    if (seq == null) return null;
+    return _normalizeX509Name(seq);
+  } catch (_) {
+    return null;
+  }
+}
+
+class _ChainResult {
+  const _ChainResult({required this.trusted, required this.chain});
+
+  final bool trusted;
+  final List<Uint8List> chain;
 }
 
 Uint8List? _extractSignerCertDer(Uint8List cmsBytes) {
@@ -682,6 +851,8 @@ bool _verifyX509Signature(Uint8List certDer, RSAPublicKey key) {
     if (certSeq == null || certSeq.elements.length < 3) return false;
     final tbs = _asAsn1Sequence(certSeq.elements[0]);
     if (tbs == null) return false;
+    final sigAlgOid = _readCertSignatureAlgorithmOid(certSeq.elements[1]);
+    final digestOid = _signatureOidToDigestOid(sigAlgOid);
     final sigBitString = certSeq.elements[2] as ASN1BitString;
 
     var sigBytes = sigBitString.valueBytes();
@@ -689,8 +860,10 @@ bool _verifyX509Signature(Uint8List certDer, RSAPublicKey key) {
       sigBytes = sigBytes.sublist(1);
     }
 
-    final digest = crypto.sha256.convert(tbs.encodedBytes).bytes;
-    final digestInfo = _buildDigestInfoSha256(Uint8List.fromList(digest));
+    final digest = _digestForOid(tbs.encodedBytes, digestOid);
+    if (digest == null) return false;
+    final digestInfo = _buildDigestInfoForDigest(digest, digestOid);
+    if (digestInfo == null) return false;
 
     final engine = PKCS1Encoding(RSAEngine())
       ..init(false, PublicKeyParameter<RSAPublicKey>(key));
@@ -698,6 +871,29 @@ bool _verifyX509Signature(Uint8List certDer, RSAPublicKey key) {
     return _listEquals(decrypted, digestInfo);
   } catch (_) {
     return false;
+  }
+}
+
+String? _readCertSignatureAlgorithmOid(ASN1Object obj) {
+  final seq = obj is ASN1Sequence ? obj : _asAsn1Sequence(obj);
+  if (seq == null || seq.elements.isEmpty) return null;
+  final first = seq.elements.first;
+  if (first is ASN1ObjectIdentifier) return _oidToString(first);
+  return null;
+}
+
+String? _signatureOidToDigestOid(String? signatureOid) {
+  switch (signatureOid) {
+    case '1.2.840.113549.1.1.5':
+      return '1.3.14.3.2.26'; // sha1
+    case '1.2.840.113549.1.1.11':
+      return '2.16.840.1.101.3.4.2.1'; // sha256
+    case '1.2.840.113549.1.1.12':
+      return '2.16.840.1.101.3.4.2.2'; // sha384
+    case '1.2.840.113549.1.1.13':
+      return '2.16.840.1.101.3.4.2.3'; // sha512
+    default:
+      return '2.16.840.1.101.3.4.2.1';
   }
 }
 
@@ -1499,12 +1695,118 @@ String _formatX509Name(ASN1Sequence nameSeq) {
       if (oidObj is! ASN1ObjectIdentifier) continue;
       final oid = _oidToString(oidObj) ?? '';
       final key = _oidShortName(oid);
-      final val = _asn1ValueToString(valObj);
+      final val = _asn1ValueToString(valObj).trim();
       if (val.isEmpty) continue;
       parts.add('${key.isEmpty ? oid : key}=$val');
     }
   }
   return parts.join(', ');
+}
+
+String _normalizeX509Name(ASN1Sequence nameSeq) {
+  final parts = <String>[];
+  for (final rdn in nameSeq.elements) {
+    if (rdn is! ASN1Set) continue;
+    for (final atv in rdn.elements) {
+      if (atv is! ASN1Sequence || atv.elements.length < 2) continue;
+      final oidObj = atv.elements[0];
+      final valObj = atv.elements[1];
+      if (oidObj is! ASN1ObjectIdentifier) continue;
+      final oid = _oidToString(oidObj) ?? '';
+      final key = (_oidShortName(oid).isEmpty ? oid : _oidShortName(oid))
+          .toUpperCase();
+      final rawVal = _asn1ValueToString(valObj).trim().toLowerCase();
+      if (rawVal.isEmpty) continue;
+      parts.add('$key=$rawVal');
+    }
+  }
+  parts.sort();
+  return parts.join(';');
+}
+
+bool _nameIsSubset(Uint8List subjectDer, Uint8List issuerDer) {
+  final subjectAttrs = _extractNameAttributesFromDer(subjectDer);
+  final issuerAttrs = _extractNameAttributesFromDer(issuerDer);
+  if (subjectAttrs == null || issuerAttrs == null) return false;
+  for (final entry in issuerAttrs.entries) {
+    final subjectValues = subjectAttrs[entry.key];
+    if (subjectValues == null || subjectValues.isEmpty) return false;
+    final issuerValues = entry.value;
+    var matched = false;
+    for (final value in issuerValues) {
+      if (subjectValues.contains(value)) {
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) return false;
+  }
+  return true;
+}
+
+Map<String, List<String>>? _extractNameAttributesFromDer(Uint8List nameDer) {
+  try {
+    final obj = ASN1Parser(nameDer).nextObject();
+    final seq = obj is ASN1Sequence ? obj : _asAsn1Sequence(obj);
+    if (seq == null) return null;
+    return _extractNameAttributes(seq);
+  } catch (_) {
+    return null;
+  }
+}
+
+Map<String, List<String>> _extractNameAttributes(ASN1Sequence nameSeq) {
+  final map = <String, List<String>>{};
+  for (final rdn in nameSeq.elements) {
+    if (rdn is! ASN1Set) continue;
+    for (final atv in rdn.elements) {
+      if (atv is! ASN1Sequence || atv.elements.length < 2) continue;
+      final oidObj = atv.elements[0];
+      final valObj = atv.elements[1];
+      if (oidObj is! ASN1ObjectIdentifier) continue;
+      final oid = _oidToString(oidObj) ?? '';
+      final value = _asn1ValueToString(valObj).trim().toLowerCase();
+      if (oid.isEmpty || value.isEmpty) continue;
+      map.putIfAbsent(oid, () => <String>[]).add(value);
+    }
+  }
+  return map;
+}
+
+Uint8List? _readSubjectKeyIdentifier(Uint8List certDer) {
+  const oidSki = '2.5.29.14';
+  final extBytes = _findExtensionValue(certDer, oidSki);
+  if (extBytes == null || extBytes.isEmpty) return null;
+  try {
+    final obj = ASN1Parser(extBytes).nextObject();
+    if (obj is ASN1OctetString) return obj.valueBytes();
+    final bytes = _readTaggedValueBytes(obj);
+    if (bytes != null && bytes.isNotEmpty) return bytes;
+  } catch (_) {}
+  return null;
+}
+
+Uint8List? _readAuthorityKeyIdentifier(Uint8List certDer) {
+  const oidAki = '2.5.29.35';
+  final extBytes = _findExtensionValue(certDer, oidAki);
+  if (extBytes == null || extBytes.isEmpty) return null;
+  try {
+    final obj = ASN1Parser(extBytes).nextObject();
+    final seq = obj is ASN1Sequence ? obj : _asAsn1Sequence(obj);
+    if (seq == null) return null;
+    for (final el in seq.elements) {
+      final tag = _readTagNumber(el);
+      if (tag == 0) {
+        final unwrapped = _unwrapTagged(el);
+        if (unwrapped is ASN1OctetString) return unwrapped.valueBytes();
+        if (unwrapped is ASN1Object) {
+          final bytes = _readTaggedValueBytes(unwrapped);
+          if (bytes != null && bytes.isNotEmpty) return bytes;
+        }
+      }
+    }
+  } catch (_) {}
+  return null;
 }
 
 String _asn1ValueToString(ASN1Object obj) {
@@ -1832,6 +2134,31 @@ Uint8List _buildDigestInfoSha512(Uint8List digest) {
   return seq.encodedBytes;
 }
 
+Uint8List _buildDigestInfoSha384(Uint8List digest) {
+  final algId = ASN1Sequence()
+    ..add(ASN1ObjectIdentifier.fromComponentString('2.16.840.1.101.3.4.2.2'))
+    ..add(ASN1Null());
+  final digestOctet = ASN1OctetString(digest);
+  final seq = ASN1Sequence()
+    ..add(algId)
+    ..add(digestOctet);
+  return seq.encodedBytes;
+}
+
+Uint8List? _buildDigestInfoForDigest(Uint8List digest, String? oid) {
+  switch (oid) {
+    case '1.3.14.3.2.26':
+      return _buildDigestInfoSha1(digest);
+    case '2.16.840.1.101.3.4.2.2':
+      return _buildDigestInfoSha384(digest);
+    case '2.16.840.1.101.3.4.2.3':
+      return _buildDigestInfoSha512(digest);
+    case '2.16.840.1.101.3.4.2.1':
+    default:
+      return _buildDigestInfoSha256(digest);
+  }
+}
+
 class _SignerInfoParsed {
   _SignerInfoParsed({
     required this.signedAttrsTagged,
@@ -2079,6 +2406,69 @@ Uint8List _encodeLength(int length) {
 }
 
 String _byteRangeKey(List<int> range) => range.join(',');
+
+DateTime? _parsePdfDate(String raw) {
+  var text = raw.trim();
+  if (text.isEmpty) return null;
+  if (text.startsWith('D:')) {
+    text = text.substring(2);
+  }
+  final digits = RegExp(r'^\d{4,14}').firstMatch(text)?.group(0) ?? '';
+  if (digits.length < 4) return null;
+  final year = int.parse(digits.substring(0, 4));
+  final month = digits.length >= 6 ? int.parse(digits.substring(4, 6)) : 1;
+  final day = digits.length >= 8 ? int.parse(digits.substring(6, 8)) : 1;
+  final hour = digits.length >= 10 ? int.parse(digits.substring(8, 10)) : 0;
+  final minute = digits.length >= 12 ? int.parse(digits.substring(10, 12)) : 0;
+  final second = digits.length >= 14 ? int.parse(digits.substring(12, 14)) : 0;
+
+  var offsetSign = 0;
+  var offsetHours = 0;
+  var offsetMinutes = 0;
+  final tzMatch = RegExp(r'([+\-Z])').firstMatch(text.substring(digits.length));
+  if (tzMatch != null) {
+    final tz = tzMatch.group(1);
+    if (tz == 'Z') {
+      offsetSign = 0;
+    } else if (tz == '+' || tz == '-') {
+      offsetSign = tz == '+' ? 1 : -1;
+      final rest = text.substring(digits.length + 1);
+      final hh = RegExp(r'\d{2}').firstMatch(rest)?.group(0);
+      if (hh != null) offsetHours = int.parse(hh);
+      final mm = RegExp(r"'?(\d{2})'?").allMatches(rest).map((m) => m.group(1)).toList();
+      if (mm.length > 1 && mm[1] != null) {
+        offsetMinutes = int.parse(mm[1]!);
+      } else if (mm.isNotEmpty && mm.first != null) {
+        offsetMinutes = int.parse(mm.first!);
+      }
+    }
+  }
+
+  final utc = DateTime.utc(year, month, day, hour, minute, second);
+  if (offsetSign == 0) return utc;
+  final offset = Duration(hours: offsetHours, minutes: offsetMinutes);
+  return utc.subtract(offsetSign > 0 ? offset : -offset);
+}
+
+String? _scanSigningTimeNearByteRange(Uint8List pdfBytes, List<int> range) {
+  if (range.length < 4) return null;
+  final gapStart = range[0] + range[1];
+  final gapEnd = range[2];
+  const windowSize = 524288;
+  final windowStart = gapStart - windowSize >= 0 ? gapStart - windowSize : 0;
+  final windowEnd = gapEnd + windowSize <= pdfBytes.length
+      ? gapEnd + windowSize
+      : pdfBytes.length;
+  if (windowStart >= windowEnd) return null;
+  final window = pdfBytes.sublist(windowStart, windowEnd);
+  try {
+    final text = latin1.decode(window, allowInvalid: true);
+    final match = RegExp(r'/M\s*\(([^)]*)\)').firstMatch(text);
+    return match?.group(1);
+  } catch (_) {
+    return null;
+  }
+}
 
 ASN1Object? _unwrapTagged(ASN1Object obj) {
   final tag = _readTagNumber(obj);
