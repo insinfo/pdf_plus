@@ -31,6 +31,11 @@ class PdfRect {
     return PdfRect(left, bottom, right - left, top - bottom);
   }
 
+  factory PdfRect.fromLTWH(
+      double left, double top, double width, double height) {
+    return PdfRect(left, top, width, height);
+  }
+
   factory PdfRect.fromPoints(PdfPoint offset, PdfPoint size) {
     return PdfRect(offset.x, offset.y, size.x, size.y);
   }

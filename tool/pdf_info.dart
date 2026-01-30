@@ -21,6 +21,8 @@ void main(List<String> args) {
 
   final reader = PdfRandomAccessFileReader.openSync(file);
   final parser = PdfDocumentParser.fromReader(reader);
+  
+  // Extrai as informações usando o parser otimizado
   final info = parser.extractInfo();
 
   stdout.writeln('$path:');
@@ -83,15 +85,18 @@ String _escapeInfo(String value) {
       .replaceAll(')', '\\)');
 }
 
+/// Formata números removendo zeros decimais desnecessários.
+/// Ex: 10.00 -> 10, 10.50 -> 10.5, 10.55 -> 10.55
 String _fmtNum(num value) {
   if (value is int) return value.toString();
   if (value is double) {
-    var s = value.toStringAsFixed(2);
-    if (s.contains('.')) {
-      s = s.replaceFirst(RegExp(r'(\.\d*?[1-9])0+$'), r'$1');
-      s = s.replaceFirst(RegExp(r'\.0+$'), '');
-    }
-    return s;
+    // 1. Converte para fixo com 2 casas
+    // 2. Remove zeros finais e ponto decimal opcional se sobrar
+    // Regex r'\.?0+$':
+    //   \.? : Ponto opcional
+    //   0+  : Um ou mais zeros
+    //   $   : No final da string
+    return value.toStringAsFixed(2).replaceFirst(RegExp(r'\.?0+$'), '');
   }
   return value.toString();
 }

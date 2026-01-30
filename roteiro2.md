@@ -22,6 +22,57 @@ Measure-Command -Expression { dart .\tool\pdf_info.dart '.\tmp\14_34074_Vol 5.pd
 
 Measure-Command -Expression { .\tool\pdf_info.exe '.\tmp\14_34074_Vol 5.pdf'}
 
+mutool info .\test\assets\pdfs\itext_2_1_3_bad_startxref.pdf 
+mutool info .\test\assets\pdfs\itext_2_1_3_missing_eof.pdf   
+mutool info .\test\assets\pdfs\itext_2_1_3_truncated.pdf  
+
+
+faltando
+
+API de extração de campos de assinatura (nome do campo, /Reason, /Location, /M, /Name, /SubFilter, /ByteRange)
+API de edição (listar/remover/renomear campos de assinatura, adicionar campo vazio)
+Extração avançada de dados ICP‑Brasil (CPF/CNPJ por OIDs 2.16.76.1.3.x já interpretados)
+Suporte a PDFs sem certs embutidos (buscar cadeia via AIA ou truststore local)
+
+Completar “extract signature fields” com /Reason, /Location, /Name vindo de objetos do formulário (quando o xref é válido)
+Extrair e expor “SignatureDictionary”/SignedAttrs obrigatórios/​opcionais como no relatório ITI
+Suporte AIA para cadeia quando o CMS não embute certs (buscar .p7b/.cer)
+
+sim implemente Completar “extract signature fields” com /Reason, /Location, /Name vindo de objetos do formulário (quando o xref é válido)
+Extrair e expor “SignatureDictionary”/SignedAttrs obrigatórios/​opcionais como no relatório ITI
+(isso tem que implementar de uma maneira que fique agnostico de dart:io para não dart problem  ao compilar para dart web) Suporte AIA para cadeia quando o CMS não embute certs (buscar .p7b/.cer)
+
+## Status recente (performance)
+
+* `pdf_info.exe` está no mesmo patamar do `mutool` no PDF de referência.
+* Otimizações de parser foram encerradas; foco agora volta para o roteiro (assinatura/edição).
+
+## Substituição do dart_pdf (pendências)
+
+### Assinatura externa / fluxo A3
+* `PdfExternalSigning.preparePdf` (placeholder + ByteRange + hash) ✅
+* `PdfExternalSigning.embedSignature` (inserção PKCS#7) ✅
+* `PdfSignatureConfig` (metadata + DocMDP) ✅
+* `PdfQuickInfo` (versão + DocMDP + assinaturas) ✅
+* `PdfCmsSigner.signDetachedSha256RsaFromPem` (helper compatível) ✅
+* `PdfUriAnnotation` (alias para links) ✅
+* `PdfRect.fromLTWH` e `PdfSize` (compatibilidade de layout) ✅
+
+### Validação (mínimo para DocMDP)
+* `PdfSignatureValidationReport` com `docMdp.permissionP` ✅
+* `TrustedRootsProvider` (API compatível) ✅
+* Verificação criptográfica do CMS (RSA SHA-256) ✅
+* Cadeia: validação direta com raiz confiável (RSA) ✅
+* OCSP/CRL (revogação real via provider) ✅
+
+### LTV / DSS
+* Inserção de DSS/OCSP/CRL em modo incremental ✅
+
+### Aparência e edição
+* Aparência de assinatura customizável via callback ✅
+* Remoção de páginas e atualização de /Info ✅
+* Inserir páginas, carimbo de texto/imagem, links/URIs ⏳
+
 Foco na robustez e na correção
 Reduzindo dependências
 a ideia é eliminar na medida do possivel dependecia de 

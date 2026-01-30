@@ -30,3 +30,16 @@ class PdfPoint {
   PdfPoint translate(double offsetX, double offsetY) =>
       PdfPoint(x + offsetX, y + offsetY);
 }
+
+@immutable
+class PdfSize {
+  const PdfSize(this.width, this.height);
+
+  final double width;
+  final double height;
+
+  PdfPoint toPoint() => PdfPoint(width, height);
+
+  @override
+  String toString() => 'PdfSize($width, $height)';
+}

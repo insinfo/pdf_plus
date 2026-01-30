@@ -175,6 +175,37 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     );
   }
 
+  /// Extrai informações de campos de assinatura (/FT /Sig).
+  List<PdfSignatureFieldInfo> extractSignatureFields() {
+    try {
+      _ensureXrefParsed();
+      final trailer = _trailerInfo ?? _readTrailerInfoFromReader(reader, xrefOffset);
+      final rootObjId = trailer.rootObj;
+      if (rootObjId == null) return const <PdfSignatureFieldInfo>[];
+
+      final rootObj = _getObjectNoStream(rootObjId) ?? _getObject(rootObjId);
+      if (rootObj == null || rootObj.value is! _PdfDictToken) {
+        return const <PdfSignatureFieldInfo>[];
+      }
+      final rootDict = rootObj.value as _PdfDictToken;
+      final acroForm = _resolveDictFromValueNoStream(rootDict.values['/AcroForm']);
+      if (acroForm == null) return const <PdfSignatureFieldInfo>[];
+
+      final fieldsVal = acroForm.values['/Fields'];
+      final fields = _resolveArrayFromValue(fieldsVal);
+      if (fields == null) return const <PdfSignatureFieldInfo>[];
+
+      final out = <PdfSignatureFieldInfo>[];
+      final visited = <int>{};
+      for (final item in fields.values) {
+        _collectSignatureFields(item, out, visited);
+      }
+      return out;
+    } catch (_) {
+      return _extractSignatureFieldsFromBytes(reader.readAll());
+    }
+  }
+
   List<_PdfRef> _collectPageRefs(
     _PdfRef rootRef, {
     int? maxPages,
@@ -237,6 +268,90 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     final obj = _getObjectNoStream(ref.obj) ?? _getObject(ref.obj);
     if (obj == null || obj.value is! _PdfDictToken) return null;
     return obj.value as _PdfDictToken;
+  }
+
+  _PdfArrayToken? _resolveArrayFromValue(dynamic value) {
+    if (value is _PdfArrayToken) return value;
+    final ref = _asRef(value);
+    if (ref == null) return null;
+    final obj = _getObjectNoStream(ref.obj) ?? _getObject(ref.obj);
+    if (obj == null || obj.value is! _PdfArrayToken) return null;
+    return obj.value as _PdfArrayToken;
+  }
+
+  void _collectSignatureFields(
+    dynamic value,
+    List<PdfSignatureFieldInfo> out,
+    Set<int> visited, {
+    String? inheritedName,
+  }) {
+    if (value is _PdfRef) {
+      if (!visited.add(value.obj)) return;
+      final obj = _getObjectNoStream(value.obj) ?? _getObject(value.obj);
+      if (obj == null || obj.value is! _PdfDictToken) return;
+      _collectSignatureFields(
+        obj.value,
+        out,
+        visited,
+        inheritedName: inheritedName,
+      );
+      return;
+    }
+
+    if (value is! _PdfDictToken) return;
+    final dict = value;
+
+    final ownName = _asString(dict.values['/T']);
+    final resolvedName = ownName ?? inheritedName;
+
+    final kidsVal = dict.values['/Kids'];
+    final kids = _resolveArrayFromValue(kidsVal);
+    if (kids != null) {
+      for (final kid in kids.values) {
+        _collectSignatureFields(
+          kid,
+          out,
+          visited,
+          inheritedName: resolvedName,
+        );
+      }
+    }
+
+    final fieldType = _asName(dict.values['/FT']);
+    final fieldName = resolvedName;
+
+    dynamic sigVal = dict.values['/V'];
+    if (sigVal is _PdfRef) {
+      final sigObj = _getObjectNoStream(sigVal.obj) ?? _getObject(sigVal.obj);
+      sigVal = sigObj?.value;
+    }
+
+    if (sigVal is! _PdfDictToken) {
+      if (fieldType != '/Sig') return;
+      out.add(PdfSignatureFieldInfo(fieldName: fieldName));
+      return;
+    }
+
+    if (fieldType != '/Sig' && _asName(sigVal.values['/Type']) != '/Sig') {
+      return;
+    }
+
+    final reason = _asString(sigVal.values['/Reason']) ?? _asString(dict.values['/Reason']);
+    final location = _asString(sigVal.values['/Location']) ?? _asString(dict.values['/Location']);
+    final name = _asString(sigVal.values['/Name']) ?? _asString(dict.values['/Name']);
+    final signingTime = _asString(sigVal.values['/M']) ?? _asString(dict.values['/M']);
+    final subFilter = _asName(sigVal.values['/SubFilter']);
+    final byteRange = _asIntArray(sigVal.values['/ByteRange']);
+
+    out.add(PdfSignatureFieldInfo(
+      fieldName: fieldName,
+      reason: reason,
+      location: location,
+      name: name,
+      signingTimeRaw: signingTime,
+      subFilter: subFilter,
+      byteRange: byteRange,
+    ));
   }
 
   String? _asFilterName(dynamic value) {
@@ -307,6 +422,32 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     if (value is bool) return value ? 'true' : 'false';
     if (value is _PdfRef) return '${value.obj} ${value.gen} R';
     return value.toString();
+  }
+
+  String? _asString(dynamic value) {
+    if (value is _PdfStringToken) return _decodePdfString(value.bytes);
+    if (value is _PdfNameToken) return value.value;
+    if (value is int || value is double || value is bool) {
+      return value.toString();
+    }
+    if (value is _PdfRef) return '${value.obj} ${value.gen} R';
+    return null;
+  }
+
+  List<int>? _asIntArray(dynamic value) {
+    final resolved = _resolveValueNoStream(value);
+    if (resolved is _PdfArrayToken) {
+      final nums = <int>[];
+      for (final v in resolved.values) {
+        if (v is int) {
+          nums.add(v);
+        } else if (v is double) {
+          nums.add(v.toInt());
+        }
+      }
+      if (nums.isNotEmpty) return nums;
+    }
+    return null;
   }
 
   @override
@@ -1668,16 +1809,18 @@ int _repairXrefByScanFromReader(
   while (offset < len) {
     final windowSize = (offset + chunkSize > len) ? (len - offset) : chunkSize;
     final window = reader.readRange(offset, windowSize);
+    final bytes = window;
+    final end = bytes.length;
     int i = 0;
     bool jumped = false;
 
-    while (i < window.length) {
-      i = _skipPdfWsAndComments(window, i, window.length);
-      if (i >= window.length) break;
+    while (i < end) {
+      i = _skipPdfWsAndComments(bytes, i, end);
+      if (i >= end) break;
 
-      final b = window[i];
+      final b = bytes[i];
       if (b >= 0x30 && b <= 0x39) {
-        final res = _readIntFast(window, i, window.length);
+        final res = _readIntFast(bytes, i, end);
         if (res.value == -1) {
           i++;
           continue;
@@ -1689,9 +1832,9 @@ int _repairXrefByScanFromReader(
         lastIntPosAbs = offset + i;
         i = res.nextIndex;
 
-        final j = _skipPdfWsAndComments(window, i, window.length);
-        if (j < window.length &&
-            _matchToken(window, j, const <int>[0x6F, 0x62, 0x6A])) {
+        final j = _skipPdfWsAndComments(bytes, i, end);
+        if (j < end &&
+          _matchToken(bytes, j, const <int>[0x6F, 0x62, 0x6A])) {
           if (prevInt != null && prevIntPosAbs != null) {
             final objId = prevInt;
             final gen = lastInt;
@@ -1707,7 +1850,7 @@ int _repairXrefByScanFromReader(
             }
 
             final dictInfo = _scanObjectDictAndSkipStreamFromWindow(
-              window,
+              bytes,
               j + 3,
               offset,
               len,
@@ -1737,8 +1880,8 @@ int _repairXrefByScanFromReader(
               if (skipAbs != null && skipAbs > offset && skipAbs <= len) {
                 offset = skipAbs;
               } else {
-                offset = (offset + window.length <= len)
-                    ? (offset + window.length)
+                offset = (offset + end <= len)
+                  ? (offset + end)
                     : len;
               }
 
@@ -2935,6 +3078,278 @@ int _hexValue(int b) {
   return 0;
 }
 
+class PdfQuickInfo {
+  PdfQuickInfo._({
+    required this.isPdf15OrAbove,
+    required this.hasSignatures,
+    required this.docMdpPermissionP,
+  });
+
+  final bool isPdf15OrAbove;
+  final bool hasSignatures;
+  final int? docMdpPermissionP;
+
+  static PdfQuickInfo fromBytes(Uint8List bytes) {
+    final version = _readPdfVersion(bytes);
+    final isPdf15OrAbove = version >= 1.5;
+    final hasSignatures = _findByteRangeToken(bytes) != -1;
+
+    int? permissionP;
+    try {
+      final parser = PdfDocumentParser(bytes);
+      permissionP = _extractDocMdpPermission(parser);
+    } catch (_) {
+      permissionP = null;
+    }
+    permissionP ??= _extractDocMdpPermissionFromBytes(bytes);
+
+    return PdfQuickInfo._(
+      isPdf15OrAbove: isPdf15OrAbove,
+      hasSignatures: hasSignatures,
+      docMdpPermissionP: permissionP,
+    );
+  }
+}
+
+double _readPdfVersion(Uint8List bytes) {
+  const token = <int>[0x25, 0x50, 0x44, 0x46, 0x2D]; // %PDF-
+  final limit = bytes.length > 1024 ? 1024 : bytes.length;
+  final pos = _indexOfSequence(bytes, token, 0, limit);
+  if (pos == -1 || pos + 8 > limit) return 1.4;
+
+  final major = bytes[pos + 5];
+  final dot = bytes[pos + 6];
+  final minor = bytes[pos + 7];
+  if (dot != 0x2E /* . */) return 1.4;
+  if (major < 0x30 || major > 0x39) return 1.4;
+  if (minor < 0x30 || minor > 0x39) return 1.4;
+  final majorVal = major - 0x30;
+  final minorVal = minor - 0x30;
+  return majorVal + (minorVal / 10.0);
+}
+
+int _findByteRangeToken(Uint8List bytes) {
+  const token = <int>[
+    0x2F, // /
+    0x42, 0x79, 0x74, 0x65, 0x52, 0x61, 0x6E, 0x67, 0x65, // ByteRange
+  ];
+  return _indexOfSequence(bytes, token, 0, bytes.length);
+}
+
+int? _extractDocMdpPermission(PdfDocumentParser parser) {
+  parser._ensureXrefParsed();
+  final trailer =
+      parser._trailerInfo ?? _readTrailerInfoFromReader(parser.reader, parser.xrefOffset);
+  final rootObjId = trailer.rootObj;
+  if (rootObjId == null) return null;
+
+  final rootObj = parser._getObjectNoStream(rootObjId) ?? parser._getObject(rootObjId);
+  if (rootObj == null || rootObj.value is! _PdfDictToken) return null;
+  final rootDict = rootObj.value as _PdfDictToken;
+
+  final permsDict = parser._resolveDictFromValueNoStream(rootDict.values['/Perms']);
+  if (permsDict == null) return null;
+
+  dynamic docMdpVal = permsDict.values['/DocMDP'];
+  if (docMdpVal is _PdfRef) {
+    final docObj = parser._getObjectNoStream(docMdpVal.obj) ?? parser._getObject(docMdpVal.obj);
+    docMdpVal = docObj?.value;
+  }
+  if (docMdpVal is! _PdfDictToken) return null;
+
+  final refVal = docMdpVal.values['/Reference'];
+  if (refVal is! _PdfArrayToken) return null;
+
+  for (final item in refVal.values) {
+    dynamic refItem = item;
+    if (refItem is _PdfRef) {
+      final refObj = parser._getObjectNoStream(refItem.obj) ?? parser._getObject(refItem.obj);
+      refItem = refObj?.value;
+    }
+    if (refItem is! _PdfDictToken) continue;
+    dynamic tp = refItem.values['/TransformParams'];
+    if (tp is _PdfRef) {
+      final tpObj = parser._getObjectNoStream(tp.obj) ?? parser._getObject(tp.obj);
+      tp = tpObj?.value;
+    }
+    if (tp is! _PdfDictToken) continue;
+    final p = _asInt(tp.values['/P']);
+    if (p != null) return p;
+  }
+
+  return null;
+}
+
+int? _extractDocMdpPermissionFromBytes(Uint8List bytes) {
+  const docMdpToken = <int>[
+    0x2F, // /
+    0x44, 0x6F, 0x63, 0x4D, 0x44, 0x50, // DocMDP
+  ];
+  const pToken = <int>[0x2F, 0x50]; // /P
+
+  int offset = 0;
+  while (offset < bytes.length) {
+    final pos = _indexOfSequence(bytes, docMdpToken, offset, bytes.length);
+    if (pos == -1) break;
+    final windowStart = pos;
+    final windowEnd = (pos + 4096 < bytes.length) ? (pos + 4096) : bytes.length;
+    final pPos = _indexOfSequence(bytes, pToken, windowStart, windowEnd);
+    if (pPos != -1) {
+      try {
+        int i = pPos + pToken.length;
+        i = _skipPdfWsAndComments(bytes, i, windowEnd);
+        final parsed = _readInt(bytes, i, windowEnd);
+        if (parsed.value >= 1 && parsed.value <= 3) {
+          return parsed.value;
+        }
+      } catch (_) {}
+    }
+    offset = pos + docMdpToken.length;
+  }
+  return null;
+}
+
+List<PdfSignatureFieldInfo> _extractSignatureFieldsFromBytes(Uint8List bytes) {
+  final ranges = _findAllByteRangesFromBytes(bytes);
+  if (ranges.isEmpty) return const <PdfSignatureFieldInfo>[];
+
+  final out = <PdfSignatureFieldInfo>[];
+  for (final range in ranges) {
+    final gapStart = range[0] + range[1];
+    final gapEnd = range[2];
+    final windowStart = gapStart - 4096 >= 0 ? gapStart - 4096 : 0;
+    final windowEnd = gapEnd + 4096 <= bytes.length ? gapEnd + 4096 : bytes.length;
+    final window = bytes.sublist(windowStart, windowEnd);
+
+    final fieldName = _scanPdfStringValue(window, const <int>[
+      0x2F, 0x54 // /T
+    ]);
+    final reason = _scanPdfStringValue(window, const <int>[
+      0x2F, 0x52, 0x65, 0x61, 0x73, 0x6F, 0x6E // /Reason
+    ]);
+    final location = _scanPdfStringValue(window, const <int>[
+      0x2F, 0x4C, 0x6F, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E // /Location
+    ]);
+    final name = _scanPdfStringValue(window, const <int>[
+      0x2F, 0x4E, 0x61, 0x6D, 0x65 // /Name
+    ]);
+    final signingTime = _scanPdfStringValue(window, const <int>[
+      0x2F, 0x4D // /M
+    ]);
+    final subFilter = _scanPdfNameValue(window, const <int>[
+      0x2F, 0x53, 0x75, 0x62, 0x46, 0x69, 0x6C, 0x74, 0x65, 0x72 // /SubFilter
+    ]);
+
+    out.add(PdfSignatureFieldInfo(
+      fieldName: fieldName,
+      reason: reason,
+      location: location,
+      name: name,
+      signingTimeRaw: signingTime,
+      subFilter: subFilter,
+      byteRange: range,
+    ));
+  }
+  return out;
+}
+
+List<List<int>> _findAllByteRangesFromBytes(Uint8List bytes) {
+  const token = <int>[
+    0x2F, 0x42, 0x79, 0x74, 0x65, 0x52, 0x61, 0x6E, 0x67, 0x65
+  ];
+  final out = <List<int>>[];
+  var offset = 0;
+  while (offset < bytes.length) {
+    final pos = _indexOfSequence(bytes, token, offset, bytes.length);
+    if (pos == -1) break;
+    var i = _skipPdfWsAndComments(bytes, pos + token.length, bytes.length);
+    if (i >= bytes.length || bytes[i] != 0x5B) {
+      offset = pos + token.length;
+      continue;
+    }
+    i++;
+    final nums = <int>[];
+    while (i < bytes.length && nums.length < 4) {
+      i = _skipPdfWsAndComments(bytes, i, bytes.length);
+      if (i >= bytes.length) break;
+      if (bytes[i] == 0x5D) {
+        i++;
+        break;
+      }
+      try {
+        final parsed = _readInt(bytes, i, bytes.length);
+        nums.add(parsed.value);
+        i = parsed.nextIndex;
+      } catch (_) {
+        i++;
+      }
+    }
+    if (nums.length == 4) {
+      out.add(nums);
+    }
+    offset = pos + token.length;
+  }
+  return out;
+}
+
+String? _scanPdfStringValue(Uint8List bytes, List<int> key) {
+  final pos = _indexOfSequence(bytes, key, 0, bytes.length);
+  if (pos == -1) return null;
+  var i = _skipPdfWsAndComments(bytes, pos + key.length, bytes.length);
+  if (i >= bytes.length) return null;
+  if (bytes[i] == 0x28) {
+    final parsed = _readLiteralString(bytes, i, bytes.length);
+    return _decodePdfString(parsed.bytes);
+  }
+  if (bytes[i] == 0x3C) {
+    try {
+      final hex = _readHexString(bytes, i, bytes.length);
+      return _decodePdfString(hex.bytes);
+    } catch (_) {
+      return null;
+    }
+  }
+  if (bytes[i] == 0x2F) {
+    i++;
+    final start = i;
+    while (i < bytes.length &&
+        !_isWhitespace(bytes[i]) &&
+        bytes[i] != 0x2F &&
+        bytes[i] != 0x3E &&
+        bytes[i] != 0x3C &&
+        bytes[i] != 0x28 &&
+        bytes[i] != 0x29 &&
+        bytes[i] != 0x5B &&
+        bytes[i] != 0x5D) {
+      i++;
+    }
+    return String.fromCharCodes(bytes.sublist(start, i));
+  }
+  return null;
+}
+
+String? _scanPdfNameValue(Uint8List bytes, List<int> key) {
+  final pos = _indexOfSequence(bytes, key, 0, bytes.length);
+  if (pos == -1) return null;
+  var i = _skipPdfWsAndComments(bytes, pos + key.length, bytes.length);
+  if (i >= bytes.length || bytes[i] != 0x2F) return null;
+  i++;
+  final start = i;
+  while (i < bytes.length &&
+      !_isWhitespace(bytes[i]) &&
+      bytes[i] != 0x2F &&
+      bytes[i] != 0x3E &&
+      bytes[i] != 0x3C &&
+      bytes[i] != 0x28 &&
+      bytes[i] != 0x29 &&
+      bytes[i] != 0x5B &&
+      bytes[i] != 0x5D) {
+    i++;
+  }
+  if (i <= start) return null;
+  return '/' + String.fromCharCodes(bytes.sublist(start, i));
+}
+
 int _maxObjectId(Uint8List bytes) {
   var maxId = 0;
   var i = 0;
@@ -3079,6 +3494,12 @@ int _indexOfSequenceBmh(
 }
 
 int _skipPdfWsAndComments(Uint8List bytes, int i, int end) {
+  if (i < end) {
+    final b = bytes[i];
+    if (!_isWhitespace(b) && b != 0x25) {
+      return i;
+    }
+  }
   while (i < end) {
     final b = bytes[i];
     if (_isWhitespace(b)) {

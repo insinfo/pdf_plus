@@ -123,8 +123,10 @@ class PdfCatalog extends PdfObject<PdfDict> {
           '/DocMDP': pdfDocument.sign!.ref(),
         });
       }
+    }
 
-      final dss = PdfDict();
+    final dss = PdfDict();
+    if (pdfDocument.sign != null) {
       if (pdfDocument.sign!.crl.isNotEmpty) {
         dss['/CRLs'] = PdfArray.fromObjects(pdfDocument.sign!.crl);
       }
@@ -134,10 +136,22 @@ class PdfCatalog extends PdfObject<PdfDict> {
       if (pdfDocument.sign!.ocsp.isNotEmpty) {
         dss['/OCSPs'] = PdfArray.fromObjects(pdfDocument.sign!.ocsp);
       }
+    }
 
-      if (dss.values.isNotEmpty) {
-        params['/DSS'] = dss;
+    if (pdfDocument.dss != null) {
+      if (pdfDocument.dss!.crl.isNotEmpty) {
+        dss['/CRLs'] = PdfArray.fromObjects(pdfDocument.dss!.crl);
       }
+      if (pdfDocument.dss!.cert.isNotEmpty) {
+        dss['/Certs'] = PdfArray.fromObjects(pdfDocument.dss!.cert);
+      }
+      if (pdfDocument.dss!.ocsp.isNotEmpty) {
+        dss['/OCSPs'] = PdfArray.fromObjects(pdfDocument.dss!.ocsp);
+      }
+    }
+
+    if (dss.values.isNotEmpty) {
+      params['/DSS'] = dss;
     }
 
     final widgets = <PdfAnnot>[];

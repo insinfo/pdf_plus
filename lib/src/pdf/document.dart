@@ -41,6 +41,7 @@ import 'obj/page.dart';
 import 'obj/page_label.dart';
 import 'obj/page_list.dart';
 import 'obj/signature.dart';
+import 'validation/pdf_dss.dart';
 
 /// Display hint for the PDF viewer
 enum PdfPageMode {
@@ -128,8 +129,13 @@ class PdfDocument {
 
   /// This is the info object. Although this is an optional object, we
   /// include it.
+  PdfInfo? _info;
+
   @Deprecated('This can safely be removed.')
-  PdfInfo? info;
+  PdfInfo? get info => _info;
+
+  @Deprecated('This can safely be removed.')
+  set info(PdfInfo? value) => _info = value;
 
   /// This is the Pages object, which is required by each Pdf Document
   PdfPageList get pdfPageList => catalog.pdfPageList;
@@ -155,6 +161,9 @@ class PdfDocument {
 
   /// Object used to sign the document
   PdfSignature? sign;
+
+  /// DSS data (LTV)
+  PdfDssData? dss;
 
   /// Graphics state, representing only opacity.
   PdfGraphicStates? _graphicStates;
@@ -202,10 +211,47 @@ class PdfDocument {
     return catalog.outlines!;
   }
 
+  /// Atualiza os metadados (/Info) do documento.
+  void updateInfo({
+    String? title,
+    String? author,
+    String? creator,
+    String? subject,
+    String? keywords,
+    String? producer,
+  }) {
+    if (_info != null) {
+      _info!.inUse = false;
+    }
+    _info = PdfInfo(
+      this,
+      title: title,
+      author: author,
+      creator: creator,
+      subject: subject,
+      keywords: keywords,
+      producer: producer,
+    );
+  }
+
+  /// Remove uma página pelo índice (edição incremental segura).
+  void removePageAt(int index) {
+    if (index < 0 || index >= pdfPageList.pages.length) {
+      throw RangeError.index(index, pdfPageList.pages, 'index');
+    }
+    final page = pdfPageList.pages.removeAt(index);
+    page.inUse = false;
+  }
+
   /// The root page labels
   PdfPageLabels get pageLabels {
     catalog.pageLabels ??= PdfPageLabels(this);
     return catalog.pageLabels!;
+  }
+
+  /// Inicializa DSS quando necessário.
+  void ensureDss() {
+    dss ??= PdfDssData(this);
   }
 
   /// Graphic states for opacity and transfer modes
@@ -269,14 +315,23 @@ class PdfDocument {
   /// blocking when the operation runs on the main isolate.
   ///
   /// Returns a [Uint8List] containing the document data.
-  Future<Uint8List> save({bool enableEventLoopBalancing = false}) async {
-    return pdfCompute(() async {
+  Future<Uint8List> save({
+    bool enableEventLoopBalancing = false,
+    bool useIsolate = true,
+  }) async {
+    final computation = () async {
       final os = PdfStream();
       if (prev != null) {
         os.putBytes(prev!.bytes);
       }
       await _write(os, enableEventLoopBalancing: enableEventLoopBalancing);
       return os.output();
-    });
+    };
+
+    if (!useIsolate) {
+      return computation();
+    }
+
+    return pdfCompute(computation);
   }
 }

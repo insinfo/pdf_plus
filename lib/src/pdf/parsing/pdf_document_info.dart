@@ -59,3 +59,23 @@ class PdfDocumentInfo {
   final List<PdfPageMediaBoxInfo> mediaBoxes;
   final List<PdfImageInfo> images;
 }
+
+class PdfSignatureFieldInfo {
+  const PdfSignatureFieldInfo({
+    required this.fieldName,
+    this.reason,
+    this.location,
+    this.name,
+    this.signingTimeRaw,
+    this.subFilter,
+    this.byteRange,
+  });
+
+  final String? fieldName;
+  final String? reason;
+  final String? location;
+  final String? name;
+  final String? signingTimeRaw;
+  final String? subFilter;
+  final List<int>? byteRange;
+}

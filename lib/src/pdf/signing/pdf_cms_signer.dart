@@ -2,8 +2,47 @@ import 'dart:typed_data';
 
 import 'package:asn1lib/asn1lib.dart';
 import 'package:crypto/crypto.dart' as crypto;
+import 'package:pointycastle/export.dart';
+
+import 'pem_utils.dart';
 
 class PdfCmsSigner {
+  /// Helper compatível com dart_pdf: assina digest com RSA/SHA-256 usando PEM.
+  static Uint8List signDetachedSha256RsaFromPem({
+    required Uint8List contentDigest,
+    required String privateKeyPem,
+    required String certificatePem,
+    List<String> chainPem = const <String>[],
+    DateTime? signingTime,
+  }) {
+    final signerCertDer =
+        PdfPemUtils.decodeFirstPem(certificatePem, 'CERTIFICATE');
+    final extraCertsDer = <Uint8List>[];
+    for (final pem in chainPem) {
+      extraCertsDer.addAll(PdfPemUtils.decodePemBlocks(pem, 'CERTIFICATE'));
+    }
+
+    final cms = PdfCmsSigner();
+    final signedAttrsDer = cms._buildSignedAttributesDer(
+      contentDigest: contentDigest,
+      signingTime: (signingTime ?? DateTime.now().toUtc()),
+    );
+    final signedAttrsDigest = Uint8List.fromList(
+      crypto.sha256.convert(signedAttrsDer).bytes,
+    );
+
+    final key = PdfPemUtils.rsaPrivateKeyFromPem(privateKeyPem);
+    final signature = _rsaSignDigestSha256(signedAttrsDigest, key);
+
+    return cms._buildCmsSignedData(
+      contentDigest: contentDigest,
+      signerCertDer: signerCertDer,
+      extraCertsDer: extraCertsDer,
+      signedAttrsDer: signedAttrsDer,
+      signature: signature,
+    );
+  }
+
   Future<Uint8List> buildDetachedCms({
     required Uint8List contentDigest,
     required Uint8List signerCertDer,
@@ -244,4 +283,19 @@ class PdfCmsSigner {
     }
     return out;
   }
+}
+
+Uint8List _rsaSignDigestSha256(Uint8List digest, RSAPrivateKey key) {
+  final algId = ASN1Sequence()
+    ..add(ASN1ObjectIdentifier.fromComponentString('2.16.840.1.101.3.4.2.1'))
+    ..add(ASN1Null());
+  final di = ASN1Sequence()
+    ..add(algId)
+    ..add(ASN1OctetString(digest));
+  final digestInfo = di.encodedBytes;
+
+  final signer = PKCS1Encoding(RSAEngine())
+    ..init(true, PrivateKeyParameter<RSAPrivateKey>(key));
+  final sig = signer.process(digestInfo);
+  return Uint8List.fromList(sig);
 }

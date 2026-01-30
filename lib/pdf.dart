@@ -51,12 +51,8 @@ export 'src/pdf/page_format.dart';
 export 'src/pdf/point.dart';
 export 'src/pdf/raster.dart';
 export 'src/pdf/rect.dart';
-export 'src/pdf/parsing/pdf_document_parser.dart';
-export 'src/pdf/parsing/pdf_document_info.dart';
-export 'src/pdf/signing/pdf_external_signer.dart';
-export 'src/pdf/signing/pdf_cms_signer.dart';
-export 'src/pdf/signing/pdf_signature_appearance.dart';
-export 'src/pdf/signing/pdf_pades_signer.dart';
-export 'src/pdf/signing/pdf_signer.dart';
-export 'src/pdf/signing/pdf_rsa_signer.dart';
-export 'src/pdf/validation/pdf_signature_validator.dart';
+
+
+//novas APIs
+// export 'src/pdf/parsing/pdf_document_parser.dart';
+// export 'src/pdf/parsing/pdf_document_info.dart';

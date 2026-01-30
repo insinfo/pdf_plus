@@ -428,6 +428,28 @@ class PdfAnnotUrlLink extends PdfAnnotBase {
   }
 }
 
+class PdfUriAnnotation extends PdfAnnotUrlLink {
+  PdfUriAnnotation({
+    required PdfRect bounds,
+    required String uri,
+    PdfBorder? border,
+    Set<PdfAnnotFlags>? flags,
+    DateTime? date,
+    PdfColor? color,
+    String? subject,
+    String? author,
+  }) : super(
+          rect: bounds,
+          url: uri,
+          border: border,
+          flags: flags,
+          date: date,
+          color: color,
+          subject: subject,
+          author: author,
+        );
+}
+
 class PdfAnnotSquare extends PdfAnnotBase {
   /// Create an Square annotation
   PdfAnnotSquare({
