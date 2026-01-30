@@ -3,8 +3,9 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:pdf_plus/signing.dart';
 import 'package:pdf_plus/pdf.dart';
-import 'package:pdf_plus/src/pdf/parsing/pdf_document_parser.dart';
+
 import 'package:test/test.dart';
 
 void main() {

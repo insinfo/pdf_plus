@@ -20,7 +20,7 @@ void main(List<String> args) {
   }
 
   final reader = PdfRandomAccessFileReader.openSync(file);
-  final parser = PdfDocumentParser.fromReader(reader);
+  final parser = PdfDocumentParser.fromReader(reader, allowRepair: true);
   
   // Extrai as informações usando o parser otimizado
   final info = parser.extractInfo();

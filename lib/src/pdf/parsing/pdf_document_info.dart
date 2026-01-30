@@ -1,3 +1,7 @@
+import '../format/array.dart';
+import '../format/base.dart';
+import '../format/dict.dart';
+
 class PdfIndirectRef {
   const PdfIndirectRef(this.obj, this.gen);
 
@@ -67,8 +71,13 @@ class PdfSignatureFieldInfo {
     this.location,
     this.name,
     this.signingTimeRaw,
+    this.filter,
     this.subFilter,
     this.byteRange,
+    this.pageRef,
+    this.pageIndex,
+    this.rect,
+    this.signatureDictionaryPresent,
   });
 
   final String? fieldName;
@@ -76,6 +85,47 @@ class PdfSignatureFieldInfo {
   final String? location;
   final String? name;
   final String? signingTimeRaw;
+  final String? filter;
   final String? subFilter;
   final List<int>? byteRange;
+  final PdfIndirectRef? pageRef;
+  final int? pageIndex;
+  final List<double>? rect;
+  final bool? signatureDictionaryPresent;
+}
+
+class PdfSignatureFieldObjectInfo {
+  const PdfSignatureFieldObjectInfo({
+    required this.info,
+    this.fieldRef,
+    required this.fieldDict,
+    this.fieldIndex,
+    this.isDirect = false,
+    this.signatureRef,
+    this.signatureDict,
+  });
+
+  final PdfSignatureFieldInfo info;
+  final PdfIndirectRef? fieldRef;
+  final PdfDict<PdfDataType> fieldDict;
+  final int? fieldIndex;
+  final bool isDirect;
+  final PdfIndirectRef? signatureRef;
+  final PdfDict<PdfDataType>? signatureDict;
+}
+
+class PdfSignatureFieldEditContext {
+  const PdfSignatureFieldEditContext({
+    required this.fields,
+    this.acroFormRef,
+    this.acroFormDict,
+    this.fieldsRef,
+    this.fieldsArray,
+  });
+
+  final List<PdfSignatureFieldObjectInfo> fields;
+  final PdfIndirectRef? acroFormRef;
+  final PdfDict<PdfDataType>? acroFormDict;
+  final PdfIndirectRef? fieldsRef;
+  final PdfArray? fieldsArray;
 }

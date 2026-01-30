@@ -27,20 +27,14 @@ mutool info .\test\assets\pdfs\itext_2_1_3_missing_eof.pdf
 mutool info .\test\assets\pdfs\itext_2_1_3_truncated.pdf  
 
 
-faltando
+pendências (revisadas)
 
-API de extração de campos de assinatura (nome do campo, /Reason, /Location, /M, /Name, /SubFilter, /ByteRange)
-API de edição (listar/remover/renomear campos de assinatura, adicionar campo vazio)
-Extração avançada de dados ICP‑Brasil (CPF/CNPJ por OIDs 2.16.76.1.3.x já interpretados)
-Suporte a PDFs sem certs embutidos (buscar cadeia via AIA ou truststore local)
+✅ API de extração de campos de assinatura (nome do campo, /Reason, /Location, /M, /Name, /Filter, /SubFilter, /ByteRange + flag de SignatureDictionary)
+✅ API de edição (listar/remover/renomear campos de assinatura, adicionar campo vazio) — MVP com update incremental via refs
+✅ Suporte a PDFs sem certs embutidos (AIA/caIssuers) com fetcher agnóstico de IO/web
 
-Completar “extract signature fields” com /Reason, /Location, /Name vindo de objetos do formulário (quando o xref é válido)
-Extrair e expor “SignatureDictionary”/SignedAttrs obrigatórios/​opcionais como no relatório ITI
-Suporte AIA para cadeia quando o CMS não embute certs (buscar .p7b/.cer)
-
-sim implemente Completar “extract signature fields” com /Reason, /Location, /Name vindo de objetos do formulário (quando o xref é válido)
-Extrair e expor “SignatureDictionary”/SignedAttrs obrigatórios/​opcionais como no relatório ITI
-(isso tem que implementar de uma maneira que fique agnostico de dart:io para não dart problem  ao compilar para dart web) Suporte AIA para cadeia quando o CMS não embute certs (buscar .p7b/.cer)
+⏳ Extração avançada de dados ICP‑Brasil (CPF/CNPJ por OIDs 2.16.76.1.3.x já interpretados)
+⏳ Relatório ITI: refinar “SignatureDictionary” com campos obrigatórios/​opcionais por assinatura (além do flag presente)
 
 ## Status recente (performance)
 
@@ -72,6 +66,14 @@ Extrair e expor “SignatureDictionary”/SignedAttrs obrigatórios/​opcionais
 * Aparência de assinatura customizável via callback ✅
 * Remoção de páginas e atualização de /Info ✅
 * Inserir páginas, carimbo de texto/imagem, links/URIs ⏳
+* Edição de campos de assinatura (listar/remover/renomear/adicionar) ✅ (MVP)
+
+## Implementado agora (jan/2026)
+
+* `PdfDocumentParser.extractSignatureFields()` agora expõe `/Filter` e o flag de `SignatureDictionary`.
+* `PdfDocumentParser.extractSignatureFieldEditContext()` para editar campos com base em refs válidas.
+* `PdfSignatureFieldEditor` (MVP): listar, renomear, remover campos e adicionar campo vazio.
+* AIA/caIssuers já suportado com `PdfCertificateFetcher` via import condicional (IO/Web).
 
 Foco na robustez e na correção
 Reduzindo dependências

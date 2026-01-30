@@ -9,14 +9,22 @@ void main() {
     expect(file.existsSync(), isTrue, reason: 'File not found: ${file.path}');
 
     final bytes = file.readAsBytesSync();
-    final parser = PdfDocumentParser(bytes);
+    final parser = PdfDocumentParser(bytes, allowRepair: true);
     final fields = parser.extractSignatureFields();
 
     expect(fields.length, 2);
     for (final field in fields) {
       expect(field.byteRange, isNotNull);
       expect(field.byteRange!.length, 4);
+      // /Filter pode não estar presente em todos os PDFs.
       expect(field.subFilter, isNotNull);
+      expect(field.signatureDictionaryPresent, isTrue);
+      if (field.pageRef != null) {
+        expect(field.pageIndex, isNotNull);
+      }
+      if (field.rect != null) {
+        expect(field.rect!.length, 4);
+      }
     }
   });
 }

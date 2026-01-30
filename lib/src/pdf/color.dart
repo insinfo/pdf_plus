@@ -26,6 +26,17 @@ class PdfColor {
         assert(blue >= 0 && blue <= 1),
         assert(alpha >= 0 && alpha <= 1);
 
+  /// Convenience for RGB values in 0..255 (alpha in 0..255).
+  factory PdfColor.fromRgbInt(int red, int green, int blue, [int alpha = 255]) {
+    double clamp01(int v) => v.clamp(0, 255).toDouble() / 255.0;
+    return PdfColor(
+      clamp01(red),
+      clamp01(green),
+      clamp01(blue),
+      clamp01(alpha),
+    );
+  }
+
   /// Return a color with: 0xAARRGGBB
   const PdfColor.fromInt(int color)
       : red = (color >> 16 & 0xff) / 255.0,

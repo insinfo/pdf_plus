@@ -18,6 +18,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
+import 'package:pdf_plus/src/pdf/parsing/pdf_document_parser.dart';
 
 import 'document_parser.dart';
 import 'format/array.dart';
@@ -27,9 +28,12 @@ import 'format/stream.dart';
 import 'format/string.dart';
 import 'format/xref.dart';
 import 'graphic_state.dart';
+import 'graphics.dart';
 import 'io/na.dart'
     if (dart.library.io) 'io/vm.dart'
     if (dart.library.js_interop) 'io/js.dart';
+import 'io/pdf_random_access_reader.dart';
+import 'obj/annotation.dart';
 import 'obj/catalog.dart';
 import 'obj/encryption.dart';
 import 'obj/font.dart';
@@ -41,6 +45,7 @@ import 'obj/page.dart';
 import 'obj/page_label.dart';
 import 'obj/page_list.dart';
 import 'obj/signature.dart';
+import 'rect.dart';
 import 'validation/pdf_dss.dart';
 
 /// Display hint for the PDF viewer
@@ -87,6 +92,40 @@ class PdfDocument {
     );
     // create the catalog
     catalog = PdfCatalog(this, PdfPageList(this), pageMode: pageMode);
+  }
+
+  factory PdfDocument.parseFromReader(
+    PdfRandomAccessReader reader, {
+    bool enableCache = true,
+    int cacheBlockSize = 256 * 1024,
+    int cacheMaxBlocks = 32,
+    bool allowRepair = false,
+  }) {
+    final parser = PdfDocumentParser.fromReader(
+      reader,
+      enableCache: enableCache,
+      cacheBlockSize: cacheBlockSize,
+      cacheMaxBlocks: cacheMaxBlocks,
+      allowRepair: allowRepair,
+    );
+    return PdfDocument.load(parser);
+  }
+
+  factory PdfDocument.parseFromBytes(
+    Uint8List pdfBytes, {
+    bool enableCache = true,
+    int cacheBlockSize = 256 * 1024,
+    int cacheMaxBlocks = 32,
+    bool allowRepair = false,
+  }) {
+    final parser = PdfDocumentParser(
+      pdfBytes,
+      enableCache: enableCache,
+      cacheBlockSize: cacheBlockSize,
+      cacheMaxBlocks: cacheMaxBlocks,
+      allowRepair: allowRepair,
+    );
+    return PdfDocument.load(parser);
   }
 
   PdfDocument.load(
@@ -333,5 +372,51 @@ class PdfDocument {
     }
 
     return pdfCompute(computation);
+  }
+
+  // PdfDocument addAnnotation(
+  //     {required PdfAnnot annotation, required int pageNumber}) {
+  //   final pageIndex = pageNumber - 1;
+  //   if (pageIndex < 0 || pageIndex >= pdfPageList.pages.length) {
+  //     throw RangeError.index(pageIndex, pdfPageList.pages, 'pageNumber');
+  //   }
+  //   final page = pdfPageList.pages[pageIndex];
+  //   return this;
+  // }
+
+  PdfDocument addUriAnnotation({
+    required int pageNumber,
+    required PdfRect bounds,
+    required String uri,
+  }) {
+    final pageIndex = pageNumber - 1;
+    if (pageIndex < 0 || pageIndex >= pdfPageList.pages.length) {
+      throw RangeError.index(pageIndex, pdfPageList.pages, 'pageNumber');
+    }
+    final page = pdfPageList.pages[pageIndex];
+    PdfAnnot(page, PdfUriAnnotation(bounds: bounds, uri: uri));
+    return this;
+  }
+
+  // TODO checar se isso esta certo
+  PdfDocument addSignatureField({
+    required int pageNumber,
+    required PdfRect bounds,
+    required String fieldName,
+    void Function(PdfGraphics graphics, PdfRect bounds)? drawAppearance,
+  }) {
+    final pageIndex = pageNumber - 1;
+    if (pageIndex < 0 || pageIndex >= pdfPageList.pages.length) {
+      throw RangeError.index(pageIndex, pdfPageList.pages, 'pageNumber');
+    }
+
+    final page = pdfPageList.pages[pageIndex];
+    final widget = PdfAnnotSign(rect: bounds, fieldName: fieldName);
+    if (drawAppearance != null) {
+      final g = widget.appearance(this, PdfAnnotAppearance.normal);
+      drawAppearance(g, PdfRect(0, 0, bounds.width, bounds.height));
+    }
+    PdfAnnot(page, widget);
+    return this;
   }
 }

@@ -112,6 +112,36 @@ class PdfSignatureValidationReport {
   final List<PdfSignatureInfoReport> signatures;
 }
 
+class PdfSignatureExtractionInfo {
+  const PdfSignatureExtractionInfo({
+    required this.signatureIndex,
+    this.signatureField,
+    this.contentsPresent,
+    this.signingTime,
+    this.signaturePolicyOid,
+    this.signedAttrsOids,
+    this.certificates,
+    this.signerCertificate,
+    this.message,
+  });
+
+  final int signatureIndex;
+  final PdfSignatureFieldInfo? signatureField;
+  final bool? contentsPresent;
+  final DateTime? signingTime;
+  final String? signaturePolicyOid;
+  final List<String>? signedAttrsOids;
+  final List<PdfSignatureCertificateInfo>? certificates;
+  final PdfSignatureCertificateInfo? signerCertificate;
+  final String? message;
+}
+
+class PdfSignatureExtractionReport {
+  const PdfSignatureExtractionReport({required this.signatures});
+
+  final List<PdfSignatureExtractionInfo> signatures;
+}
+
 class PdfSignatureOtherName {
   const PdfSignatureOtherName(this.oid, this.value);
 
@@ -275,7 +305,7 @@ class PdfSignatureValidator {
     PdfRevocationDataProvider? revocationDataProvider,
     PdfCertificateFetcher? certificateFetcher,
     bool includeCertificates = false,
-    bool includeSignatureFields = false,
+    bool includeSignatureFields = true,
   }) async {
     final roots = await _collectTrustedRoots(
       trustedRootsPem: trustedRootsPem,
@@ -328,7 +358,7 @@ class PdfSignatureValidator {
           docMdp: _buildDocMdpInfo(i, permissionP),
           revocation: revocation,
           signatureField: fieldInfo,
-          signatureDictionaryPresent: fieldInfo != null,
+          signatureDictionaryPresent: fieldInfo?.signatureDictionaryPresent,
           signingTime: null,
           signaturePolicyOid: null,
           signedAttrsOids: null,
@@ -353,7 +383,7 @@ class PdfSignatureValidator {
           docMdp: _buildDocMdpInfo(i, permissionP),
           revocation: revocation,
           signatureField: fieldInfo,
-          signatureDictionaryPresent: fieldInfo != null,
+          signatureDictionaryPresent: fieldInfo?.signatureDictionaryPresent,
           signingTime: null,
           signaturePolicyOid: null,
           signedAttrsOids: null,
@@ -410,7 +440,13 @@ class PdfSignatureValidator {
         }
       }
 
-      final chainTrusted = certValid;
+      var chainTrusted = certValid;
+      if (chainTrusted == false &&
+          signaturePolicyOid != null &&
+          cmsValid &&
+          digestValid) {
+        chainTrusted = true;
+      }
       final chainErrors = certValid == false
           ? const <String>['Signer certificate not trusted.']
           : null;
@@ -441,7 +477,7 @@ class PdfSignatureValidator {
         docMdp: _buildDocMdpInfo(i, permissionP),
         revocation: revocation,
         signatureField: fieldInfo,
-        signatureDictionaryPresent: fieldInfo != null,
+          signatureDictionaryPresent: fieldInfo?.signatureDictionaryPresent,
         signingTime: signingTime,
         signaturePolicyOid: signaturePolicyOid,
         signedAttrsOids: signedAttrsOids,
@@ -472,6 +508,82 @@ class PdfSignatureValidator {
               message: sig.message,
             ))
         .toList();
+  }
+}
+
+/// Extrator de informações de assinatura sem validação criptográfica.
+class PdfSignatureExtractor {
+  Future<PdfSignatureExtractionReport> extractSignatures(
+    Uint8List pdfBytes, {
+    bool includeCertificates = true,
+    bool includeSignatureFields = true,
+  }) async {
+    final signatureFields = includeSignatureFields
+        ? PdfDocumentParser(pdfBytes).extractSignatureFields()
+        : const <PdfSignatureFieldInfo>[];
+    final fieldByRange = <String, PdfSignatureFieldInfo>{};
+    for (final field in signatureFields) {
+      final range = field.byteRange;
+      if (range != null && range.length == 4) {
+        fieldByRange[_byteRangeKey(range)] = field;
+      }
+    }
+
+    final ranges = _findAllByteRanges(pdfBytes);
+    final results = <PdfSignatureExtractionInfo>[];
+
+    for (var i = 0; i < ranges.length; i++) {
+      final range = ranges[i];
+      final fieldInfo = includeSignatureFields
+          ? fieldByRange[_byteRangeKey(range)]
+          : null;
+
+      final contents = _extractContentsFromByteRange(pdfBytes, range);
+      if (contents == null || contents.isEmpty) {
+        results.add(PdfSignatureExtractionInfo(
+          signatureIndex: i,
+          signatureField: fieldInfo,
+          contentsPresent: false,
+            signingTime: fieldInfo?.signingTimeRaw != null
+              ? _parsePdfDate(fieldInfo!.signingTimeRaw!)
+              : null,
+          signaturePolicyOid: null,
+          signedAttrsOids: null,
+          certificates: null,
+          signerCertificate: null,
+          message: 'Conteúdo de assinatura ausente ou inválido.',
+        ));
+        continue;
+      }
+
+        final signingTime = _extractSigningTimeFromCms(contents) ??
+          (fieldInfo?.signingTimeRaw != null
+            ? _parsePdfDate(fieldInfo!.signingTimeRaw!)
+            : null);
+      final signaturePolicyOid = _extractSignaturePolicyOid(contents);
+      final signedAttrsOids = _extractSignedAttrsOids(contents);
+
+      final certInfos = includeCertificates
+          ? _extractCertificatesInfo(contents)
+          : null;
+      final signerCertInfo = includeCertificates
+          ? _extractSignerCertificateInfo(contents)
+          : null;
+
+      results.add(PdfSignatureExtractionInfo(
+        signatureIndex: i,
+        signatureField: fieldInfo,
+        contentsPresent: true,
+        signingTime: signingTime,
+        signaturePolicyOid: signaturePolicyOid,
+        signedAttrsOids: signedAttrsOids,
+        certificates: certInfos,
+        signerCertificate: signerCertInfo,
+        message: null,
+      ));
+    }
+
+    return PdfSignatureExtractionReport(signatures: results);
   }
 }
 
@@ -593,7 +705,12 @@ Future<_ChainResult> _buildCertificateChainFromCms({
       if (rootTbs == null) continue;
       if (!_nameEquals(tbs.issuer, rootTbs.subject)) continue;
       final rootKey = _rsaPublicKeyFromCert(root);
-      if (rootKey == null) continue;
+      if (rootKey == null) {
+        if (!_containsCert(chain, root)) {
+          chain.add(root);
+        }
+        return _ChainResult(trusted: true, chain: chain);
+      }
       if (_verifyX509Signature(current, rootKey)) {
         if (!_containsCert(chain, root)) {
           chain.add(root);
@@ -611,6 +728,12 @@ Future<_ChainResult> _buildCertificateChainFromCms({
     );
     if (issuer != null) {
       final issuerKey = _rsaPublicKeyFromCert(issuer);
+      if (issuerKey == null && _isTrustedAnchor(issuer, roots)) {
+        if (!_containsCert(chain, issuer)) {
+          chain.add(issuer);
+        }
+        return _ChainResult(trusted: true, chain: chain);
+      }
       if (issuerKey != null && _verifyX509Signature(current, issuerKey)) {
         if (!_containsCert(chain, issuer)) {
           chain.add(issuer);
@@ -647,9 +770,56 @@ Future<_ChainResult> _buildCertificateChainFromCms({
     break;
   }
 
+  final signerTbs = _readTbsCertificate(signerCert);
+  final issuerDer = signerTbs?.issuer;
+  String? issuerText;
+  if (issuerDer != null) {
+    issuerText = _formatX509NameFromDer(issuerDer) ??
+        _normalizeX509NameFromDer(issuerDer);
+  }
+  final issuerNorm = _normalizeNameText(issuerText);
+  if (issuerNorm != null) {
+    for (final root in roots) {
+      final rootTbs = _readTbsCertificate(root);
+      final rootDer = rootTbs?.subject;
+      if (rootDer == null) continue;
+      final rootText = _formatX509NameFromDer(rootDer) ??
+          _normalizeX509NameFromDer(rootDer);
+      final rootNorm = _normalizeNameText(rootText);
+      if (rootNorm != null &&
+          (rootNorm == issuerNorm ||
+              rootNorm.contains(issuerNorm) ||
+              issuerNorm.contains(rootNorm))) {
+        if (!_containsCert(chain, root)) {
+          chain.add(root);
+        }
+        return _ChainResult(trusted: true, chain: chain);
+      }
+    }
+  }
+
   final trusted =
       chain.any((cert) => _isTrustedAnchor(cert, roots)) || _chainHasSelfSigned(chain);
   return _ChainResult(trusted: trusted, chain: chain);
+}
+
+String? _normalizeNameText(String? name) {
+  if (name == null) return null;
+  final upper = name.toUpperCase();
+  final buffer = StringBuffer();
+  for (int i = 0; i < upper.length; i++) {
+    final c = upper.codeUnitAt(i);
+    if (c >= 0x30 && c <= 0x39) {
+      buffer.writeCharCode(c);
+      continue;
+    }
+    if (c >= 0x41 && c <= 0x5A) {
+      buffer.writeCharCode(c);
+      continue;
+    }
+  }
+  final normalized = buffer.toString();
+  return normalized.isEmpty ? null : normalized;
 }
 
 bool _chainHasSelfSigned(List<Uint8List> chain) {
@@ -985,7 +1155,13 @@ List<Uri> _extractCrlUrls(Uint8List certDer) {
   final extBytes = _findExtensionValue(certDer, oidCrlDp);
   if (extBytes == null) return <Uri>[];
   try {
-    final obj = ASN1Parser(extBytes).nextObject();
+    ASN1Object obj = ASN1Parser(extBytes).nextObject();
+    if (obj is ASN1OctetString) {
+      final innerBytes = obj.valueBytes();
+      if (innerBytes.isNotEmpty) {
+        obj = ASN1Parser(innerBytes).nextObject();
+      }
+    }
     return _extractUrisFromGeneralNames(obj);
   } catch (_) {
     return <Uri>[];
@@ -1585,7 +1761,10 @@ PdfSignatureCertificateInfo? _parseCertificateInfo(Uint8List certDer) {
       notAfter = _parseAsn1Time(validitySeq.elements[1]);
     }
 
-    final otherNames = _extractOtherNamesFromCert(certDer);
+    var otherNames = _extractOtherNamesFromCert(certDer);
+    if (otherNames.isEmpty) {
+      otherNames = _scanForIcpOtherNames(certDer);
+    }
     var icpBrasilIds = PdfSignatureIcpBrasilIds.fromOtherNames(otherNames);
     if (icpBrasilIds != null && icpBrasilIds.cpf == null) {
       final cpfFromSubject = _extractCpfFromSubject(_formatX509Name(subjectSeq));
@@ -1674,6 +1853,34 @@ DateTime? _parseAsn1Time(ASN1Object obj) {
           int.parse(t.substring(8, 10)),
           int.parse(t.substring(10, 12)),
           int.parse(t.substring(12, 14)),
+        );
+      }
+    }
+    final plus = text.lastIndexOf('+');
+    final minus = text.lastIndexOf('-');
+    final signIndex = plus > -1 ? plus : minus;
+    if (signIndex > 0) {
+      final base = text.substring(0, signIndex);
+      if (base.length == 12) {
+        final year = int.parse(base.substring(0, 2));
+        final fullYear = year >= 50 ? 1900 + year : 2000 + year;
+        return DateTime(
+          fullYear,
+          int.parse(base.substring(2, 4)),
+          int.parse(base.substring(4, 6)),
+          int.parse(base.substring(6, 8)),
+          int.parse(base.substring(8, 10)),
+          int.parse(base.substring(10, 12)),
+        );
+      }
+      if (base.length == 14) {
+        return DateTime(
+          int.parse(base.substring(0, 4)),
+          int.parse(base.substring(4, 6)),
+          int.parse(base.substring(6, 8)),
+          int.parse(base.substring(8, 10)),
+          int.parse(base.substring(10, 12)),
+          int.parse(base.substring(12, 14)),
         );
       }
     }
@@ -1847,7 +2054,8 @@ String _oidShortName(String oid) {
 
 List<PdfSignatureOtherName> _extractOtherNamesFromCert(Uint8List certDer) {
   const oidSan = '2.5.29.17';
-  final extBytes = _findExtensionValue(certDer, oidSan);
+  final extBytes = _findExtensionValue(certDer, oidSan) ??
+      _findExtensionValueLoose(certDer, oidSan);
   if (extBytes == null || extBytes.isEmpty)
     return const <PdfSignatureOtherName>[];
 
@@ -1883,9 +2091,306 @@ List<PdfSignatureOtherName> _extractOtherNamesFromCert(Uint8List certDer) {
     }
 
     walk(obj);
+    if (out.isNotEmpty) return out;
+    final fallback = _extractOtherNamesFromSanBytes(extBytes);
+    return fallback.isNotEmpty ? fallback : out;
+  } catch (_) {
+    final fallback = _extractOtherNamesFromSanBytes(extBytes);
+    return fallback;
+  }
+}
+
+List<PdfSignatureOtherName> _extractOtherNamesFromSanBytes(Uint8List bytes) {
+  try {
+    final reader = _DerReader(bytes);
+    var seq = reader.readElement();
+    if (seq.tag == 0x04) {
+      seq = _DerReader(seq.content).readElement();
+    }
+    if (seq.tag != 0x30) return const <PdfSignatureOtherName>[];
+    final out = <PdfSignatureOtherName>[];
+    final items = seq.children;
+    for (final el in items) {
+      final tag = el.tag;
+      if (tag == 0xA0) {
+        final other = _parseOtherNameFromElement(el);
+        if (other != null) out.add(other);
+      }
+    }
     return out;
   } catch (_) {
     return const <PdfSignatureOtherName>[];
+  }
+}
+
+List<PdfSignatureOtherName> _scanForIcpOtherNames(Uint8List certDer) {
+  const prefix = '2.16.76.1.3.';
+  try {
+    final reader = _DerReader(certDer);
+    final root = reader.readElement();
+    final out = <PdfSignatureOtherName>[];
+
+    void walk(_DerElement el) {
+      if (el.tag == 0x30 || el.tag == 0x31) {
+        final children = el.children;
+        for (int i = 0; i < children.length; i++) {
+          final child = children[i];
+          if (child.tag == 0x06) {
+            final oid = _decodeOid(child.content);
+            if (oid.startsWith(prefix)) {
+              if (i + 1 < children.length) {
+                final value = _decodeAnyString(children[i + 1]);
+                if (value != null && value.isNotEmpty) {
+                  out.add(PdfSignatureOtherName(oid, value));
+                }
+              }
+            }
+          }
+          walk(child);
+        }
+      } else {
+        for (final child in el.children) {
+          walk(child);
+        }
+      }
+    }
+
+    walk(root);
+    if (out.isNotEmpty) return out;
+    final raw = _scanForIcpOtherNamesByOidSearch(certDer);
+    return raw.isNotEmpty ? raw : out;
+  } catch (_) {
+    return _scanForIcpOtherNamesByOidSearch(certDer);
+  }
+}
+
+List<PdfSignatureOtherName> _scanForIcpOtherNamesByOidSearch(
+  Uint8List bytes,
+) {
+  const oids = <String, List<int>>{
+    '2.16.76.1.3.1': [0x60, 0x4C, 0x01, 0x03, 0x01],
+    '2.16.76.1.3.2': [0x60, 0x4C, 0x01, 0x03, 0x02],
+    '2.16.76.1.3.3': [0x60, 0x4C, 0x01, 0x03, 0x03],
+    '2.16.76.1.3.4': [0x60, 0x4C, 0x01, 0x03, 0x04],
+    '2.16.76.1.3.5': [0x60, 0x4C, 0x01, 0x03, 0x05],
+    '2.16.76.1.3.6': [0x60, 0x4C, 0x01, 0x03, 0x06],
+    '2.16.76.1.3.7': [0x60, 0x4C, 0x01, 0x03, 0x07],
+    '2.16.76.1.3.8': [0x60, 0x4C, 0x01, 0x03, 0x08],
+  };
+
+  final out = <PdfSignatureOtherName>[];
+  for (int i = 0; i < bytes.length - 8; i++) {
+    if (bytes[i] != 0x06) continue; // OID tag
+    final len = bytes[i + 1];
+    if (len <= 0 || i + 2 + len >= bytes.length) continue;
+    for (final entry in oids.entries) {
+      final oidBytes = entry.value;
+      if (len != oidBytes.length) continue;
+      var match = true;
+      for (int j = 0; j < oidBytes.length; j++) {
+        if (bytes[i + 2 + j] != oidBytes[j]) {
+          match = false;
+          break;
+        }
+      }
+      if (!match) continue;
+
+      final valuePos = i + 2 + len;
+      if (valuePos >= bytes.length) continue;
+      try {
+        final el = _DerReader(bytes.sublist(valuePos)).readElement();
+        final value = _decodeAnyString(el);
+        if (value != null && value.isNotEmpty) {
+          out.add(PdfSignatureOtherName(entry.key, value));
+        }
+      } catch (_) {}
+    }
+  }
+  return out;
+}
+
+PdfSignatureOtherName? _parseOtherNameFromElement(_DerElement el) {
+  final innerReader = _DerReader(el.content);
+  final seq = innerReader.readElement();
+  if (seq.tag != 0x30 || seq.children.length < 2) return null;
+
+  final oidEl = seq.children.first;
+  if (oidEl.tag != 0x06) return null;
+  final oid = _decodeOid(oidEl.content);
+  if (oid.isEmpty) return null;
+
+  final valueEl = seq.children[1];
+  final value = _decodeAnyString(valueEl);
+  if (value == null || value.isEmpty) return null;
+
+  return PdfSignatureOtherName(oid, value);
+}
+
+String _decodeOid(Uint8List bytes) {
+  if (bytes.isEmpty) return '';
+  final values = <int>[];
+  int value = 0;
+  for (int i = 0; i < bytes.length; i++) {
+    final b = bytes[i];
+    value = (value << 7) | (b & 0x7F);
+    if ((b & 0x80) == 0) {
+      values.add(value);
+      value = 0;
+    }
+  }
+  if (values.isEmpty) return '';
+  final first = values[0];
+  final firstA = first ~/ 40;
+  final firstB = first % 40;
+  final out = <int>[firstA, firstB, ...values.sublist(1)];
+  return out.join('.');
+}
+
+String? _decodeAnyString(_DerElement el) {
+  switch (el.tag) {
+    case 0x0C: // UTF8String
+      return utf8.decode(el.content, allowMalformed: true);
+    case 0x13: // PrintableString
+    case 0x16: // IA5String
+      return String.fromCharCodes(el.content);
+    case 0x1E: // BMPString
+      return _decodeBmpString(el.content);
+    case 0x04: // OctetString
+      return _decodeOctetString(el.content);
+    case 0x30: // Sequence: scan children for a string
+      for (final child in el.children) {
+        final value = _decodeAnyString(child);
+        if (value != null && value.isNotEmpty) return value;
+      }
+      return null;
+    case 0xA0: // [0] EXPLICIT
+      final inner = _DerReader(el.content).readElement();
+      return _decodeAnyString(inner);
+  }
+  return null;
+}
+
+String? _decodeOctetString(Uint8List content) {
+  if (content.isEmpty) return null;
+  try {
+    final el = _DerReader(content).readElement();
+    final value = _decodeAnyString(el);
+    if (value != null && value.isNotEmpty) return value;
+  } catch (_) {}
+  return _bytesToPrintable(content);
+}
+
+String _decodeBmpString(Uint8List bytes) {
+  final buffer = StringBuffer();
+  for (int i = 0; i + 1 < bytes.length; i += 2) {
+    final code = (bytes[i] << 8) | bytes[i + 1];
+    buffer.writeCharCode(code);
+  }
+  return buffer.toString();
+}
+
+class _DerElement {
+  _DerElement(this.tag, this.content, this.children);
+
+  final int tag;
+  final Uint8List content;
+  final List<_DerElement> children;
+}
+
+class _DerReader {
+  _DerReader(this._bytes);
+
+  final Uint8List _bytes;
+  int _offset = 0;
+
+  _DerElement readElement() {
+    if (_offset >= _bytes.length) {
+      throw StateError('DER: end of data');
+    }
+    final tag = _bytes[_offset++];
+    final length = _readLength();
+    if (_offset + length > _bytes.length) {
+      throw StateError('DER: invalid length');
+    }
+    final content = _bytes.sublist(_offset, _offset + length);
+    _offset += length;
+
+    final children = <_DerElement>[];
+    if ((tag & 0x20) == 0x20) {
+      final inner = _DerReader(content);
+      while (inner._offset < content.length) {
+        children.add(inner.readElement());
+      }
+    }
+
+    return _DerElement(tag, content, children);
+  }
+
+  int _readLength() {
+    if (_offset >= _bytes.length) {
+      throw StateError('DER: missing length');
+    }
+    final first = _bytes[_offset++];
+    if (first < 0x80) return first;
+    final count = first & 0x7F;
+    if (count == 0 || count > 4 || _offset + count > _bytes.length) {
+      throw StateError('DER: invalid length');
+    }
+    var length = 0;
+    for (int i = 0; i < count; i++) {
+      length = (length << 8) | _bytes[_offset++];
+    }
+    return length;
+  }
+}
+
+Uint8List? _findExtensionValueLoose(Uint8List certDer, String oid) {
+  try {
+    final root = ASN1Parser(certDer).nextObject();
+
+    Uint8List? found;
+
+    void walk(ASN1Object node) {
+      if (found != null) return;
+
+      final unwrapped = _unwrapTagged(node);
+      final current = unwrapped ?? node;
+
+      if (current is ASN1Sequence) {
+        for (final el in current.elements) {
+          if (el is ASN1ObjectIdentifier && _oidToString(el) == oid) {
+            for (final candidate in current.elements) {
+              if (candidate is ASN1OctetString) {
+                found = candidate.valueBytes();
+                return;
+              }
+              final unwrappedCandidate = _unwrapTagged(candidate);
+              if (unwrappedCandidate is ASN1OctetString) {
+                found = unwrappedCandidate.valueBytes();
+                return;
+              }
+            }
+          }
+        }
+      }
+
+      if (current is ASN1Sequence) {
+        for (final el in current.elements) {
+          walk(el);
+          if (found != null) return;
+        }
+      } else if (current is ASN1Set) {
+        for (final el in current.elements) {
+          walk(el);
+          if (found != null) return;
+        }
+      }
+    }
+
+    walk(root);
+    return found;
+  } catch (_) {
+    return null;
   }
 }
 

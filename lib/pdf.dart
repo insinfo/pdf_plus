@@ -47,12 +47,8 @@ export 'src/pdf/obj/shading.dart';
 export 'src/pdf/obj/signature.dart';
 export 'src/pdf/obj/smask.dart';
 export 'src/pdf/obj/ttffont.dart';
+export 'src/pdf/signing/pdf_signature_tools.dart';
 export 'src/pdf/page_format.dart';
 export 'src/pdf/point.dart';
 export 'src/pdf/raster.dart';
 export 'src/pdf/rect.dart';
-
-
-//novas APIs
-// export 'src/pdf/parsing/pdf_document_parser.dart';
-// export 'src/pdf/parsing/pdf_document_info.dart';

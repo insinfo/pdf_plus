@@ -10,6 +10,8 @@ void main() {
       const PdfSignatureOtherName('2.16.76.1.3.4', '02022010 00000000123'),
       const PdfSignatureOtherName('2.16.76.1.3.5', '465555610469001047700000000000municipioRS'),
       const PdfSignatureOtherName('2.16.76.1.3.6', '253764977686'),
+      const PdfSignatureOtherName('2.16.76.1.3.7', '17033259508'),
+      const PdfSignatureOtherName('2.16.76.1.3.8', '17033259509'),
     ];
 
     final ids = PdfSignatureIcpBrasilIds.fromOtherNames(otherNames);
@@ -20,6 +22,7 @@ void main() {
     expect(ids.responsavelNome, 'JOAO RESPONSAVEL');
     expect(ids.tituloEleitor, isNotNull);
     expect(ids.cei, '253764977686');
+    expect(ids.nis, isNotNull);
     expect(ids.dateOfBirth, DateTime(2000, 1, 1));
   });
 }
