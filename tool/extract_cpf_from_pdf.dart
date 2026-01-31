@@ -8,8 +8,8 @@ const _oidCpfResponsavel = '2.16.76.1.3.4';
 
 Future<void> main(List<String> args) async {
   final defaultPaths = <String>[
-    r'C:\MyDartProjects\pdf_plus\test\assets\pdfs\sample_govbr_signature_assinado.pdf',
-    r'C:\MyDartProjects\pdf_plus\test\assets\pdfs\sample_token_icpbrasil_assinado.pdf',
+    r'test\assets\pdfs\sample_govbr_signature_assinado.pdf',
+    r'test\assets\pdfs\sample_token_icpbrasil_assinado.pdf',
   ];
 
   final paths = args.isNotEmpty ? args : defaultPaths;

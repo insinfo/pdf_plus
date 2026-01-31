@@ -19,6 +19,7 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:pdf_plus/src/pdf/parsing/pdf_document_parser.dart';
+import 'io/pdf_random_access_reader.dart';
 
 import 'document_parser.dart';
 import 'format/array.dart';
@@ -32,7 +33,7 @@ import 'graphics.dart';
 import 'io/na.dart'
     if (dart.library.io) 'io/vm.dart'
     if (dart.library.js_interop) 'io/js.dart';
-import 'io/pdf_random_access_reader.dart';
+
 import 'obj/annotation.dart';
 import 'obj/catalog.dart';
 import 'obj/encryption.dart';

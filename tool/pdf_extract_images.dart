@@ -1,8 +1,9 @@
 import 'dart:io';
 
-import '../lib/src/pdf/io/pdf_random_access_reader_io.dart';
-import '../lib/src/pdf/parsing/pdf_document_parser.dart';
+import 'package:pdf_plus/signing.dart';
+import 'package:pdf_plus/src/pdf/io/pdf_random_access_reader_io.dart';
 
+// dart tool/pdf_extract_images.dart "test\assets\pdfs\2 ass leonardo e mauricio.pdf"
 void main(List<String> args) {
   if (args.isEmpty) {
     stderr.writeln('Uso: dart tool/pdf_extract_images.dart <arquivo.pdf> [saida] [--from=N] [--to=N]');
