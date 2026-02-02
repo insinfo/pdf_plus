@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:asn1lib/asn1lib.dart';
+import 'package:pdf_plus/src/crypto/asn1/asn1.dart';
 import 'package:pdf_plus/signing.dart';
 import 'package:test/test.dart';
 
@@ -136,8 +136,8 @@ void main() {
       isFalse,
     );
 
-    final reportWithFetcher = await PdfSignatureValidator()
-        .validateAllSignatures(
+    final reportWithFetcher =
+        await PdfSignatureValidator().validateAllSignatures(
       chosen.pdfBytes,
       trustedRootsProvider: AssetTrustedRootsProvider([chosen.rootCert]),
       includeSignatureFields: true,

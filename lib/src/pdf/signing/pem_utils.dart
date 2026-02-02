@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:asn1lib/asn1lib.dart';
-import 'package:pointycastle/export.dart';
+import 'package:pdf_plus/src/crypto/asn1/asn1.dart';
+import 'package:pdf_plus/src/crypto/rsa_keys.dart';
 
 class PdfPemUtils {
   const PdfPemUtils._();
@@ -43,7 +43,8 @@ class PdfPemUtils {
       return _rsaPrivateKeyFromPkcs8(pkcs8.first);
     }
 
-    throw ArgumentError('Chave privada PEM não suportada (apenas PKCS#1/PKCS#8).');
+    throw ArgumentError(
+        'Chave privada PEM não suportada (apenas PKCS#1/PKCS#8).');
   }
 
   static RSAPrivateKey _rsaPrivateKeyFromPkcs1(Uint8List der) {

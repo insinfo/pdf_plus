@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:crypto/crypto.dart' as crypto;
+import 'package:pdf_plus/src/crypto/sha1.dart';
 
 class JksParseResult {
   JksParseResult({required this.certificates, this.verified = false});
@@ -81,7 +81,7 @@ Uint8List _computeJksDigest(Uint8List data, String password) {
   input.setRange(offset, offset + magic.length, magic);
   offset += magic.length;
   input.setRange(offset, offset + data.length, data);
-  final digest = crypto.sha1.convert(input).bytes;
+  final digest = sha1.convert(input).bytes;
   return Uint8List.fromList(digest);
 }
 

@@ -1,4 +1,4 @@
-import 'package:collection/collection.dart' show DelegatingIterable;
+import 'package:pdf_plus/src/utils/collection/wrappers.dart';
 
 import 'item.dart';
 

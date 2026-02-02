@@ -1,7 +1,10 @@
 import 'dart:typed_data';
 
-import 'package:asn1lib/asn1lib.dart';
-import 'package:pointycastle/export.dart';
+import 'package:pdf_plus/src/crypto/asn1/asn1.dart';
+import 'package:pdf_plus/src/crypto/base.dart';
+import 'package:pdf_plus/src/crypto/pkcs1.dart';
+import 'package:pdf_plus/src/crypto/rsa_engine.dart';
+import 'package:pdf_plus/src/crypto/rsa_keys.dart';
 
 import 'pem_utils.dart';
 import 'pdf_external_signer.dart';
@@ -19,10 +22,12 @@ class PdfRsaPrivateKeySigner implements PdfExternalSigner {
     List<String> chainPem = const <String>[],
   }) {
     final privateKey = PdfPemUtils.rsaPrivateKeyFromPem(privateKeyPem);
-    final signerCert = PdfPemUtils.decodeFirstPem(certificatePem, 'CERTIFICATE');
+    final signerCert =
+        PdfPemUtils.decodeFirstPem(certificatePem, 'CERTIFICATE');
     final chain = <Uint8List>[
       signerCert,
-      ...chainPem.expand((pem) => PdfPemUtils.decodePemBlocks(pem, 'CERTIFICATE')),
+      ...chainPem
+          .expand((pem) => PdfPemUtils.decodePemBlocks(pem, 'CERTIFICATE')),
     ];
     return PdfRsaPrivateKeySigner(privateKey: privateKey, certificates: chain);
   }

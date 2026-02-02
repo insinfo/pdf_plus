@@ -20,7 +20,8 @@ import 'dart:typed_data';
 import 'package:pdf_plus/src/utils/barcode/barcode.dart';
 import 'package:pdf_plus/src/utils/barcode/src/aztec.dart';
 import 'package:pdf_plus/src/utils/barcode/src/barcode_2d.dart';
-import 'package:convert/convert.dart';
+import 'package:pdf_plus/src/utils/convert/hex/hex.dart';
+
 import 'package:test/test.dart';
 
 import 'golden_utils.dart';

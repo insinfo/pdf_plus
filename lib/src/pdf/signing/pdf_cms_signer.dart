@@ -1,8 +1,12 @@
 import 'dart:typed_data';
 
-import 'package:asn1lib/asn1lib.dart';
-import 'package:crypto/crypto.dart' as crypto;
-import 'package:pointycastle/export.dart';
+import 'package:pdf_plus/src/crypto/asn1/asn1.dart';
+import 'package:pdf_plus/src/crypto/sha256.dart';
+
+import 'package:pdf_plus/src/crypto/base.dart';
+import 'package:pdf_plus/src/crypto/pkcs1.dart';
+import 'package:pdf_plus/src/crypto/rsa_engine.dart';
+import 'package:pdf_plus/src/crypto/rsa_keys.dart';
 
 import 'pem_utils.dart';
 
@@ -28,7 +32,7 @@ class PdfCmsSigner {
       signingTime: (signingTime ?? DateTime.now().toUtc()),
     );
     final signedAttrsDigest = Uint8List.fromList(
-      crypto.sha256.convert(signedAttrsDer).bytes,
+      sha256.convert(signedAttrsDer).bytes,
     );
 
     final key = PdfPemUtils.rsaPrivateKeyFromPem(privateKeyPem);
@@ -58,7 +62,7 @@ class PdfCmsSigner {
       signingTime: signingTime ?? DateTime.now().toUtc(),
     );
     final signedAttrsDigest = Uint8List.fromList(
-      crypto.sha256.convert(signedAttrsDer).bytes,
+      sha256.convert(signedAttrsDer).bytes,
     );
 
     final signature = await signCallback(signedAttrsDer, signedAttrsDigest);
@@ -189,7 +193,8 @@ class PdfCmsSigner {
     ]);
   }
 
-  Uint8List _encodeAttribute({required String oid, required Uint8List valueDer}) {
+  Uint8List _encodeAttribute(
+      {required String oid, required Uint8List valueDer}) {
     return _encodeSequence([
       _oid(oid),
       _encodeSet([valueDer]),

@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:asn1lib/asn1lib.dart';
+import 'package:pdf_plus/src/crypto/asn1/asn1.dart';
 
 class PdfLpaPolicyInfo {
   PdfLpaPolicyInfo({

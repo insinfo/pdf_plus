@@ -1,4 +1,4 @@
-import 'package:collection/collection.dart' show ListEquality;
+import 'package:pdf_plus/src/utils/collection/equality.dart';
 
 import '../../xml/enums/node_type.dart';
 import '../event.dart';

@@ -1,7 +1,5 @@
 import 'dart:typed_data';
-
-import 'package:crypto/crypto.dart' as crypto;
-
+import 'package:pdf_plus/src/crypto/sha256.dart';
 import 'pdf_signature_validator.dart';
 import 'pdf_lpa.dart';
 
@@ -107,7 +105,7 @@ class PdfItiComplianceReport {
     bool? lpaOnline,
     bool? paOnline,
   }) {
-    final hash = crypto.sha256.convert(pdfBytes).toString();
+    final hash = sha256.convert(pdfBytes).toString();
     final signatures = _buildSignatureReports(validationReport.signatures, lpa);
     final anchored = signatures.where((s) => s.chainTrusted == true).length;
 
@@ -116,8 +114,10 @@ class PdfItiComplianceReport {
     if (computedPolicy == null || computedLpa == null) {
       final policyOid = validationReport.signatures
           .map((s) => s.signaturePolicyOid)
-          .firstWhere((oid) => oid != null && oid.isNotEmpty, orElse: () => null);
-      final policy = policyOid != null && lpa != null ? lpa.findPolicy(policyOid) : null;
+          .firstWhere((oid) => oid != null && oid.isNotEmpty,
+              orElse: () => null);
+      final policy =
+          policyOid != null && lpa != null ? lpa.findPolicy(policyOid) : null;
       final now = DateTime.now();
       if (computedPolicy == null) {
         final validInLpa = policy != null;
@@ -196,7 +196,8 @@ class PdfItiComplianceReport {
     buffer.writeln('');
     buffer.writeln('Quantidade de assinaturas: $signatureCount');
     buffer.writeln('');
-    buffer.writeln('Quantidade de assinaturas ancoradas: $anchoredSignatureCount');
+    buffer.writeln(
+        'Quantidade de assinaturas ancoradas: $anchoredSignatureCount');
     buffer.writeln('');
     buffer.writeln('');
     buffer.writeln('Informações da Política de Assinatura');
@@ -372,8 +373,7 @@ class PdfItiSignatureReport {
 
     final signatureType = 'Destacada';
 
-    final revoked =
-        info.revocation.crlRevoked || info.revocation.ocspRevoked;
+    final revoked = info.revocation.crlRevoked || info.revocation.ocspRevoked;
     final signatureStatus = (info.cmsValid &&
             info.digestValid &&
             info.intact &&
@@ -386,9 +386,8 @@ class PdfItiSignatureReport {
         ? 'Valid'
         : (info.chainTrusted == false ? 'Invalid' : 'Unknown');
 
-    final structureStatus = info.intact
-        ? 'Em conformidade com o padrão'
-        : 'Não conforme';
+    final structureStatus =
+        info.intact ? 'Em conformidade com o padrão' : 'Não conforme';
 
     final asymmetricCipherStatus = info.cmsValid ? 'Aprovada' : 'Reprovada';
     final digestOk = info.digestValid ? 'true' : 'false';
@@ -396,7 +395,8 @@ class PdfItiSignatureReport {
     final signingTime = _formatDateTimeBrt(info.signingTime) ??
         (info.signatureField?.signingTimeRaw ?? 'Não informado');
 
-    final signaturePolicy = policyLabel ?? info.signaturePolicyOid ?? 'Não informado';
+    final signaturePolicy =
+        policyLabel ?? info.signaturePolicyOid ?? 'Não informado';
 
     final requiredAttrsOk =
         info.signedAttrsReport?.missingRequiredOids.isEmpty == true &&
@@ -469,10 +469,8 @@ class PdfItiAttributeReport {
   final optional = <PdfItiAttributeReport>[];
 
   final present = info.signedAttrsReport?.presentOids ?? const <String>[];
-  final requiredOids =
-      info.signedAttrsReport?.requiredOids ?? const <String>[];
-  final optionalOids =
-      info.signedAttrsReport?.optionalOids ?? const <String>[];
+  final requiredOids = info.signedAttrsReport?.requiredOids ?? const <String>[];
+  final optionalOids = info.signedAttrsReport?.optionalOids ?? const <String>[];
 
   for (final oid in requiredOids) {
     final name = _oidToAttributeName(oid);

@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:crypto/crypto.dart' as crypto;
 import 'package:pdf_plus/signing.dart' as pdf;
+import 'package:pdf_plus/src/crypto/sha256.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -41,7 +41,7 @@ void main() {
           utf8.encode('pdf-plus-cms-test-content'),
         );
         final Uint8List digest =
-            Uint8List.fromList(crypto.sha256.convert(content).bytes);
+            Uint8List.fromList(sha256.convert(content).bytes);
 
         final Uint8List cmsDer = pdf.PdfCmsSigner.signDetachedSha256RsaFromPem(
           contentDigest: digest,

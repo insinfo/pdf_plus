@@ -17,7 +17,7 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
-import 'package:crypto/crypto.dart';
+import 'package:pdf_plus/src/crypto/sha256.dart';
 import 'package:pdf_plus/src/pdf/parsing/pdf_document_parser.dart';
 import 'io/pdf_random_access_reader.dart';
 

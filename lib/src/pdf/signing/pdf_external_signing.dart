@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:crypto/crypto.dart' as crypto;
+import 'package:pdf_plus/src/crypto/sha256.dart';
 
 import '../document.dart';
 import '../format/array.dart';
@@ -55,7 +55,8 @@ class PdfExternalSigning {
 
     final pageIndex = pageNumber - 1;
     if (pageIndex < 0 || pageIndex >= document.pdfPageList.pages.length) {
-      throw RangeError.index(pageIndex, document.pdfPageList.pages, 'pageNumber');
+      throw RangeError.index(
+          pageIndex, document.pdfPageList.pages, 'pageNumber');
     }
 
     final placeholder = _PdfExternalSignaturePlaceholder(
@@ -105,7 +106,9 @@ class PdfExternalSigning {
 
     final gapStart = range[0] + range[1];
     final gapEnd = range[2];
-    if (gapStart < 0 || gapEnd <= gapStart || gapEnd > preparedPdfBytes.length) {
+    if (gapStart < 0 ||
+        gapEnd <= gapStart ||
+        gapEnd > preparedPdfBytes.length) {
       throw StateError('ByteRange inválido no PDF preparado.');
     }
 
@@ -337,7 +340,8 @@ void _writeByteRange(
     throw StateError('ByteRange excede espaço reservado.');
   }
 
-  bytes.setRange(bracketStart + 1, bracketStart + 1 + repBytes.length, repBytes);
+  bytes.setRange(
+      bracketStart + 1, bracketStart + 1 + repBytes.length, repBytes);
   for (int k = bracketStart + 1 + repBytes.length; k < bracketEnd; k++) {
     bytes[k] = 0x20; // espaço
   }
@@ -354,7 +358,7 @@ Uint8List _computeByteRangeDigest(Uint8List bytes, List<int> range) {
 
   final part1 = bytes.sublist(start1, start1 + len1);
   final part2 = bytes.sublist(start2, start2 + len2);
-  final digest = crypto.sha256.convert(<int>[...part1, ...part2]);
+  final digest = sha256.convert(<int>[...part1, ...part2]);
   return Uint8List.fromList(digest.bytes);
 }
 
@@ -415,7 +419,8 @@ List<int>? _findLastByteRange(Uint8List bytes) {
   return parsed;
 }
 
-int _lastIndexOfSequence(Uint8List bytes, List<int> pattern, int start, int end) {
+int _lastIndexOfSequence(
+    Uint8List bytes, List<int> pattern, int start, int end) {
   if (pattern.isEmpty) return -1;
   final int max = end - pattern.length;
   for (int i = max; i >= start; i--) {
@@ -453,7 +458,12 @@ List<int>? _parseByteRangeAt(Uint8List bytes, int start) {
 int _skipPdfWsAndComments(Uint8List bytes, int i, int end) {
   while (i < end) {
     final b = bytes[i];
-    if (b == 0x00 || b == 0x09 || b == 0x0A || b == 0x0C || b == 0x0D || b == 0x20) {
+    if (b == 0x00 ||
+        b == 0x09 ||
+        b == 0x0A ||
+        b == 0x0C ||
+        b == 0x0D ||
+        b == 0x20) {
       i++;
       continue;
     }

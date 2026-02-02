@@ -1,5 +1,7 @@
 import 'dart:math' as math;
-import 'package:collection/collection.dart';
+
+import 'package:pdf_plus/src/utils/collection/iterable_extensions.dart';
+
 import '../evaluation/context.dart';
 import '../evaluation/definition.dart';
 import '../types/item.dart';

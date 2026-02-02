@@ -1,8 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:crypto/crypto.dart' as crypto;
-
+import 'package:pdf_plus/src/crypto/sha256.dart';
 import '../format/base.dart';
 import '../format/dict.dart';
 import '../format/name.dart';
@@ -223,7 +222,8 @@ void _writeByteRange(
     throw StateError('ByteRange excede espaço reservado.');
   }
 
-  bytes.setRange(bracketStart + 1, bracketStart + 1 + repBytes.length, repBytes);
+  bytes.setRange(
+      bracketStart + 1, bracketStart + 1 + repBytes.length, repBytes);
   for (int k = bracketStart + 1 + repBytes.length; k < bracketEnd; k++) {
     bytes[k] = 0x20; // espaço
   }
@@ -240,7 +240,7 @@ Uint8List _computeByteRangeDigest(Uint8List bytes, List<int> range) {
 
   final part1 = bytes.sublist(start1, start1 + len1);
   final part2 = bytes.sublist(start2, start2 + len2);
-  final digest = crypto.sha256.convert(<int>[...part1, ...part2]);
+  final digest = sha256.convert(<int>[...part1, ...part2]);
   return Uint8List.fromList(digest.bytes);
 }
 

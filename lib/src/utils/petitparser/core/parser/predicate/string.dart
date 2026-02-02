@@ -1,5 +1,5 @@
-import 'package:collection/collection.dart' show equalsIgnoreAsciiCase;
 import 'package:meta/meta.dart';
+import 'package:pdf_plus/src/utils/collection/comparators.dart';
 
 import '../../core/parser.dart';
 import 'predicate.dart';

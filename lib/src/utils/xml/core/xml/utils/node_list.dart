@@ -1,5 +1,5 @@
-import 'package:collection/collection.dart' show DelegatingList;
 import 'package:meta/meta.dart';
+import 'package:pdf_plus/src/utils/collection/wrappers.dart';
 
 import '../enums/node_type.dart';
 import '../exceptions/parent_exception.dart';

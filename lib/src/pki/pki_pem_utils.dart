@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:asn1lib/asn1lib.dart';
-import 'package:pointycastle/export.dart';
+import 'package:pdf_plus/src/crypto/asn1/asn1.dart';
+import 'package:pdf_plus/src/crypto/rsa_keys.dart';
 
 /// Utilities to export PKI material (DER/keys) into PEM.
 class PkiPemUtils {
@@ -16,7 +16,7 @@ class PkiPemUtils {
     BigInt? publicExponent,
   }) {
     final BigInt? n = privateKey.n;
-    final BigInt? d = privateKey.exponent;
+    final BigInt? d = privateKey.privateExponent;
     final BigInt? p = privateKey.p;
     final BigInt? q = privateKey.q;
 

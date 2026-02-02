@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:collection/collection.dart';
+import 'package:pdf_plus/src/utils/collection/wrappers.dart';
 
 import '../exceptions/evaluation_exception.dart';
 import 'sequence.dart';

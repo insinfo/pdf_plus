@@ -1,9 +1,16 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:asn1lib/asn1lib.dart';
-import 'package:crypto/crypto.dart' as crypto;
-import 'package:pointycastle/export.dart';
+import 'package:pdf_plus/src/crypto/asn1/asn1.dart';
+
+import 'package:pdf_plus/src/crypto/sha1.dart';
+import 'package:pdf_plus/src/crypto/sha256.dart';
+import 'package:pdf_plus/src/crypto/sha512.dart';
+
+import 'package:pdf_plus/src/crypto/base.dart';
+import 'package:pdf_plus/src/crypto/pkcs1.dart';
+import 'package:pdf_plus/src/crypto/rsa_engine.dart';
+import 'package:pdf_plus/src/crypto/rsa_keys.dart';
 
 import '../parsing/pdf_document_parser.dart';
 import '../parsing/pdf_document_info.dart';
@@ -335,9 +342,8 @@ class PdfSignatureValidator {
 
     for (var i = 0; i < ranges.length; i++) {
       final range = ranges[i];
-      final fieldInfo = includeSignatureFields
-          ? fieldByRange[_byteRangeKey(range)]
-          : null;
+      final fieldInfo =
+          includeSignatureFields ? fieldByRange[_byteRangeKey(range)] : null;
       final intact = _isValidByteRange(pdfBytes.length, range);
       var cmsValid = false;
       var digestValid = false;
@@ -398,7 +404,7 @@ class PdfSignatureValidator {
         continue;
       }
 
-        final certInfos =
+      final certInfos =
           includeCertificates ? _extractCertificatesInfo(contents) : null;
       final signerCertInfo =
           includeCertificates ? _extractSignerCertificateInfo(contents) : null;
@@ -477,7 +483,7 @@ class PdfSignatureValidator {
         docMdp: _buildDocMdpInfo(i, permissionP),
         revocation: revocation,
         signatureField: fieldInfo,
-          signatureDictionaryPresent: fieldInfo?.signatureDictionaryPresent,
+        signatureDictionaryPresent: fieldInfo?.signatureDictionaryPresent,
         signingTime: signingTime,
         signaturePolicyOid: signaturePolicyOid,
         signedAttrsOids: signedAttrsOids,
@@ -534,9 +540,8 @@ class PdfSignatureExtractor {
 
     for (var i = 0; i < ranges.length; i++) {
       final range = ranges[i];
-      final fieldInfo = includeSignatureFields
-          ? fieldByRange[_byteRangeKey(range)]
-          : null;
+      final fieldInfo =
+          includeSignatureFields ? fieldByRange[_byteRangeKey(range)] : null;
 
       final contents = _extractContentsFromByteRange(pdfBytes, range);
       if (contents == null || contents.isEmpty) {
@@ -544,7 +549,7 @@ class PdfSignatureExtractor {
           signatureIndex: i,
           signatureField: fieldInfo,
           contentsPresent: false,
-            signingTime: fieldInfo?.signingTimeRaw != null
+          signingTime: fieldInfo?.signingTimeRaw != null
               ? _parsePdfDate(fieldInfo!.signingTimeRaw!)
               : null,
           signaturePolicyOid: null,
@@ -556,19 +561,17 @@ class PdfSignatureExtractor {
         continue;
       }
 
-        final signingTime = _extractSigningTimeFromCms(contents) ??
+      final signingTime = _extractSigningTimeFromCms(contents) ??
           (fieldInfo?.signingTimeRaw != null
-            ? _parsePdfDate(fieldInfo!.signingTimeRaw!)
-            : null);
+              ? _parsePdfDate(fieldInfo!.signingTimeRaw!)
+              : null);
       final signaturePolicyOid = _extractSignaturePolicyOid(contents);
       final signedAttrsOids = _extractSignedAttrsOids(contents);
 
-      final certInfos = includeCertificates
-          ? _extractCertificatesInfo(contents)
-          : null;
-      final signerCertInfo = includeCertificates
-          ? _extractSignerCertificateInfo(contents)
-          : null;
+      final certInfos =
+          includeCertificates ? _extractCertificatesInfo(contents) : null;
+      final signerCertInfo =
+          includeCertificates ? _extractSignerCertificateInfo(contents) : null;
 
       results.add(PdfSignatureExtractionInfo(
         signatureIndex: i,
@@ -783,8 +786,8 @@ Future<_ChainResult> _buildCertificateChainFromCms({
       final rootTbs = _readTbsCertificate(root);
       final rootDer = rootTbs?.subject;
       if (rootDer == null) continue;
-      final rootText = _formatX509NameFromDer(rootDer) ??
-          _normalizeX509NameFromDer(rootDer);
+      final rootText =
+          _formatX509NameFromDer(rootDer) ?? _normalizeX509NameFromDer(rootDer);
       final rootNorm = _normalizeNameText(rootText);
       if (rootNorm != null &&
           (rootNorm == issuerNorm ||
@@ -798,8 +801,8 @@ Future<_ChainResult> _buildCertificateChainFromCms({
     }
   }
 
-  final trusted =
-      chain.any((cert) => _isTrustedAnchor(cert, roots)) || _chainHasSelfSigned(chain);
+  final trusted = chain.any((cert) => _isTrustedAnchor(cert, roots)) ||
+      _chainHasSelfSigned(chain);
   return _ChainResult(trusted: trusted, chain: chain);
 }
 
@@ -872,7 +875,8 @@ Uint8List? _findIssuerInPool(
       if (_nameEquals(tbs.subject, issuerName)) return cert;
       if (issuerNameNormalized != null) {
         final subjectNormalized = _normalizeX509NameFromDer(tbs.subject);
-        if (subjectNormalized != null && subjectNormalized == issuerNameNormalized) {
+        if (subjectNormalized != null &&
+            subjectNormalized == issuerNameNormalized) {
           return cert;
         }
       }
@@ -1350,7 +1354,7 @@ Uint8List _buildOcspRequest({
     return Uint8List(0);
   }
 
-  final issuerNameHash = crypto.sha1.convert(issuerTbs.subject).bytes;
+  final issuerNameHash = sha1.convert(issuerTbs.subject).bytes;
   final issuerKeyHash = _computeIssuerKeyHash(issuerCertDer);
 
   final certId = ASN1Sequence()
@@ -1372,9 +1376,9 @@ Uint8List _computeIssuerKeyHash(Uint8List issuerCertDer) {
   final key = _rsaPublicKeyFromCert(issuerCertDer);
   if (key == null) return Uint8List(0);
   final rsaSeq = ASN1Sequence()
-    ..add(ASN1Integer(key.modulus!))
-    ..add(ASN1Integer(key.exponent!));
-  return Uint8List.fromList(crypto.sha1.convert(rsaSeq.encodedBytes).bytes);
+    ..add(ASN1Integer(key.modulus))
+    ..add(ASN1Integer(key.exponent));
+  return Uint8List.fromList(sha1.convert(rsaSeq.encodedBytes).bytes);
 }
 
 enum _OcspCertStatus { good, revoked, unknown }
@@ -1494,12 +1498,12 @@ Uint8List _computeByteRangeDigestForOid(
   final part2 = bytes.sublist(start2, start2 + len2);
   final data = <int>[...part1, ...part2];
   if (digestOid == '1.3.14.3.2.26') {
-    return Uint8List.fromList(crypto.sha1.convert(data).bytes);
+    return Uint8List.fromList(sha1.convert(data).bytes);
   }
   if (digestOid == '2.16.840.1.101.3.4.2.3') {
-    return Uint8List.fromList(crypto.sha512.convert(data).bytes);
+    return Uint8List.fromList(sha512.convert(data).bytes);
   }
-  return Uint8List.fromList(crypto.sha256.convert(data).bytes);
+  return Uint8List.fromList(sha256.convert(data).bytes);
 }
 
 Uint8List? _extractContentsFromByteRange(
@@ -1767,7 +1771,8 @@ PdfSignatureCertificateInfo? _parseCertificateInfo(Uint8List certDer) {
     }
     var icpBrasilIds = PdfSignatureIcpBrasilIds.fromOtherNames(otherNames);
     if (icpBrasilIds != null && icpBrasilIds.cpf == null) {
-      final cpfFromSubject = _extractCpfFromSubject(_formatX509Name(subjectSeq));
+      final cpfFromSubject =
+          _extractCpfFromSubject(_formatX509Name(subjectSeq));
       if (cpfFromSubject != null) {
         icpBrasilIds = PdfSignatureIcpBrasilIds(
           cpf: cpfFromSubject,
@@ -1783,7 +1788,8 @@ PdfSignatureCertificateInfo? _parseCertificateInfo(Uint8List certDer) {
       }
     }
     if (icpBrasilIds == null) {
-      final cpfFromSubject = _extractCpfFromSubject(_formatX509Name(subjectSeq));
+      final cpfFromSubject =
+          _extractCpfFromSubject(_formatX509Name(subjectSeq));
       if (cpfFromSubject != null) {
         icpBrasilIds = PdfSignatureIcpBrasilIds(
           cpf: cpfFromSubject,
@@ -1920,8 +1926,8 @@ String _normalizeX509Name(ASN1Sequence nameSeq) {
       final valObj = atv.elements[1];
       if (oidObj is! ASN1ObjectIdentifier) continue;
       final oid = _oidToString(oidObj) ?? '';
-      final key = (_oidShortName(oid).isEmpty ? oid : _oidShortName(oid))
-          .toUpperCase();
+      final key =
+          (_oidShortName(oid).isEmpty ? oid : _oidShortName(oid)).toUpperCase();
       final rawVal = _asn1ValueToString(valObj).trim().toLowerCase();
       if (rawVal.isEmpty) continue;
       parts.add('$key=$rawVal');
@@ -2606,14 +2612,14 @@ Uint8List? _buildDigestInfoWithDigest(Uint8List data, String? oid) {
 
 Uint8List? _digestForOid(Uint8List data, String? oid) {
   if (oid == '1.3.14.3.2.26') {
-    final digest = crypto.sha1.convert(data).bytes;
+    final digest = sha1.convert(data).bytes;
     return Uint8List.fromList(digest);
   }
   if (oid == '2.16.840.1.101.3.4.2.3') {
-    final digest = crypto.sha512.convert(data).bytes;
+    final digest = sha512.convert(data).bytes;
     return Uint8List.fromList(digest);
   }
-  final digest = crypto.sha256.convert(data).bytes;
+  final digest = sha256.convert(data).bytes;
   return Uint8List.fromList(digest);
 }
 
@@ -2940,7 +2946,10 @@ DateTime? _parsePdfDate(String raw) {
       final rest = text.substring(digits.length + 1);
       final hh = RegExp(r'\d{2}').firstMatch(rest)?.group(0);
       if (hh != null) offsetHours = int.parse(hh);
-      final mm = RegExp(r"'?(\d{2})'?").allMatches(rest).map((m) => m.group(1)).toList();
+      final mm = RegExp(r"'?(\d{2})'?")
+          .allMatches(rest)
+          .map((m) => m.group(1))
+          .toList();
       if (mm.length > 1 && mm[1] != null) {
         offsetMinutes = int.parse(mm[1]!);
       } else if (mm.isNotEmpty && mm.first != null) {

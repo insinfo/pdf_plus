@@ -2,9 +2,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:asn1lib/asn1lib.dart';
-import 'package:crypto/crypto.dart' as crypto;
+import 'package:pdf_plus/src/crypto/asn1/asn1.dart';
+
 import 'package:pdf_plus/signing.dart' as pdf;
+import 'package:pdf_plus/src/crypto/sha256.dart';
 import 'package:pdf_plus/src/pki/pki_jks_utils.dart';
 
 class AssetTrustedRootsProvider implements pdf.TrustedRootsProvider {
@@ -145,8 +146,9 @@ class TruststoreAssetsLoader {
         return out;
       }
 
-      final certList =
-          certsObj is ASN1Set ? certsObj.elements : (certsObj as ASN1Sequence).elements;
+      final certList = certsObj is ASN1Set
+          ? certsObj.elements
+          : (certsObj as ASN1Sequence).elements;
       for (final el in certList) {
         addIfCertificate(el);
       }
@@ -247,7 +249,7 @@ class TruststoreAssetsLoader {
     final seen = <String>{};
     final out = <Uint8List>[];
     for (final cert in roots) {
-      final hash = crypto.sha256.convert(cert).toString();
+      final hash = sha256.convert(cert).toString();
       if (seen.add(hash)) {
         out.add(cert);
       }

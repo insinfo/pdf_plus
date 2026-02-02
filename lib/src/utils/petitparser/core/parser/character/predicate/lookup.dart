@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:collection/collection.dart' show ListEquality;
+import 'package:pdf_plus/src/utils/collection/equality.dart';
 
 import '../../../shared/pragma.dart';
 import '../predicate.dart';
