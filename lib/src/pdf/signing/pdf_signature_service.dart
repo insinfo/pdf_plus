@@ -15,8 +15,9 @@ import 'pdf_signature_appearance.dart';
 import 'pdf_signature_config.dart';
 import 'pem_utils.dart';
 
-/// Campo de assinatura para PDF existente.
+/// Signature field definition for an existing PDF.
 class PdfSignatureField {
+  /// Creates a field using PDF-space bounds.
   PdfSignatureField.bounds({
     required this.pageNumber,
     required this.fieldName,
@@ -27,6 +28,7 @@ class PdfSignatureField {
         width = null,
         height = null;
 
+  /// Creates a field using top-left coordinates.
   PdfSignatureField.pageTopLeft({
     required this.pageNumber,
     required this.fieldName,
@@ -37,25 +39,38 @@ class PdfSignatureField {
     this.drawAppearance,
   }) : bounds = null;
 
+  /// Page number (1-based).
   final int pageNumber;
+  /// Field name.
   final String fieldName;
+  /// Bounds in PDF user space.
   final PdfRect? bounds;
+  /// Left coordinate (top-left mode).
   final double? left;
+  /// Top coordinate (top-left mode).
   final double? top;
+  /// Width (top-left mode).
   final double? width;
+  /// Height (top-left mode).
   final double? height;
+  /// Custom appearance drawer.
   final void Function(PdfGraphics graphics, PdfRect bounds)? drawAppearance;
 
+  /// Whether the field uses top-left coordinates.
   bool get isTopLeft => bounds == null;
 }
 
-/// API de alto nivel para assinatura incremental em PDF existente.
+/// High-level API for incremental signing of existing PDFs.
 class PdfSignatureService {
+  /// Creates a signature service.
   PdfSignatureService({PdfCmsSigner? cmsSigner})
       : _cmsSigner = cmsSigner ?? PdfCmsSigner();
 
   final PdfCmsSigner _cmsSigner;
 
+  /// Signs a PDF byte array and returns the updated bytes.
+  ///
+  /// If [signature.isDocTimeStamp] is true, [timestampProvider] is required.
   Future<Uint8List> signBytes({
     required Uint8List inputBytes,
     required PdfExternalSigner externalSigner,
@@ -194,21 +209,26 @@ Uint8List _extractByteRangeData(Uint8List bytes, List<int> byteRange) {
   return out;
 }
 
-/// Signer PEM pronto para uso (assinatura "interna").
+/// PEM signer adapter for internal signing workflows.
 class PdfPemSigner implements PdfExternalSigner {
+  /// Creates a PEM signer with private key and certificate chain.
   PdfPemSigner({
     required this.privateKeyPem,
     required this.certificatePem,
     this.chainPem = const <String>[],
   });
 
+  /// PEM-encoded private key.
   final String privateKeyPem;
+  /// PEM-encoded signing certificate.
   final String certificatePem;
+  /// PEM-encoded extra chain certificates.
   final List<String> chainPem;
 
   List<Uint8List>? _cached;
 
   @override
+  /// Returns the signer certificate chain as DER bytes.
   List<Uint8List> get certificates {
     if (_cached != null) return _cached!;
     final certs = <Uint8List>[
@@ -221,6 +241,7 @@ class PdfPemSigner implements PdfExternalSigner {
   }
 
   @override
+  /// Signs a digest using RSA/SHA-256.
   Future<Uint8List> signDigest(Uint8List digest) async {
     return PdfCmsSigner.signDigestRsaSha256(digest, privateKeyPem);
   }

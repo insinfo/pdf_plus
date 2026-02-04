@@ -24,7 +24,7 @@ import 'parsing/pdf_document_info.dart';
 
 /// Base class for loading an existing PDF document.
 abstract class PdfDocumentParserBase {
-  /// Create a Document loader instance
+  /// Creates a document loader instance.
   PdfDocumentParserBase(
     PdfRandomAccessReader reader, {
     bool enableCache = true,
@@ -38,7 +38,7 @@ abstract class PdfDocumentParserBase {
               )
             : reader;
 
-  /// Create a Document loader instance from bytes
+  /// Creates a document loader instance from bytes.
   PdfDocumentParserBase.fromBytes(
     Uint8List bytes, {
     bool enableCache = true,
@@ -52,24 +52,26 @@ abstract class PdfDocumentParserBase {
               )
             : PdfMemoryRandomAccessReader(bytes);
 
-  /// Random access reader
+  /// Random access reader.
   final PdfRandomAccessReader reader;
 
-  /// The existing PDF document content
+  /// The existing PDF document content.
   Uint8List get bytes => _cachedBytes ??= reader.readAll();
   Uint8List? _cachedBytes;
 
-  /// The objects size of the existing PDF document
+  /// The objects size of the existing PDF document.
   int get size;
 
-  /// The offset of the previous cross reference table
+  /// The offset of the previous cross reference table.
   int get xrefOffset;
 
+  /// The PDF version of the parsed document.
   PdfVersion get version => PdfVersion.pdf_1_4;
 
-  /// Import the existing objects into the new PDF document
+  /// Imports the existing objects into the new PDF document.
   void mergeDocument(PdfDocument pdfDocument);
 
+  /// Extracts the signature field edit context, if any.
   PdfSignatureFieldEditContext extractSignatureFieldEditContext() =>
       const PdfSignatureFieldEditContext(fields: []);
 }

@@ -56,33 +56,27 @@ import 'acroform/pdf_acroform.dart';
 import 'parsing/pdf_document_info.dart';
 import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
-/// Display hint for the PDF viewer
+/// Display hint for the PDF viewer.
 enum PdfPageMode {
-  /// This page mode indicates that the document
-  /// should be opened just with the page visible.  This is the default
+  /// Opens with only the page visible (default).
   none,
 
-  /// This page mode indicates that the Outlines
-  /// should also be displayed when the document is opened.
+  /// Opens with the outline panel visible.
   outlines,
 
-  /// This page mode indicates that the Thumbnails should be visible when the
-  /// document first opens.
+  /// Opens with page thumbnails visible.
   thumbs,
 
-  /// This page mode indicates that when the document is opened, it is displayed
-  /// in full-screen-mode. There is no menu bar, window controls nor any other
-  /// window present.
+  /// Opens in full screen mode.
   fullscreen
 }
 
-/// This class is the base of the Pdf generator. A [PdfDocument] class is
-/// created for a document, and each page, object, annotation,
-/// etc is added to the document.
-/// Once complete, the document can be written to a Stream, and the Pdf
-/// document's internal structures are kept in sync.
+/// Core PDF document model used to create and serialize PDF files.
+///
+/// Create a [PdfDocument], add pages and objects, then call [save] to
+/// generate the final bytes.
 class PdfDocument {
-  /// This creates a Pdf document
+  /// Creates a new PDF document.
   PdfDocument({
     PdfPageMode pageMode = PdfPageMode.none,
     DeflateCallback? deflate,
@@ -102,6 +96,7 @@ class PdfDocument {
     catalog = PdfCatalog(this, PdfPageList(this), pageMode: pageMode);
   }
 
+  /// Parses a PDF from a random access reader.
   factory PdfDocument.parseFromReader(
     PdfRandomAccessReader reader, {
     bool enableCache = true,
@@ -119,6 +114,7 @@ class PdfDocument {
     return PdfDocument.load(parser);
   }
 
+  /// Parses a PDF from in-memory bytes.
   factory PdfDocument.parseFromBytes(
     Uint8List pdfBytes, {
     bool enableCache = true,
@@ -136,6 +132,7 @@ class PdfDocument {
     return PdfDocument.load(parser);
   }
 
+  /// Loads a PDF using an existing parser.
   PdfDocument.load(
     this.prev, {
     DeflateCallback? deflate,
@@ -156,69 +153,70 @@ class PdfDocument {
 
   final PdfDocumentParserBase? prev;
 
-  /// This is used to allocate objects a unique serial number in the document.
+  /// The serial number counter for new indirect objects.
   int _objser;
 
+  /// Current object serial number.
   int get objser => _objser;
 
-  /// This vector contains each indirect object within the document.
+  /// All indirect objects that belong to this document.
   final Set<PdfObject> objects = <PdfObject>{};
 
-  /// This is the Catalog object, which is required by each Pdf Document
+  /// The document catalog object.
   late final PdfCatalog catalog;
 
-  /// PDF generation settings
+  /// PDF generation settings.
   late final PdfSettings settings;
 
-  /// PDF version to generate
+  /// PDF version to generate.
   @Deprecated('Use settings.version')
   PdfVersion get version => settings.version;
 
-  /// This is the info object. Although this is an optional object, we
-  /// include it.
+  /// The /Info dictionary if present.
   PdfInfo? _info;
 
+  /// The /Info dictionary (deprecated).
   @Deprecated('This can safely be removed.')
   PdfInfo? get info => _info;
 
+  /// Sets the /Info dictionary (deprecated).
   @Deprecated('This can safely be removed.')
   set info(PdfInfo? value) => _info = value;
 
-  /// This is the Pages object, which is required by each Pdf Document
+  /// Page tree root.
   PdfPageList get pdfPageList => catalog.pdfPageList;
 
-  /// The anchor names dictionary
+  /// Name tree dictionary.
   PdfNames get pdfNames {
     catalog.names ??= PdfNames(this);
     return catalog.names!;
   }
 
-  /// This holds a [PdfObject] describing the default border for annotations.
-  /// It's only used when the document is being written.
+  /// Default border for annotations, used during serialization.
   PdfObject? defaultOutlineBorder;
 
-  /// Callback to compress the stream in the pdf file.
-  /// Use `deflate: zlib.encode` if using dart:io
-  /// No compression by default
+  /// Stream compression callback (deprecated).
+  ///
+  /// Use `deflate: zlib.encode` if using `dart:io`. Null disables compression.
   @Deprecated('Use settings.deflate')
   DeflateCallback? get deflate => settings.deflate;
 
-  /// Object used to encrypt the document
+  /// Encryption configuration for the document.
   PdfEncryption? encryption;
 
-  /// Object used to sign the document
+  /// Document-level signature object.
   PdfSignature? sign;
 
-  /// DSS data (LTV)
+  /// DSS data (LTV).
   PdfDssData? dss;
 
-  /// Graphics state, representing only opacity.
+  /// Graphics state registry (opacity and transfer modes).
   PdfGraphicStates? _graphicStates;
 
-  /// The PDF specification version
+  /// PDF specification version string.
   final String versionString = '1.7';
 
-  /// This holds the current fonts
+  /// Fonts registered in this document.
   final Set<PdfFont> fonts = <PdfFont>{};
 
   PdfSignatureFieldEditor? _signatureEditor;
@@ -227,14 +225,15 @@ class PdfDocument {
 
   Uint8List? _documentID;
 
+  /// Whether compression is enabled (deprecated).
   @Deprecated('Use settings.compress')
   bool get compress => settings.deflate != null;
 
-  /// Output a PDF document with comments and formatted data
+  /// Whether verbose output is enabled (deprecated).
   @Deprecated('Use settings.verbose')
   bool get verbose => settings.verbose;
 
-  /// Generates the document ID
+  /// Generates or returns the document ID.
   Uint8List get documentID {
     if (_documentID == null) {
       final rnd = math.Random.secure();
@@ -247,22 +246,21 @@ class PdfDocument {
     return _documentID!;
   }
 
-  /// Creates a new serial number
+  /// Allocates a new indirect object serial number.
   int genSerial() => _objser++;
 
-  /// This returns a specific page. It's used mainly when using a
-  /// Serialized template file.
+  /// Returns a specific page by index.
   PdfPage? page(int page) {
     return pdfPageList.pages[page];
   }
 
-  /// The root outline
+  /// The document outline root.
   PdfOutline get outline {
     catalog.outlines ??= PdfOutline(this);
     return catalog.outlines!;
   }
 
-  /// Atualiza os metadados (/Info) do documento.
+  /// Updates /Info metadata fields.
   void updateInfo({
     String? title,
     String? author,
@@ -285,7 +283,7 @@ class PdfDocument {
     );
   }
 
-  /// Remove uma página pelo índice (edição incremental segura).
+  /// Removes a page by index (safe incremental edit).
   void removePageAt(int index) {
     if (index < 0 || index >= pdfPageList.pages.length) {
       throw RangeError.index(index, pdfPageList.pages, 'index');
@@ -294,18 +292,19 @@ class PdfDocument {
     page.inUse = false;
   }
 
-  /// The root page labels
+  /// Page label tree root.
   PdfPageLabels get pageLabels {
     catalog.pageLabels ??= PdfPageLabels(this);
     return catalog.pageLabels!;
   }
 
-  /// Inicializa DSS quando necessário.
+  /// Initializes DSS data if needed.
   void ensureDss() {
     dss ??= PdfDssData(this);
   }
 
-  /// Manager for signature fields (Acforms).
+  /// Signature field manager (AcroForm).
+  ///
   /// Allows finding, renaming, removing, and modifying signature fields.
   PdfSignatureFieldEditor get signatures {
     if (_signatureEditor != null) return _signatureEditor!;
@@ -321,22 +320,22 @@ class PdfDocument {
     return _signatureEditor!;
   }
 
-  /// AcroForm manager for handling general form fields (Text, Checkbox, etc).
+  /// AcroForm manager for general form fields.
   PdfAcroForm get form {
     _acroForm ??= PdfAcroForm(this);
     return _acroForm!;
   }
 
-  /// Graphic states for opacity and transfer modes
+  /// Graphic states for opacity and transfer modes.
   PdfGraphicStates get graphicStates {
     _graphicStates ??= PdfGraphicStates(this);
     return _graphicStates!;
   }
 
-  /// This document has at least one graphic state
+  /// Whether this document has any graphic states.
   bool get hasGraphicStates => _graphicStates != null;
 
-  /// This writes the document to an OutputStream.
+  /// Writes the document to an output stream.
   Future<void> output(
     PdfStream os, {
     bool enableEventLoopBalancing = false,
@@ -377,7 +376,7 @@ class PdfDocument {
     }
   }
 
-  /// Generates the PDF document as a memory file.
+  /// Generates the PDF document as a memory buffer.
   ///
   /// Runs in a background isolate when supported (e.g., on Dart VM),
   /// or on the main isolate when isolate support is unavailable
@@ -418,6 +417,7 @@ class PdfDocument {
   //   return this;
   // }
 
+  /// Adds a URI annotation to the given page.
   PdfDocument addUriAnnotation({
     required int pageNumber,
     required PdfRect bounds,
@@ -432,7 +432,7 @@ class PdfDocument {
     return this;
   }
 
-  // TODO checar se isso esta certo
+  /// Adds a signature field at the given bounds.
   PdfDocument addSignatureField({
     required int pageNumber,
     required PdfRect bounds,
@@ -454,6 +454,7 @@ class PdfDocument {
     return this;
   }
 
+  /// Adds a URI annotation using top-left coordinates.
   PdfDocument addUriAnnotationTopLeft({
     required int pageNumber,
     required double left,
@@ -478,6 +479,7 @@ class PdfDocument {
     return this;
   }
 
+  /// Adds a signature field using top-left coordinates.
   PdfDocument addSignatureFieldTopLeft({
     required int pageNumber,
     required double left,
@@ -509,6 +511,7 @@ class PdfDocument {
     return this;
   }
 
+  /// Converts top-left coordinates into PDF user space.
   PdfRect _rectFromTopLeft(
     PdfPage page, {
     required double left,
@@ -523,16 +526,21 @@ class PdfDocument {
 }
 
 class PdfSignatureFieldEditor {
+  /// Creates a signature field editor for a document.
   PdfSignatureFieldEditor({
     required this.document,
     required this.context,
   });
 
+  /// The owning document.
   final PdfDocument document;
+  /// The edit context backing the field list.
   final PdfSignatureFieldEditContext context;
 
+  /// All signature fields.
   List<PdfSignatureFieldObjectInfo> get fields => context.fields;
 
+  /// Finds a signature field by name.
   PdfSignatureFieldObjectInfo? findByName(String name) {
     for (final field in context.fields) {
       if (field.info.fieldName == name) return field;
@@ -540,18 +548,21 @@ class PdfSignatureFieldEditor {
     return null;
   }
 
+  /// Renames a field by name.
   bool renameFieldByName(String currentName, String newName) {
     final field = findByName(currentName);
     if (field == null) return false;
     return renameField(field, newName);
   }
 
+  /// Removes a field by name.
   bool removeFieldByName(String name) {
     final field = findByName(name);
     if (field == null) return false;
     return removeField(field);
   }
 
+  /// Renames a field.
   bool renameField(PdfSignatureFieldObjectInfo field, String newName) {
     final updated = PdfDict<PdfDataType>.values(
       Map<String, PdfDataType>.from(field.fieldDict.values),
@@ -569,6 +580,7 @@ class PdfSignatureFieldEditor {
     return _replaceDirectField(field, updated);
   }
 
+  /// Updates metadata stored in the field dictionary.
   bool updateFieldMetadata(
     PdfSignatureFieldObjectInfo field, {
     String? reason,
@@ -604,6 +616,7 @@ class PdfSignatureFieldEditor {
     return _replaceDirectField(field, updated);
   }
 
+  /// Replaces the field dictionary with a prebuilt one.
   bool updateFieldDict(
     PdfSignatureFieldObjectInfo field,
     PdfDict<PdfDataType> updated,
@@ -620,6 +633,7 @@ class PdfSignatureFieldEditor {
     return _replaceDirectField(field, updated);
   }
 
+  /// Clears the signature value (/V) for a field.
   bool clearSignatureValue(PdfSignatureFieldObjectInfo field) {
     final updated = PdfDict<PdfDataType>.values(
       Map<String, PdfDataType>.from(field.fieldDict.values),
@@ -637,6 +651,7 @@ class PdfSignatureFieldEditor {
     return _replaceDirectField(field, updated);
   }
 
+  /// Removes a field from the AcroForm fields array.
   bool removeField(PdfSignatureFieldObjectInfo field) {
     final fieldsArray = context.fieldsArray;
     if (fieldsArray == null) return false;
@@ -661,6 +676,7 @@ class PdfSignatureFieldEditor {
     return _writeFieldsArray(updated);
   }
 
+  /// Adds an empty signature widget to a page.
   PdfAnnotSign addEmptySignatureField({
     required PdfPage page,
     required PdfRect bounds,
@@ -671,6 +687,7 @@ class PdfSignatureFieldEditor {
     return widget;
   }
 
+  /// Writes the updated fields array to the document.
   bool _writeFieldsArray(PdfArray fields) {
     final fieldsRef = context.fieldsRef;
     if (fieldsRef != null) {
@@ -706,6 +723,7 @@ class PdfSignatureFieldEditor {
     return true;
   }
 
+  /// Removes annotation references to a field from all pages.
   void _removeAnnotationFromPages(PdfIndirectRef fieldRef) {
     for (final page in document.pdfPageList.pages) {
       final annots = page.params[PdfNameTokens.annots];
@@ -719,6 +737,7 @@ class PdfSignatureFieldEditor {
     }
   }
 
+  /// Replaces a direct field entry in the fields array.
   bool _replaceDirectField(
     PdfSignatureFieldObjectInfo field,
     PdfDict<PdfDataType> updated,

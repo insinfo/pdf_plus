@@ -94,9 +94,8 @@ Refatoracao do parser (organizado sem `part`)
 - Parser dividido em arquivos menores (mantendo robustez/performance):
   - `lib/src/pdf/parsing/pdf_document_parser.dart` (orquestracao e API publica).
   - `lib/src/pdf/parsing/pdf_parser_types.dart` (tipos auxiliares antes internos).
-  - `lib/src/pdf/parsing/pdf_parser_constants.dart` (constantes de tokens PDF).
 - Tipos antes privados viraram publicos para evitar `part`.
-- Constantes como `PdfKeys.pages`, `PdfKeys.xObject`, `PdfKeys.acroForm`, etc.
+- Constantes centralizadas em `lib/src/pdf/pdf_names.dart` via `PdfNameTokens`.
 
 Proximos passos sugeridos (nao implementados ainda)
 

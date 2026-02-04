@@ -14,8 +14,9 @@ import 'pdf_cms_signer.dart';
 import 'pdf_external_signer.dart';
 import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
-/// Implementação PAdES baseada em PdfSignatureBase.
+/// PAdES implementation based on [PdfSignatureBase].
 class PdfPadesSigner extends PdfSignatureBase {
+  /// Creates a PAdES signer using an external signer and CMS builder.
   PdfPadesSigner({
     required this.externalSigner,
     PdfCmsSigner? cmsSigner,
@@ -28,17 +29,27 @@ class PdfPadesSigner extends PdfSignatureBase {
     this.name,
   }) : cmsSigner = cmsSigner ?? PdfCmsSigner();
 
+  /// External signer used to sign CMS attributes.
   final PdfExternalSigner externalSigner;
+  /// CMS builder used to build detached signatures.
   final PdfCmsSigner cmsSigner;
+  /// Reserved size for /Contents.
   final int contentsReserveSize;
+  /// Fixed width for ByteRange numbers.
   final int byteRangeDigits;
+  /// Signing time to embed.
   final DateTime? signingTime;
+  /// Reason for signing.
   final String? reason;
+  /// Location of signing.
   final String? location;
+  /// Contact information.
   final String? contactInfo;
+  /// Signer name.
   final String? name;
 
   @override
+  /// Populates the signature dictionary before hashing.
   void preSign(PdfObject object, PdfDict params) {
     params[PdfNameTokens.filter] = const PdfName(PdfNameTokens.adobePpkLite);
     params[PdfNameTokens.subFilter] = const PdfName(PdfNameTokens.adbePkcs7Detached);
@@ -66,6 +77,7 @@ class PdfPadesSigner extends PdfSignatureBase {
   }
 
   @override
+  /// Computes the ByteRange digest, builds CMS, and embeds /Contents.
   Future<void> sign(
     PdfObject object,
     PdfStream os,

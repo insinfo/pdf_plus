@@ -16,7 +16,7 @@
 
 import 'color.dart';
 
-/// Material design colors
+/// Material design colors.
 class PdfColors {
   PdfColors._();
 
@@ -394,7 +394,7 @@ class PdfColors {
     deepOrangeAccent,
   ];
 
-  /// Get a pseudo-random color
+  /// Returns a pseudo-random color for a given index.
   static PdfColor getColor(int index) {
     final hue = index * 137.508;
     final PdfColor color = PdfColorHsv(hue % 360, 1, 1);

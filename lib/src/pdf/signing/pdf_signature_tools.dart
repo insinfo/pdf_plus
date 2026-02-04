@@ -7,7 +7,9 @@ import '../rect.dart';
 import 'pdf_external_signing.dart';
 import 'pdf_signature_config.dart';
 
+/// Convenience helpers for external signing workflows.
 class PdfSignatureTools {
+  /// Prepares a PDF for external signing using PDF-space bounds.
   static Future<PdfExternalSigningPrepared> prepareExternalSignature({
     required Uint8List inputBytes,
     required int pageNumber,
@@ -28,6 +30,7 @@ class PdfSignatureTools {
     );
   }
 
+  /// Prepares a PDF for external signing using top-left coordinates.
   static Future<PdfExternalSigningPrepared> prepareExternalSignatureTopLeft({
     required Uint8List inputBytes,
     required int pageNumber,
@@ -62,6 +65,7 @@ class PdfSignatureTools {
     );
   }
 
+  /// Embeds a PKCS#7 signature into prepared PDF bytes.
   static Uint8List embedExternalSignature({
     required Uint8List preparedPdfBytes,
     required Uint8List pkcs7Bytes,

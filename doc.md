@@ -103,6 +103,59 @@ File('output_signed.pdf').writeAsBytesSync(outputBytes);
 document.dispose();
 ```
 
+### 3.2 Aparência personalizada com logo (drawAppearance)
+Use `drawAppearance` para desenhar um visual personalizado. Para imagens,
+crie a `PdfImage` usando o `document` associado ao `PdfGraphics`.
+```dart
+import 'dart:io';
+import 'package:pdf_plus/pdf.dart' as pdf;
+import 'package:pdf_plus/signing.dart';
+
+final inputBytes = File('documento.pdf').readAsBytesSync();
+final document = PdfLoadedDocument.fromBytes(inputBytes);
+
+final signer = PdfSignatureSigner.pem(
+  privateKeyPem: userKeyPem,
+  certificate: X509Certificate.fromPem(userCertPem),
+  chain: [
+    X509Certificate.fromPem(interCertPem),
+    X509Certificate.fromPem(rootCertPem),
+  ],
+);
+
+final logoBytes = File('logo.png').readAsBytesSync();
+
+await document.addSignature(
+  PdfSignatureRequest(
+    pageNumber: 1,
+    signer: signer,
+    fieldName: 'AssinaturaVisual',
+    bounds: PdfSignatureBounds.topLeft(
+      left: 50,
+      top: 50,
+      width: 240,
+      height: 90,
+    ),
+    drawAppearance: (graphics, rect) {
+      final font = graphics.defaultFont;
+      if (font == null) return;
+
+      // Use o documento correto associado ao graphics.
+      final logo = pdf.PdfImage.file(graphics.document, bytes: logoBytes);
+
+      graphics.drawRect(0, 0, rect.width, rect.height);
+      graphics.strokePath();
+      graphics.drawImage(logo, 8, 8, 48, 48);
+      graphics.drawString(font, 10, 'Assinado digitalmente', 64, 28);
+    },
+  ),
+);
+
+final outputBytes = await document.save();
+File('output_signed.pdf').writeAsBytesSync(outputBytes);
+document.dispose();
+```
+
 ### 3.1 Timestamp RFC 3161 (FreeTSA opcional)
 ```dart
 import 'dart:io';
@@ -144,6 +197,108 @@ await document.addSignature(
 		location: 'Brasil',
 		timestampProvider: tsa.timestampSignature,
 	),
+);
+```
+
+### 3.3 APIs de assinatura eletrônica (visão geral)
+Esta biblioteca oferece três níveis de API para assinatura:
+- **Alto nível**: `PdfLoadedDocument` + `PdfSignatureRequest`
+- **Serviço**: `PdfSignatureService` + `PdfSignatureField`
+- **Ferramentas**: `PdfSignatureTools` (prepare/embed)
+
+Use o nível que melhor se encaixa no seu fluxo.
+
+### 3.4 Alto nível (PdfLoadedDocument)
+```dart
+final document = PdfLoadedDocument.fromBytes(File('documento.pdf').readAsBytesSync());
+final signer = PdfSignatureSigner.pem(
+  privateKeyPem: userKeyPem,
+  certificate: X509Certificate.fromPem(userCertPem),
+  chain: [X509Certificate.fromPem(interCertPem), X509Certificate.fromPem(rootCertPem)],
+);
+
+await document.addSignature(
+  PdfSignatureRequest(
+    pageNumber: 1,
+    signer: signer,
+    fieldName: 'Assinatura1',
+    bounds: PdfSignatureBounds.topLeft(left: 50, top: 50, width: 220, height: 90),
+    reason: 'Aprovação',
+    location: 'Brasil',
+  ),
+);
+final outputBytes = await document.save();
+File('output_signed.pdf').writeAsBytesSync(outputBytes);
+document.dispose();
+```
+
+### 3.5 Serviço (PdfSignatureService)
+```dart
+final service = PdfSignatureService();
+final signedBytes = await service.signBytes(
+  inputBytes: File('documento.pdf').readAsBytesSync(),
+  externalSigner: PdfPemSigner(
+    privateKeyPem: userKeyPem,
+    certificatePem: userCertPem,
+    chainPem: [interCertPem, rootCertPem],
+  ),
+  field: PdfSignatureField.pageTopLeft(
+    pageNumber: 1,
+    fieldName: 'Assinatura1',
+    left: 50,
+    top: 50,
+    width: 220,
+    height: 90,
+  ),
+  signature: PdfSignatureConfig(
+    reason: 'Aprovação',
+    location: 'Brasil',
+    signingTime: DateTime.now(),
+  ),
+);
+File('output_signed.pdf').writeAsBytesSync(signedBytes);
+```
+
+### 3.6 Fluxo externo (prepare/embed)
+```dart
+final prepared = await PdfSignatureTools.prepareExternalSignature(
+  inputBytes: File('documento.pdf').readAsBytesSync(),
+  pageNumber: 1,
+  bounds: PdfRect(50, 50, 220, 90),
+  fieldName: 'Assinatura1',
+);
+
+// Enviar prepared.hashBase64 para assinar externamente (HSM/A3).
+final pkcs7 = await meuAssinadorExterno(prepared.hashBase64);
+
+final signed = PdfSignatureTools.embedExternalSignature(
+  preparedPdfBytes: prepared.preparedPdfBytes,
+  pkcs7Bytes: pkcs7,
+);
+File('output_signed.pdf').writeAsBytesSync(signed);
+```
+
+### 3.7 Assinatura visível personalizada (drawAppearance)
+```dart
+import 'package:pdf_plus/pdf.dart' as pdf;
+
+final logoBytes = File('logo.png').readAsBytesSync();
+await document.addSignature(
+  PdfSignatureRequest(
+    pageNumber: 1,
+    signer: signer,
+    fieldName: 'AssinaturaVisual',
+    bounds: PdfSignatureBounds.topLeft(left: 50, top: 50, width: 240, height: 90),
+    drawAppearance: (graphics, rect) {
+      final font = graphics.defaultFont;
+      if (font == null) return;
+      final logo = pdf.PdfImage.file(graphics.document, bytes: logoBytes);
+      graphics.drawRect(0, 0, rect.width, rect.height);
+      graphics.strokePath();
+      graphics.drawImage(logo, 8, 8, 48, 48);
+      graphics.drawString(font, 10, 'Assinado digitalmente', 64, 28);
+    },
+  ),
 );
 ```
 

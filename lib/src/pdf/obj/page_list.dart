@@ -23,9 +23,9 @@ import 'object.dart';
 import 'page.dart';
 import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
-/// PdfPageList object
+/// Page tree root object.
 class PdfPageList extends PdfObject<PdfDict> {
-  /// This constructs a [PdfPageList] object.
+  /// Creates a [PdfPageList] object.
   PdfPageList(
     PdfDocument pdfDocument, {
     int objgen = 0,
@@ -39,7 +39,7 @@ class PdfPageList extends PdfObject<PdfDict> {
           objser: objser,
         );
 
-  /// This holds the pages
+  /// The list of pages in document order.
   final pages = <PdfPage>[];
 
   @override

@@ -10,11 +10,12 @@ import 'pdf_external_signer.dart';
 import 'pdf_pades_signer.dart';
 import 'pdf_signature_appearance.dart';
 
-/// Fachada para assinatura de PDFs.
+/// Facade for signing in-memory [PdfDocument] instances.
 class PdfSigner {
+  /// Creates a signer facade.
   const PdfSigner();
 
-  /// Assina um [PdfDocument] já construído e retorna os bytes assinados.
+  /// Signs a built [PdfDocument] and returns the signed bytes.
   Future<Uint8List> signDocument({
     required PdfDocument document,
     required PdfExternalSigner signer,

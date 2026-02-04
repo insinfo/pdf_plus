@@ -25,6 +25,7 @@ import 'obj/function.dart';
 import 'obj/object.dart';
 import 'obj/smask.dart';
 
+/// Blend modes for compositing operations.
 enum PdfBlendMode {
   /// Selects the source color, ignoring the backdrop
   normal,
@@ -81,10 +82,10 @@ enum PdfBlendMode {
   luminosity,
 }
 
-/// Graphic state
+/// Graphic state configuration for opacity and blending.
 @immutable
 class PdfGraphicState {
-  /// Create a new graphic state
+  /// Creates a new graphic state.
   const PdfGraphicState({
     double? opacity,
     double? strokeOpacity,
@@ -95,25 +96,26 @@ class PdfGraphicState {
   })  : fillOpacity = fillOpacity ?? opacity,
         strokeOpacity = strokeOpacity ?? opacity;
 
-  /// Fill opacity to apply to this graphic state
+  /// Fill opacity to apply to this graphic state.
   final double? fillOpacity;
 
-  /// Stroke opacity to apply to this graphic state
+  /// Stroke opacity to apply to this graphic state.
   final double? strokeOpacity;
 
-  /// The current blend mode to be used
+  /// The current blend mode to be used.
   final PdfBlendMode? blendMode;
 
-  /// Opacity mask
+  /// Opacity mask.
   final PdfSoftMask? softMask;
 
-  /// Color transfer function
+  /// Color transfer function.
   final PdfFunction? transferFunction;
 
   @override
   String toString() =>
       '$runtimeType fillOpacity:$fillOpacity strokeOpacity:$strokeOpacity blendMode:$blendMode softMask:$softMask transferFunction:$transferFunction';
 
+  /// Outputs this graphic state as a PDF dictionary.
   PdfDict output() {
     final params = PdfDict();
 
@@ -163,9 +165,9 @@ class PdfGraphicState {
       transferFunction.hashCode;
 }
 
-/// Stores all the graphic states used in the document
+/// Stores all graphic states used in the document.
 class PdfGraphicStates extends PdfObject<PdfDict> {
-  /// Create a new Graphic States object
+  /// Creates a new graphic states registry.
   PdfGraphicStates(PdfDocument pdfDocument)
       : super(pdfDocument, params: PdfDict());
 
@@ -173,7 +175,7 @@ class PdfGraphicStates extends PdfObject<PdfDict> {
 
   static const String _prefix = PdfNameTokens.a;
 
-  /// Generate a name for a state object
+  /// Generates a resource name for a state object.
   String stateName(PdfGraphicState state) {
     var index = _states.indexOf(state);
     if (index < 0) {
@@ -184,6 +186,7 @@ class PdfGraphicStates extends PdfObject<PdfDict> {
   }
 
   @override
+  /// Prepares the resource dictionary for serialization.
   void prepare() {
     super.prepare();
 

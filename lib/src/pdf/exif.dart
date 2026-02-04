@@ -21,9 +21,9 @@ import 'dart:typed_data';
 
 import 'obj/image.dart';
 
-/// Jpeg metadata extraction
+/// JPEG metadata extraction.
 class PdfJpegInfo {
-  /// Load a Jpeg image's metadata
+  /// Loads a JPEG image's metadata from raw bytes.
   factory PdfJpegInfo(Uint8List image) {
     final buffer = image.buffer.asByteData(
       image.offsetInBytes,
@@ -81,33 +81,33 @@ class PdfJpegInfo {
 
   PdfJpegInfo._(this.width, this.height, this._color, this.tags);
 
-  /// Width of the image
+  /// Width of the image.
   final int? width;
 
-  /// Height of the image
+  /// Height of the image.
   final int height;
 
   final int? _color;
 
-  /// Is the image color or greyscale
+  /// Whether the image is color (RGB) or greyscale.
   bool get isRGB => _color == 3;
 
-  /// Exif tags discovered
+  /// Exif tags discovered.
   final Map<PdfExifTag, dynamic>? tags;
 
-  /// EXIF version
+  /// EXIF version.
   String? get exifVersion =>
       tags == null || tags![PdfExifTag.ExifVersion] == null
           ? null
           : utf8.decode(tags![PdfExifTag.ExifVersion]);
 
-  /// Flashpix format version
+  /// Flashpix format version.
   String? get flashpixVersion =>
       tags == null || tags![PdfExifTag.FlashpixVersion] == null
           ? null
           : utf8.decode(tags![PdfExifTag.FlashpixVersion]);
 
-  /// Rotation angle of this image
+  /// Rotation angle of this image.
   PdfImageOrientation get orientation {
     if (tags == null || tags![PdfExifTag.Orientation] == null) {
       return PdfImageOrientation.topLeft;
@@ -125,27 +125,27 @@ class PdfJpegInfo {
     }
   }
 
-  /// Exif horizontal resolution
+  /// Exif horizontal resolution.
   double? get xResolution =>
       tags == null || tags![PdfExifTag.XResolution] == null
           ? null
           : tags![PdfExifTag.XResolution][0].toDouble() /
               tags![PdfExifTag.XResolution][1].toDouble();
 
-  /// Exif vertical resolution
+  /// Exif vertical resolution.
   double? get yResolution =>
       tags == null || tags![PdfExifTag.YResolution] == null
           ? null
           : tags![PdfExifTag.YResolution][0].toDouble() /
               tags![PdfExifTag.YResolution][1].toDouble();
 
-  /// Exif horizontal pixel dimension
+  /// Exif horizontal pixel dimension.
   int? get pixelXDimension =>
       tags == null || tags![PdfExifTag.PixelXDimension] == null
           ? width
           : tags![PdfExifTag.PixelXDimension];
 
-  /// Exif vertical pixel dimension
+  /// Exif vertical pixel dimension.
   int? get pixelYDimension =>
       tags == null || tags![PdfExifTag.PixelYDimension] == null
           ? height

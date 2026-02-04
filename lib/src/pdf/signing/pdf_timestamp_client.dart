@@ -7,15 +7,19 @@ import 'package:pdf_plus/src/crypto/sha1.dart';
 import 'package:pdf_plus/src/crypto/sha256.dart';
 import 'package:pdf_plus/src/crypto/sha512.dart';
 
+/// Provider that returns a timestamp token for a given signature.
 typedef PdfTimestampProvider = Future<Uint8List> Function(Uint8List signature);
 
+/// Supported hash algorithms for TSA requests.
 enum PdfTimestampHashAlgorithm {
   sha1,
   sha256,
   sha512,
 }
 
+/// Validation options for TSA responses.
 class PdfTimestampValidationOptions {
+  /// Creates TSA validation options.
   const PdfTimestampValidationOptions({
     this.trustedRootsPem,
     this.trustedRootsProvider,
@@ -25,15 +29,23 @@ class PdfTimestampValidationOptions {
     this.throwOnFailure = true,
   });
 
+  /// PEM-encoded trusted roots.
   final List<String>? trustedRootsPem;
+  /// Trusted roots provider.
   final TrustedRootsProvider? trustedRootsProvider;
+  /// Multiple trusted roots providers.
   final List<TrustedRootsProvider>? trustedRootsProviders;
+  /// Optional certificate fetcher (AIA).
   final PdfHttpFetcherBase? certificateFetcher;
+  /// Whether a trusted chain is required.
   final bool requireTrustedChain;
+  /// Whether to throw when validation fails.
   final bool throwOnFailure;
 }
 
+/// RFC 3161 TSA client.
 class PdfTimestampClient {
+  /// Creates a TSA client.
   PdfTimestampClient({
     required this.endpoint,
     this.hashAlgorithm = PdfTimestampHashAlgorithm.sha256,
@@ -41,6 +53,7 @@ class PdfTimestampClient {
     PdfHttpFetcherBase? httpClient,
   }) : _httpClient = httpClient ?? PdfHttpFetcher();
 
+  /// Creates a client configured for FreeTSA.
   factory PdfTimestampClient.freetsa({
     PdfTimestampHashAlgorithm hashAlgorithm = PdfTimestampHashAlgorithm.sha256,
     PdfTimestampValidationOptions? validationOptions,
@@ -52,12 +65,16 @@ class PdfTimestampClient {
     );
   }
 
+  /// TSA endpoint.
   final Uri endpoint;
+  /// Hash algorithm for timestamp requests.
   final PdfTimestampHashAlgorithm hashAlgorithm;
+  /// Optional validation options.
   final PdfTimestampValidationOptions? validationOptions;
 
   final PdfHttpFetcherBase _httpClient;
 
+  /// Requests a timestamp token for [signature].
   Future<Uint8List> timestampSignature(
     Uint8List signature, {
     PdfTimestampValidationOptions? validationOptions,

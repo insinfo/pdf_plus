@@ -1,3 +1,4 @@
+/// PDF name tokens used throughout the library.
 class PdfNameTokens {
   const PdfNameTokens._();
   static const acroForm = '/AcroForm';

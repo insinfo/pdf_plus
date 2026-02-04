@@ -1,11 +1,11 @@
 import 'dart:typed_data';
 
-/// Interface para assinatura externa (A3/HSM/serviços).
+/// Interface for external signing (A3/HSM/services).
 abstract class PdfExternalSigner {
-  /// Assina o digest (SHA-256) dos `signedAttrs` e retorna a assinatura crua
-  /// (PKCS#1 v1.5 ou ECDSA), que será embutida no CMS.
+  /// Signs the SHA-256 digest of `signedAttrs` and returns a raw signature
+  /// (PKCS#1 v1.5 or ECDSA) to be embedded in the CMS.
   Future<Uint8List> signDigest(Uint8List digest);
 
-  /// Cadeia de certificados públicos do signatário.
+  /// Public certificate chain of the signer.
   List<Uint8List> get certificates;
 }

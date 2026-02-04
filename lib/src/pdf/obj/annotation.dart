@@ -37,7 +37,9 @@ import 'object.dart';
 import 'page.dart';
 import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
+/// Choice field widget (combo/list).
 class PdfChoiceField extends PdfAnnotWidget {
+  /// Creates a choice field widget.
   PdfChoiceField({
     required PdfRect rect,
     required this.textColor,
@@ -53,17 +55,24 @@ class PdfChoiceField extends PdfAnnotWidget {
           fieldName: fieldName,
         );
 
+  /// Option items.
   final List<String> items;
+  /// Text color for the appearance.
   final PdfColor textColor;
+  /// Current value.
   final String? value;
+  /// Default value.
   final String? defaultValue;
   final Set<PdfFieldFlags>? fieldFlags = {
     PdfFieldFlags.combo,
   };
+  /// Font used to draw the value.
   final PdfFont font;
 
+  /// Font size used to draw the value.
   final double fontSize;
   @override
+  /// Writes the widget appearance and field parameters.
   void build(PdfPage page, PdfObject object, PdfDict params) {
     super.build(page, object, params);
     // What is /F?
@@ -93,6 +102,7 @@ class PdfChoiceField extends PdfAnnotWidget {
     //params[PdfNameTokens.tu] = PdfString.fromString('Select from list');
   }
 
+  /// Encoded field flags value.
   int get fieldFlagsValue {
     if (fieldFlags == null || fieldFlags!.isEmpty) {
       return 0;
@@ -104,7 +114,9 @@ class PdfChoiceField extends PdfAnnotWidget {
   }
 }
 
+/// Annotation object wrapper attached to a page.
 class PdfAnnot extends PdfObject<PdfDict> {
+  /// Creates an annotation object on [pdfPage].
   PdfAnnot(this.pdfPage, this.annot, {int? objser, int objgen = 0})
       : super(pdfPage.pdfDocument,
             objser: objser,
@@ -121,7 +133,7 @@ class PdfAnnot extends PdfObject<PdfDict> {
   /// The page where the annotation will display
   final PdfPage pdfPage;
 
-  /// Output the annotation
+  /// Outputs the annotation contents.
   @override
   void prepare() {
     super.prepare();
@@ -129,6 +141,7 @@ class PdfAnnot extends PdfObject<PdfDict> {
   }
 }
 
+/// Annotation behavior flags.
 enum PdfAnnotFlags {
   /// 1
   invisible,
@@ -161,13 +174,16 @@ enum PdfAnnotFlags {
   lockedContent,
 }
 
+/// Annotation appearance states.
 enum PdfAnnotAppearance {
   normal,
   rollover,
   down,
 }
 
+/// Base class for PDF annotations.
 abstract class PdfAnnotBase {
+  /// Creates an annotation base.
   PdfAnnotBase({
     required this.subtype,
     required this.rect,
@@ -186,39 +202,41 @@ abstract class PdfAnnotBase {
         };
   }
 
-  /// The subtype of the outline, ie text, note, etc
+  /// The annotation subtype.
   final String subtype;
 
+  /// Annotation rectangle.
   final PdfRect rect;
 
-  /// the border for this annotation
+  /// Border for this annotation.
   final PdfBorder? border;
 
-  /// The text of a text annotation
+  /// Text content of the annotation.
   final String? content;
 
-  /// The internal name for a link
+  /// Internal name for a link.
   final String? name;
 
-  /// The author of the annotation
+  /// The author of the annotation.
   final String? author;
 
-  /// The subject of the annotation
+  /// The subject of the annotation.
   final String? subject;
 
-  /// Flags specifying various characteristics of the annotation
+  /// Flags specifying various characteristics of the annotation.
   late final Set<PdfAnnotFlags> flags;
 
-  /// Last modification date
+  /// Last modification date.
   final DateTime? date;
 
-  /// Color
+  /// Annotation color.
   final PdfColor? color;
 
   final _appearances = <String, PdfDataType>{};
 
   PdfName? _as;
 
+  /// Encoded annotation flags value.
   int get flagValue {
     if (flags.isEmpty) {
       return 0;
@@ -229,6 +247,7 @@ abstract class PdfAnnotBase {
         .reduce((int a, int b) => a | b);
   }
 
+  /// Creates and registers a form XObject for the appearance stream.
   PdfGraphics appearance(
     PdfDocument pdfDocument,
     PdfAnnotAppearance type, {
@@ -280,6 +299,7 @@ abstract class PdfAnnotBase {
 
   @protected
   @mustCallSuper
+  /// Writes the annotation dictionary entries.
   void build(PdfPage page, PdfObject object, PdfDict params) {
     params[PdfNameTokens.subtype] = PdfName(subtype);
     params[PdfNameTokens.rect] =
@@ -331,8 +351,9 @@ abstract class PdfAnnotBase {
   }
 }
 
+/// Text annotation.
 class PdfAnnotText extends PdfAnnotBase {
-  /// Create a text annotation
+  /// Creates a text annotation.
   PdfAnnotText({
     required PdfRect rect,
     required String content,
@@ -357,8 +378,9 @@ class PdfAnnotText extends PdfAnnotBase {
         );
 }
 
+/// Named destination link annotation.
 class PdfAnnotNamedLink extends PdfAnnotBase {
-  /// Create a named link annotation
+  /// Creates a named link annotation.
   PdfAnnotNamedLink({
     required PdfRect rect,
     required this.dest,
@@ -379,9 +401,11 @@ class PdfAnnotNamedLink extends PdfAnnotBase {
           author: author,
         );
 
+  /// Destination name.
   final String dest;
 
   @override
+  /// Writes the named destination action.
   void build(PdfPage page, PdfObject object, PdfDict params) {
     super.build(page, object, params);
     params[PdfNameTokens.a] = PdfDict.values(
@@ -393,8 +417,9 @@ class PdfAnnotNamedLink extends PdfAnnotBase {
   }
 }
 
+/// URL link annotation.
 class PdfAnnotUrlLink extends PdfAnnotBase {
-  /// Create an url link annotation
+  /// Creates a URL link annotation.
   PdfAnnotUrlLink({
     required PdfRect rect,
     required this.url,
@@ -415,9 +440,11 @@ class PdfAnnotUrlLink extends PdfAnnotBase {
           author: author,
         );
 
+  /// Target URL.
   final String url;
 
   @override
+  /// Writes the URI action.
   void build(PdfPage page, PdfObject object, PdfDict params) {
     super.build(page, object, params);
     params[PdfNameTokens.a] = PdfDict.values(
@@ -429,7 +456,9 @@ class PdfAnnotUrlLink extends PdfAnnotBase {
   }
 }
 
+/// Convenience wrapper for URL annotations.
 class PdfUriAnnotation extends PdfAnnotUrlLink {
+  /// Creates a URI annotation.
   PdfUriAnnotation({
     required PdfRect bounds,
     required String uri,
@@ -451,8 +480,9 @@ class PdfUriAnnotation extends PdfAnnotUrlLink {
         );
 }
 
+/// Square annotation.
 class PdfAnnotSquare extends PdfAnnotBase {
-  /// Create an Square annotation
+  /// Creates a square annotation.
   PdfAnnotSquare({
     required PdfRect rect,
     PdfBorder? border,
@@ -473,9 +503,11 @@ class PdfAnnotSquare extends PdfAnnotBase {
           author: author,
         );
 
+  /// Interior fill color.
   final PdfColor? interiorColor;
 
   @override
+  /// Writes the square annotation dictionary.
   void build(PdfPage page, PdfObject object, PdfDict params) {
     super.build(page, object, params);
     if (interiorColor != null) {
@@ -484,8 +516,9 @@ class PdfAnnotSquare extends PdfAnnotBase {
   }
 }
 
+/// Circle annotation.
 class PdfAnnotCircle extends PdfAnnotBase {
-  /// Create an Circle annotation
+  /// Creates a circle annotation.
   PdfAnnotCircle({
     required PdfRect rect,
     PdfBorder? border,
@@ -506,9 +539,11 @@ class PdfAnnotCircle extends PdfAnnotBase {
           author: author,
         );
 
+  /// Interior fill color.
   final PdfColor? interiorColor;
 
   @override
+  /// Writes the circle annotation dictionary.
   void build(PdfPage page, PdfObject object, PdfDict params) {
     super.build(page, object, params);
     if (interiorColor != null) {
@@ -517,8 +552,9 @@ class PdfAnnotCircle extends PdfAnnotBase {
   }
 }
 
+/// Polygon/polyline annotation.
 class PdfAnnotPolygon extends PdfAnnotBase {
-  /// Create an Polygon annotation
+  /// Creates a polygon/polyline annotation.
   PdfAnnotPolygon(this.document, this.points,
       {required PdfRect rect,
       PdfBorder? border,
@@ -540,13 +576,17 @@ class PdfAnnotPolygon extends PdfAnnotBase {
           author: author,
         );
 
+  /// Document owning this annotation.
   final PdfDocument document;
 
+  /// Vertex points.
   final List<PdfPoint> points;
 
+  /// Interior fill color.
   final PdfColor? interiorColor;
 
   @override
+  /// Writes the polygon/polyline dictionary.
   void build(PdfPage page, PdfObject object, PdfDict params) {
     super.build(page, object, params);
 
@@ -568,8 +608,9 @@ class PdfAnnotPolygon extends PdfAnnotBase {
   }
 }
 
+/// Ink list annotation.
 class PdfAnnotInk extends PdfAnnotBase {
-  /// Create an Ink List annotation
+  /// Creates an ink list annotation.
   PdfAnnotInk(
     this.document,
     this.points, {
@@ -593,11 +634,14 @@ class PdfAnnotInk extends PdfAnnotBase {
           content: content,
         );
 
+  /// Document owning this annotation.
   final PdfDocument document;
 
+  /// List of ink strokes.
   final List<List<PdfPoint>> points;
 
   @override
+  /// Writes the ink list dictionary.
   void build(
     PdfPage page,
     PdfObject object,
@@ -622,10 +666,12 @@ class PdfAnnotInk extends PdfAnnotBase {
   }
 }
 
+/// Highlighting modes for widget annotations.
 enum PdfAnnotHighlighting { none, invert, outline, push, toggle }
 
+/// Base class for widget annotations (AcroForm).
 abstract class PdfAnnotWidget extends PdfAnnotBase {
-  /// Create a widget annotation
+  /// Creates a widget annotation.
   PdfAnnotWidget({
     required PdfRect rect,
     required this.fieldType,
@@ -649,15 +695,20 @@ abstract class PdfAnnotWidget extends PdfAnnotBase {
           author: author,
         );
 
+  /// Field type name.
   final String fieldType;
 
+  /// Field name.
   final String? fieldName;
 
+  /// Highlighting behavior.
   final PdfAnnotHighlighting? highlighting;
 
+  /// Background color.
   final PdfColor? backgroundColor;
 
   @override
+  /// Writes widget annotation fields.
   void build(PdfPage page, PdfObject object, PdfDict params) {
     super.build(page, object, params);
 
@@ -702,7 +753,9 @@ abstract class PdfAnnotWidget extends PdfAnnotBase {
   }
 }
 
+/// Signature widget annotation.
 class PdfAnnotSign extends PdfAnnotWidget {
+  /// Creates a signature widget annotation.
   PdfAnnotSign({
     required PdfRect rect,
     String? fieldName,
@@ -723,6 +776,7 @@ class PdfAnnotSign extends PdfAnnotWidget {
         );
 
   @override
+  /// Writes signature widget fields and /V if present.
   void build(PdfPage page, PdfObject object, PdfDict params) {
     super.build(page, object, params);
     if (!params.containsKey(PdfNameTokens.v) && page.pdfDocument.sign != null) {
@@ -731,6 +785,7 @@ class PdfAnnotSign extends PdfAnnotWidget {
   }
 }
 
+/// AcroForm field flags.
 enum PdfFieldFlags {
   /// 1 - If set, the user may not change the value of the field.
   readOnly,
@@ -829,7 +884,9 @@ enum PdfFieldFlags {
   commitOnSelChange,
 }
 
+/// Base class for AcroForm fields.
 class PdfFormField extends PdfAnnotWidget {
+  /// Creates a form field widget.
   PdfFormField({
     required String fieldType,
     required PdfRect rect,
@@ -859,12 +916,16 @@ class PdfFormField extends PdfAnnotWidget {
           highlighting: highlighting,
         );
 
+  /// Alternate field name.
   final String? alternateName;
 
+  /// Mapping name.
   final String? mappingName;
 
+  /// Field flags.
   final Set<PdfFieldFlags>? fieldFlags;
 
+  /// Encoded field flags value.
   int get fieldFlagsValue {
     if (fieldFlags == null || fieldFlags!.isEmpty) {
       return 0;
@@ -876,6 +937,7 @@ class PdfFormField extends PdfAnnotWidget {
   }
 
   @override
+  /// Writes form field dictionary entries.
   void build(PdfPage page, PdfObject object, PdfDict params) {
     super.build(page, object, params);
     if (alternateName != null) {
@@ -889,9 +951,12 @@ class PdfFormField extends PdfAnnotWidget {
   }
 }
 
+/// Text alignment for text fields.
 enum PdfTextFieldAlign { left, center, right }
 
+/// Text field widget.
 class PdfTextField extends PdfFormField {
+  /// Creates a text field widget.
   PdfTextField({
     required PdfRect rect,
     String? fieldName,
@@ -930,21 +995,29 @@ class PdfTextField extends PdfFormField {
           fieldFlags: fieldFlags,
         );
 
+  /// Maximum input length.
   final int? maxLength;
 
+  /// Current value.
   final String? value;
 
+  /// Default value.
   final String? defaultValue;
 
+  /// Font used to render text.
   final PdfFont font;
 
+  /// Font size.
   final double fontSize;
 
+  /// Text color.
   final PdfColor textColor;
 
+  /// Text alignment.
   final PdfTextFieldAlign? textAlign;
 
   @override
+  /// Writes text field parameters and default appearance.
   void build(PdfPage page, PdfObject object, PdfDict params) {
     super.build(page, object, params);
     if (maxLength != null) {
@@ -969,7 +1042,9 @@ class PdfTextField extends PdfFormField {
   }
 }
 
+/// Button field widget.
 class PdfButtonField extends PdfFormField {
+  /// Creates a button field widget.
   PdfButtonField({
     required PdfRect rect,
     required String fieldName,
@@ -999,11 +1074,14 @@ class PdfButtonField extends PdfFormField {
           fieldFlags: fieldFlags,
         );
 
+  /// Current value.
   final String? value;
 
+  /// Default value.
   final String? defaultValue;
 
   @override
+  /// Writes button field parameters.
   void build(PdfPage page, PdfObject object, PdfDict params) {
     super.build(page, object, params);
 

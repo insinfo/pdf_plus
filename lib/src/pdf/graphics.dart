@@ -23,6 +23,7 @@ import 'package:pdf_plus/src/utils/path_parsing/path_parsing.dart';
 import 'package:pdf_plus/src/utils/vector_math/vector_math_64.dart';
 
 import 'color.dart';
+import 'document.dart';
 import 'format/array.dart';
 import 'format/name.dart';
 import 'format/num.dart';
@@ -123,9 +124,13 @@ class PdfGraphics {
   /// Buffer where to write the graphic operations
   final PdfStream _buf;
 
+  /// The document that owns this graphics context.
+  PdfDocument get document => _page.pdfDocument;
+
   /// Default font if none selected
   PdfFont? get defaultFont => _page.getDefaultFont();
 
+  /// Whether this graphics content has been modified.
   bool get altered => _page.altered;
 
   /// Draw a surface on the previously defined shape

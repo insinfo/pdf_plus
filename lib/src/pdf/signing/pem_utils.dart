@@ -4,9 +4,11 @@ import 'dart:typed_data';
 import 'package:pdf_plus/src/crypto/asn1/asn1.dart';
 import 'package:pdf_plus/src/crypto/rsa_keys.dart';
 
+/// Utilities for decoding PEM and RSA private keys.
 class PdfPemUtils {
   const PdfPemUtils._();
 
+  /// Decodes all PEM blocks matching [label].
   static List<Uint8List> decodePemBlocks(String pem, String label) {
     final escaped = RegExp.escape(label);
     final re = RegExp(
@@ -24,6 +26,7 @@ class PdfPemUtils {
     return out;
   }
 
+  /// Decodes the first PEM block matching [label].
   static Uint8List decodeFirstPem(String pem, String label) {
     final blocks = decodePemBlocks(pem, label);
     if (blocks.isEmpty) {
@@ -32,6 +35,7 @@ class PdfPemUtils {
     return blocks.first;
   }
 
+  /// Parses an RSA private key from PKCS#1 or PKCS#8 PEM.
   static RSAPrivateKey rsaPrivateKeyFromPem(String pem) {
     final pkcs1 = decodePemBlocks(pem, 'RSA PRIVATE KEY');
     if (pkcs1.isNotEmpty) {

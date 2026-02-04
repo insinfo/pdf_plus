@@ -308,9 +308,8 @@ Future<Uint8List> _signAsPerson({
       location: location,
       docMdpPermissionP: docMdpPermissionP,
       timestampProvider: timestampClient.timestampSignature,
-      drawAppearance: (graphics, rect, doc) {
+      drawAppearance: (graphics, rect) {
         _drawAssinaturaVisual(
-          document: doc,
           graphics: graphics,
           bounds: rect,
           dadosUsuario: dadosUsuario,
@@ -354,7 +353,6 @@ Future<Uint8List> _prepareBaseSignatureFields(Uint8List inputBytes) async {
 }
 
 void _drawAssinaturaVisual({
-  required pdf.PdfDocument document,
   required pdf.PdfGraphics graphics,
   required pdf.PdfRect bounds,
   required _DadosUsuarioAssinatura dadosUsuario,
@@ -378,7 +376,7 @@ void _drawAssinaturaVisual({
 
   if (logoBytes != null) {
     try {
-      final image = pdf.PdfImage.file(document, bytes: logoBytes);
+      final image = pdf.PdfImage.file(graphics.document, bytes: logoBytes);
       final logoBoxHeight = bounds.height - (padding * 2);
       final maxLogoWidth = logoBoxWidth - 10;
       final maxLogoHeight = logoBoxHeight - 10;

@@ -10,8 +10,9 @@ import 'package:pdf_plus/src/crypto/rsa_keys.dart';
 
 import 'pem_utils.dart';
 
+/// Builds CMS/PKCS#7 structures for PDF signatures.
 class PdfCmsSigner {
-  /// Helper compatível assina digest com RSA/SHA-256 usando PEM.
+  /// Helper that builds a detached CMS using PEM materials.
   static Uint8List signDetachedSha256RsaFromPem({
     required Uint8List contentDigest,
     required String privateKeyPem,
@@ -54,6 +55,7 @@ class PdfCmsSigner {
     return _rsaSignDigestSha256(digest, key);
   }
 
+  /// Builds a detached CMS/PKCS#7 signature.
   Future<Uint8List> buildDetachedCms({
     required Uint8List contentDigest,
     required Uint8List signerCertDer,

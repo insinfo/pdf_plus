@@ -28,25 +28,24 @@ import 'object.dart';
 import 'object_stream.dart';
 import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
-/// Page rotation
+/// Page rotation.
 enum PdfPageRotation {
-  /// No rotation
+  /// No rotation.
   none,
 
-  /// Rotated 90 degree clockwise
+  /// Rotated 90 degrees clockwise.
   rotate90,
 
-  /// Rotated 180 degree clockwise
+  /// Rotated 180 degrees clockwise.
   rotate180,
 
-  /// Rotated 270 degree clockwise
+  /// Rotated 270 degrees clockwise.
   rotate270,
 }
 
-/// Page object, which will hold any contents for this page.
+/// Page object that holds all contents for a page.
 class PdfPage extends PdfObject<PdfDict> with PdfGraphicStream {
-  /// This constructs a Page object, which will hold any contents for this
-  /// page.
+  /// Creates a page and registers it in the document page list.
   PdfPage(
     PdfDocument pdfDocument, {
     this.pageFormat = PdfPageFormat.standard,
@@ -67,24 +66,23 @@ class PdfPage extends PdfObject<PdfDict> with PdfGraphicStream {
     }
   }
 
-  /// This is this page format, ie the size of the page, margins, and rotation
+  /// Page format (size and margins).
   PdfPageFormat pageFormat;
 
-  /// The page rotation angle
+  /// The page rotation.
   PdfPageRotation rotate;
 
-  /// This holds the contents of the page.
+  /// Content streams for the page.
   final contents = <PdfObject>[];
 
-  /// This holds any Annotations contained within this page.
+  /// Annotations contained within this page.
   final annotations = <PdfAnnot>[];
 
   final _contentGraphics = <PdfObject, PdfGraphics>{};
 
-  /// This returns a [PdfGraphics] object, which can then be used to render
-  /// on to this page. If a previous [PdfGraphics] object was used, this object
-  /// is appended to the page, and will be drawn over the top of any previous
-  /// objects.
+  /// Returns a [PdfGraphics] object for drawing on this page.
+  ///
+  /// Each call appends a new content stream rendered over previous streams.
   PdfGraphics getGraphics() {
     final stream = PdfObjectStream(pdfDocument);
     final g = PdfGraphics(this, stream.buf);
@@ -93,7 +91,7 @@ class PdfPage extends PdfObject<PdfDict> with PdfGraphicStream {
     return g;
   }
 
-  /// This adds an Annotation to the page.
+  /// Adds an annotation to the page.
   void addAnnotation(PdfAnnot ob) {
     annotations.add(ob);
   }

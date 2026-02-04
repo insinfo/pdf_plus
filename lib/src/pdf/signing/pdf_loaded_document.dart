@@ -16,15 +16,20 @@ import 'pdf_signature_service.dart';
 import 'pdf_timestamp_client.dart';
 
 enum PdfCoordinateSystem {
+  /// Coordinates are expressed in the PDF user space (origin at bottom-left).
   pdf,
+  /// Coordinates are expressed in a top-left origin system.
   topLeft,
 }
 
+/// Signature rectangle description with a selectable coordinate system.
 class PdfSignatureBounds {
+  /// Creates bounds directly in PDF user space.
   PdfSignatureBounds.pdf(this.rect)
       : coordinateSystem = PdfCoordinateSystem.pdf,
         topLeft = null;
 
+  /// Creates bounds using top-left coordinates.
   PdfSignatureBounds.topLeft({
     required double left,
     required double top,
@@ -38,6 +43,7 @@ class PdfSignatureBounds {
   final PdfRect? rect;
   final _TopLeftRect? topLeft;
 
+  /// Converts the bounds to a PDF-space rectangle for a given [page].
   PdfRect toPdfRect(PdfPage page) {
     if (coordinateSystem == PdfCoordinateSystem.pdf && rect != null) {
       return rect!;
@@ -61,6 +67,7 @@ class _TopLeftRect {
 }
 
 class PdfSignatureRequest {
+  /// Creates a request for adding a signature to a loaded document.
   PdfSignatureRequest({
     required this.pageNumber,
     required this.signer,
@@ -91,22 +98,24 @@ class PdfSignatureRequest {
   final DateTime? signingTime;
   final PdfSignatureAppearance? appearance;
   final pw.Widget? appearanceWidget;
-  final void Function(
-          PdfGraphics graphics, PdfRect bounds, PdfDocument document)?
-      drawAppearance;
+  /// Custom appearance drawer for the signature widget.
+  final void Function(PdfGraphics graphics, PdfRect bounds)? drawAppearance;
   final int? docMdpPermissionP;
   final PdfTimestampProvider? timestampProvider;
   final int contentsReserveSize;
   final int byteRangeDigits;
 }
 
+/// Wraps an external signer to be used by PDF signing APIs.
 class PdfSignatureSigner {
   PdfSignatureSigner._(this._externalSigner);
 
+  /// Wraps a custom external signer implementation.
   factory PdfSignatureSigner.external(PdfExternalSigner signer) {
     return PdfSignatureSigner._(signer);
   }
 
+  /// Creates a signer from PEM-encoded private key and certificate.
   factory PdfSignatureSigner.raw({
     required String privateKeyPem,
     required String certificate,
@@ -156,12 +165,15 @@ class PdfSignatureSigner {
 
   final PdfExternalSigner _externalSigner;
 
+  /// The underlying external signer instance.
   PdfExternalSigner get externalSigner => _externalSigner;
 }
 
+/// Represents a PDF loaded from bytes and ready for incremental signing.
 class PdfLoadedDocument {
   PdfLoadedDocument._(this._document, this._bytes);
 
+  /// Parses a PDF from raw bytes.
   factory PdfLoadedDocument.fromBytes(Uint8List bytes) {
     final document = PdfDocument.parseFromBytes(bytes);
     return PdfLoadedDocument._(document, Uint8List.fromList(bytes));
@@ -171,8 +183,10 @@ class PdfLoadedDocument {
   Uint8List _bytes;
   bool _disposed = false;
 
+  /// The list of pages in the loaded document.
   List<PdfPage> get pages => _document.pdfPageList.pages;
 
+  /// Adds a signature to the document using the given [request].
   Future<PdfSignatureRequest> addSignature(PdfSignatureRequest request) async {
     _ensureNotDisposed();
     _validatePage(request.pageNumber);
@@ -229,8 +243,7 @@ class PdfLoadedDocument {
     DateTime? signingTime,
     PdfSignatureAppearance? appearance,
     pw.Widget? appearanceWidget,
-    void Function(PdfGraphics graphics, PdfRect bounds, PdfDocument document)?
-        drawAppearance,
+    void Function(PdfGraphics graphics, PdfRect bounds)? drawAppearance,
     int? docMdpPermissionP,
     PdfTimestampProvider? timestampProvider,
     int contentsReserveSize = 16384,
@@ -263,11 +276,13 @@ class PdfLoadedDocument {
     );
   }
 
+  /// Returns the current PDF bytes (including all signatures).
   Future<Uint8List> save() async {
     _ensureNotDisposed();
     return Uint8List.fromList(_bytes);
   }
 
+  /// Marks this instance as disposed and unusable.
   void dispose() {
     _disposed = true;
   }
@@ -312,8 +327,7 @@ class PdfLoadedDocument {
     }
 
     if (request.drawAppearance != null) {
-      return (graphics, rect) =>
-          request.drawAppearance!(graphics, rect, _document);
+      return (graphics, rect) => request.drawAppearance!(graphics, rect);
     }
 
     return null;

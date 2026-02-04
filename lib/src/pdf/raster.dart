@@ -21,9 +21,9 @@ import 'package:image/image.dart' as im;
 
 import 'color.dart';
 
-/// Represents a bitmap image
+/// Represents a bitmap image.
 class PdfRasterBase {
-  /// Create a bitmap image
+  /// Creates a bitmap image container.
   const PdfRasterBase(
     this.width,
     this.height,
@@ -31,6 +31,7 @@ class PdfRasterBase {
     this.pixels,
   );
 
+  /// Creates a raster from a decoded [im.Image].
   factory PdfRasterBase.fromImage(im.Image image) {
     final data = image
         .convert(format: im.Format.uint8, numChannels: 4, noAnimation: true)
@@ -38,11 +39,13 @@ class PdfRasterBase {
     return PdfRasterBase(image.width, image.height, true, data);
   }
 
+  /// Creates a raster from PNG bytes.
   factory PdfRasterBase.fromPng(Uint8List png) {
     final img = im.PngDecoder().decode(png)!;
     return PdfRasterBase.fromImage(img);
   }
 
+  /// Builds a blurred rectangular shadow image.
   static im.Image shadowRect(
     double width,
     double height,
@@ -73,6 +76,7 @@ class PdfRasterBase {
     return im.gaussianBlur(shadow, radius: blurRadius.round());
   }
 
+  /// Builds a blurred elliptical shadow image.
   static im.Image shadowEllipse(
     double width,
     double height,
@@ -102,28 +106,28 @@ class PdfRasterBase {
     return im.gaussianBlur(shadow, radius: blurRadius.round());
   }
 
-  /// The width of the image
+  /// The width of the image.
   final int width;
 
-  /// The height of the image
+  /// The height of the image.
   final int height;
 
-  /// The alpha channel is used
+  /// Whether the alpha channel is used.
   final bool alpha;
 
-  /// The raw RGBA pixels of the image
+  /// The raw RGBA pixels of the image.
   final Uint8List pixels;
 
   @override
   String toString() => 'Image ${width}x$height ${width * height * 4} bytes';
 
-  /// Convert to a PNG image
+  /// Encodes this raster as a PNG image.
   Future<Uint8List> toPng() async {
     final img = asImage();
     return im.PngEncoder().encode(img);
   }
 
-  /// Returns the image as an [Image] object from the pub:image library
+  /// Returns the image as an [im.Image] object.
   im.Image asImage() {
     return im.Image.fromBytes(
       width: width,

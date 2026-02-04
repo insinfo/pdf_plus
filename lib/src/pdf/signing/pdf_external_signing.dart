@@ -23,6 +23,7 @@ import '../rect.dart';
 import 'pdf_signature_config.dart';
 import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
+/// Result of preparing a PDF for external signing.
 class PdfExternalSigningPrepared {
   const PdfExternalSigningPrepared({
     required this.preparedPdfBytes,
@@ -30,16 +31,23 @@ class PdfExternalSigningPrepared {
     required this.hashBase64,
   });
 
+  /// PDF bytes with signature placeholder.
   final Uint8List preparedPdfBytes;
+  /// ByteRange array used for hashing.
   final List<int> byteRange;
+  /// Base64-encoded hash of the ByteRange content.
   final String hashBase64;
 }
 
-/// Utilitários para assinatura externa (prepare + embed).
+/// Utilities for external signing (prepare + embed).
 class PdfExternalSigning {
+  /// Use internal ByteRange parser implementation.
   static bool useInternalByteRangeParser = false;
+  /// Use fast ByteRange parser when possible.
   static bool useFastByteRangeParser = true;
+  /// Use internal /Contents parser implementation.
   static bool useInternalContentsParser = false;
+  /// Use fast /Contents parser when possible.
   static bool useFastContentsParser = true;
 
   static const List<int> _byteRangeToken = <int>[
@@ -55,6 +63,7 @@ class PdfExternalSigning {
 
   static const int _minContentsHexDigits = 64;
 
+  /// Computes the digest of the content described by [byteRange].
   static Uint8List computeByteRangeDigest(
     Uint8List pdfBytes,
     List<int> byteRange,
@@ -62,6 +71,7 @@ class PdfExternalSigning {
     return _computeByteRangeDigest(pdfBytes, byteRange);
   }
 
+  /// Computes a Base64 hash for the content described by [byteRange].
   static String computeByteRangeHashBase64(
     Uint8List pdfBytes,
     List<int> byteRange,
@@ -69,6 +79,7 @@ class PdfExternalSigning {
     return base64.encode(computeByteRangeDigest(pdfBytes, byteRange));
   }
 
+  /// Extracts the last /ByteRange array from [pdfBytes].
   static List<int> extractByteRange(Uint8List pdfBytes) {
     if (useInternalByteRangeParser) {
       return _extractByteRangeInternal(pdfBytes);
@@ -103,6 +114,7 @@ class PdfExternalSigning {
     return range;
   }
 
+  /// Finds the /Contents hex string range in [pdfBytes].
   static _ContentsRange findContentsRange(
     Uint8List pdfBytes, {
     bool strict = true,
@@ -143,7 +155,7 @@ class PdfExternalSigning {
     return range;
   }
 
-  /// Prepara o PDF com placeholder de assinatura e retorna ByteRange + hash.
+  /// Prepares a PDF with a signature placeholder and returns ByteRange + hash.
   static Future<PdfExternalSigningPrepared> preparePdf({
     required Uint8List inputBytes,
     required int pageNumber,
@@ -232,7 +244,7 @@ class PdfExternalSigning {
     );
   }
 
-  /// Embute PKCS#7 no placeholder /Contents.
+  /// Embeds PKCS#7 into the /Contents placeholder.
   static Uint8List embedSignature({
     required Uint8List preparedPdfBytes,
     required Uint8List pkcs7Bytes,
