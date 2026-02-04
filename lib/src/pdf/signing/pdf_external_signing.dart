@@ -206,7 +206,7 @@ class PdfExternalSigning {
       updated[PdfNameTokens.v] = document.sign!.ref();
 
       if (drawAppearance != null && fieldBounds != null) {
-        final appearance = PdfGraphicXObject(document, '/Form');
+        final appearance = PdfGraphicXObject(document, PdfNameTokens.form);
         appearance.params[PdfNameTokens.bbox] = PdfArray.fromNum(
           [0, 0, fieldBounds.width, fieldBounds.height],
         );
@@ -290,7 +290,7 @@ class _PdfExternalSignaturePlaceholder extends PdfSignatureBase {
       params[PdfNameTokens.location] = PdfString.fromString(signature!.location!);
     }
     if (signature?.contactInfo != null) {
-      params['/ContactInfo'] = PdfString.fromString(signature!.contactInfo!);
+      params[PdfNameTokens.contactinfo] = PdfString.fromString(signature!.contactInfo!);
     }
     if (signature?.name != null) {
       params[PdfNameTokens.name] = PdfString.fromString(signature!.name!);
@@ -298,11 +298,11 @@ class _PdfExternalSignaturePlaceholder extends PdfSignatureBase {
 
     final p = signature?.docMdpPermissionP;
     if (p != null) {
-      params['/Reference'] = PdfArray<PdfDataType>([
+      params[PdfNameTokens.reference] = PdfArray<PdfDataType>([
         PdfDict.values({
           PdfNameTokens.type: const PdfName(PdfNameTokens.sigRef),
-          '/TransformMethod': const PdfName(PdfNameTokens.docMdp),
-          '/DigestMethod': const PdfName('/SHA256'),
+          PdfNameTokens.transformmethod: const PdfName(PdfNameTokens.docMdp),
+          PdfNameTokens.digestmethod: const PdfName(PdfNameTokens.sha256),
           PdfNameTokens.transformParams: PdfDict.values({
             PdfNameTokens.type: const PdfName(PdfNameTokens.transformParams),
             PdfNameTokens.p: PdfNum(p),
@@ -857,6 +857,7 @@ int _skipPdfWsAndComments(Uint8List bytes, int i, int end) {
   if (digits == 0) throw StateError('Inteiro inválido');
   return (value: neg ? -value : value, nextIndex: i);
 }
+
 
 
 

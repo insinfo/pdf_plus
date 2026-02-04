@@ -127,40 +127,40 @@ class PdfOutline extends PdfObject<PdfDict> {
 
     // These are for kids only
     if (parent != null) {
-      params['/Title'] = PdfString.fromString(title!);
+      params[PdfNameTokens.title] = PdfString.fromString(title!);
 
       if (color != null) {
-        params['/C'] = PdfArray.fromColor(color!);
+        params[PdfNameTokens.c] = PdfArray.fromColor(color!);
       }
 
       if (style != PdfOutlineStyle.normal) {
-        params['/F'] = PdfNum(style.index);
+        params[PdfNameTokens.f] = PdfNum(style.index);
       }
 
       if (anchor != null) {
-        params['/Dest'] = PdfString.fromString(anchor!);
+        params[PdfNameTokens.dest] = PdfString.fromString(anchor!);
       } else {
         final dests = PdfArray();
         dests.add(dest!.ref());
 
         if (destMode == PdfOutlineMode.fitPage) {
-          dests.add(const PdfName('/Fit'));
+          dests.add(const PdfName(PdfNameTokens.fit));
         } else {
-          dests.add(const PdfName('/FitR'));
+          dests.add(const PdfName(PdfNameTokens.fitr));
           dests.add(PdfNum(rect!.left));
           dests.add(PdfNum(rect!.bottom));
           dests.add(PdfNum(rect!.right));
           dests.add(PdfNum(rect!.top));
         }
-        params['/Dest'] = dests;
+        params[PdfNameTokens.dest] = dests;
       }
-      params['/Parent'] = parent!.ref();
+      params[PdfNameTokens.parent] = parent!.ref();
 
       // were a descendent, so by default we are closed. Find out how many
       // entries are below us
       final c = descendants();
       if (c > 0) {
-        params['/Count'] = PdfNum(-c);
+        params[PdfNameTokens.count] = PdfNum(-c);
       }
 
       final index = parent!.getIndex(this);
@@ -171,12 +171,12 @@ class PdfOutline extends PdfObject<PdfDict> {
 
       if (index < parent!.getLast()) {
         // We have a /Next node
-        params['/Next'] = parent!.getNode(index + 1).ref();
+        params[PdfNameTokens.next] = parent!.getNode(index + 1).ref();
       }
     } else {
       // the number of outlines in this document
       // were the top level node, so all are open by default
-      params['/Count'] = PdfNum(outlines.length);
+      params[PdfNameTokens.count] = PdfNum(outlines.length);
     }
 
     // These only valid if we have children
@@ -185,7 +185,7 @@ class PdfOutline extends PdfObject<PdfDict> {
       params[PdfNameTokens.first] = outlines[0].ref();
 
       // the number of the last outline in list
-      params['/Last'] = outlines[outlines.length - 1].ref();
+      params[PdfNameTokens.last] = outlines[outlines.length - 1].ref();
     }
   }
 
@@ -216,6 +216,7 @@ class PdfOutline extends PdfObject<PdfDict> {
     return '$runtimeType $anchor $title';
   }
 }
+
 
 
 

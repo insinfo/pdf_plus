@@ -74,10 +74,10 @@ class PdfCatalog extends PdfObject<PdfDict> {
 
   /// These map the page modes just defined to the page modes setting of the Pdf.
   static const List<String> _pdfPageModes = <String>[
-    '/UseNone',
-    '/UseOutlines',
-    '/UseThumbs',
-    '/FullScreen'
+    PdfNameTokens.usenone,
+    PdfNameTokens.useoutlines,
+    PdfNameTokens.usethumbs,
+    PdfNameTokens.fullscreen
   ];
 
   @override
@@ -85,13 +85,13 @@ class PdfCatalog extends PdfObject<PdfDict> {
     super.prepare();
 
     /// the PDF specification version, overrides the header version starting from 1.4
-    params['/Version'] = PdfName('/${pdfDocument.versionString}');
+    params[PdfNameTokens.version] = PdfName('/${pdfDocument.versionString}');
 
     params[PdfNameTokens.pages] = pdfPageList.ref();
 
     // the Outlines object
     if (outlines != null && outlines!.outlines.isNotEmpty) {
-      params['/Outlines'] = outlines!.ref();
+      params[PdfNameTokens.outlines] = outlines!.ref();
     }
 
     if (metadata != null) {
@@ -100,27 +100,27 @@ class PdfCatalog extends PdfObject<PdfDict> {
 
     if (attached != null && attached!.isNotEmpty) {
       names!.params.merge(attached!.catalogNames());
-      params['/AF'] = attached!.catalogAF();
+      params[PdfNameTokens.af] = attached!.catalogAF();
     }
 
     // the Names object
     if (names != null) {
-      params['/Names'] = names!.ref();
+      params[PdfNameTokens.names] = names!.ref();
     }
 
     // the PageLabels object
     if (pageLabels != null && pageLabels!.labels.isNotEmpty) {
-      params['/PageLabels'] = pageLabels!.ref();
+      params[PdfNameTokens.pagelabels] = pageLabels!.ref();
     }
 
     // the /PageMode setting
     if (pageMode != null) {
-      params['/PageMode'] = PdfName(_pdfPageModes[pageMode!.index]);
+      params[PdfNameTokens.pagemode] = PdfName(_pdfPageModes[pageMode!.index]);
     }
 
     if (pdfDocument.sign != null) {
       if (pdfDocument.sign!.value.hasMDP) {
-        params['/Perms'] = PdfDict.values({
+        params[PdfNameTokens.perms] = PdfDict.values({
           PdfNameTokens.docMdp: pdfDocument.sign!.ref(),
         });
       }
@@ -129,36 +129,36 @@ class PdfCatalog extends PdfObject<PdfDict> {
     final dss = PdfDict();
     if (pdfDocument.sign != null) {
       if (pdfDocument.sign!.crl.isNotEmpty) {
-        dss['/CRLs'] = PdfArray.fromObjects(pdfDocument.sign!.crl);
+        dss[PdfNameTokens.crls] = PdfArray.fromObjects(pdfDocument.sign!.crl);
       }
       if (pdfDocument.sign!.cert.isNotEmpty) {
-        dss['/Certs'] = PdfArray.fromObjects(pdfDocument.sign!.cert);
+        dss[PdfNameTokens.certs] = PdfArray.fromObjects(pdfDocument.sign!.cert);
       }
       if (pdfDocument.sign!.ocsp.isNotEmpty) {
-        dss['/OCSPs'] = PdfArray.fromObjects(pdfDocument.sign!.ocsp);
+        dss[PdfNameTokens.ocsps] = PdfArray.fromObjects(pdfDocument.sign!.ocsp);
       }
     }
 
     if (pdfDocument.dss != null) {
       if (pdfDocument.dss!.crl.isNotEmpty) {
-        dss['/CRLs'] = PdfArray.fromObjects(pdfDocument.dss!.crl);
+        dss[PdfNameTokens.crls] = PdfArray.fromObjects(pdfDocument.dss!.crl);
       }
       if (pdfDocument.dss!.cert.isNotEmpty) {
-        dss['/Certs'] = PdfArray.fromObjects(pdfDocument.dss!.cert);
+        dss[PdfNameTokens.certs] = PdfArray.fromObjects(pdfDocument.dss!.cert);
       }
       if (pdfDocument.dss!.ocsp.isNotEmpty) {
-        dss['/OCSPs'] = PdfArray.fromObjects(pdfDocument.dss!.ocsp);
+        dss[PdfNameTokens.ocsps] = PdfArray.fromObjects(pdfDocument.dss!.ocsp);
       }
     }
 
     if (dss.values.isNotEmpty) {
-      params['/DSS'] = dss;
+      params[PdfNameTokens.dss] = dss;
     }
 
     final widgets = <PdfAnnot>[];
     for (final page in pdfDocument.pdfPageList.pages) {
       for (final annot in page.annotations) {
-        if (annot.annot.subtype == '/Widget') {
+        if (annot.annot.subtype == PdfNameTokens.widget) {
           widgets.add(annot);
         }
       }
@@ -166,8 +166,8 @@ class PdfCatalog extends PdfObject<PdfDict> {
 
     if (widgets.isNotEmpty) {
       final acroForm = (params[PdfNameTokens.acroForm] ??= PdfDict()) as PdfDict;
-      acroForm['/SigFlags'] = PdfNum(pdfDocument.sign?.flagsValue ?? 0) |
-          (acroForm['/SigFlags'] as PdfNum? ?? const PdfNum(0));
+      acroForm[PdfNameTokens.sigflags] = PdfNum(pdfDocument.sign?.flagsValue ?? 0) |
+          (acroForm[PdfNameTokens.sigflags] as PdfNum? ?? const PdfNum(0));
       final fields = (acroForm[PdfNameTokens.fields] ??= PdfArray()) as PdfArray;
       final fontRefs = PdfDict();
       for (final w in widgets) {
@@ -182,16 +182,17 @@ class PdfCatalog extends PdfObject<PdfDict> {
         }
       }
       if (fontRefs.isNotEmpty) {
-        acroForm['/DR'] = PdfDict.values(// "Document Resources"
+        acroForm[PdfNameTokens.dr] = PdfDict.values(// "Document Resources"
             {PdfNameTokens.font: fontRefs});
       }
     }
 
     if (colorProfile != null) {
-      params['/OutputIntents'] = colorProfile!.outputIntents();
+      params[PdfNameTokens.outputintents] = colorProfile!.outputIntents();
     }
   }
 }
+
 
 
 

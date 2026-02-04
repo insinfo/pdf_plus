@@ -113,11 +113,11 @@ class PdfFunction extends PdfObjectStream implements PdfBaseFunction {
     buf.putBytes(data!);
     super.prepare();
 
-    params['/FunctionType'] = const PdfNum(0);
-    params['/BitsPerSample'] = PdfNum(bitsPerSample);
-    params['/Order'] = PdfNum(order);
-    params['/Domain'] = PdfArray.fromNum(domain);
-    params['/Range'] = PdfArray.fromNum(range);
+    params[PdfNameTokens.functiontype] = const PdfNum(0);
+    params[PdfNameTokens.bitspersample] = PdfNum(bitsPerSample);
+    params[PdfNameTokens.order] = PdfNum(order);
+    params[PdfNameTokens.domain] = PdfArray.fromNum(domain);
+    params[PdfNameTokens.range] = PdfArray.fromNum(range);
     params[PdfNameTokens.size] = PdfArray.fromNum(<int>[data!.length ~/ order]);
   }
 
@@ -146,12 +146,12 @@ class PdfStitchingFunction extends PdfBaseFunction {
   void prepare() {
     super.prepare();
 
-    params['/FunctionType'] = const PdfNum(3);
-    params['/Functions'] = PdfArray.fromObjects(functions);
-    params['/Order'] = const PdfNum(3);
-    params['/Domain'] = PdfArray.fromNum(<num>[domainStart, domainEnd]);
-    params['/Bounds'] = PdfArray.fromNum(bounds);
-    params['/Encode'] = PdfArray.fromNum(
+    params[PdfNameTokens.functiontype] = const PdfNum(3);
+    params[PdfNameTokens.functions] = PdfArray.fromObjects(functions);
+    params[PdfNameTokens.order] = const PdfNum(3);
+    params[PdfNameTokens.domain] = PdfArray.fromNum(<num>[domainStart, domainEnd]);
+    params[PdfNameTokens.bounds] = PdfArray.fromNum(bounds);
+    params[PdfNameTokens.encode] = PdfArray.fromNum(
         List<int>.generate(functions.length * 2, (int i) => i % 2));
   }
 
@@ -159,6 +159,7 @@ class PdfStitchingFunction extends PdfBaseFunction {
   String toString() =>
       '$runtimeType $domainStart $bounds $domainEnd $functions';
 }
+
 
 
 

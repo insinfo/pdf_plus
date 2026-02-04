@@ -37,17 +37,18 @@ class PdfaColorProfile extends PdfObject<PdfDictStream> {
     return PdfArray<PdfDict>([
       PdfDict({
         PdfNameTokens.type: const PdfName(PdfNameTokens.outputIntent),
-        '/S': const PdfName('/GTS_PDFA1'),
-        '/OutputConditionIdentifier':
+        PdfNameTokens.s: const PdfName(PdfNameTokens.gtsPdfa1),
+        PdfNameTokens.outputconditionidentifier:
             PdfString(Uint8List.fromList('sRGB2014.icc'.codeUnits)),
         PdfNameTokens.info: PdfString(Uint8List.fromList('sRGB2014.icc'.codeUnits)),
-        '/RegistryName':
+        PdfNameTokens.registryname:
             PdfString(Uint8List.fromList('http://www.color.org'.codeUnits)),
-        '/DestOutputProfile': ref(),
+        PdfNameTokens.destoutputprofile: ref(),
       }),
     ]);
   }
 }
+
 
 
 

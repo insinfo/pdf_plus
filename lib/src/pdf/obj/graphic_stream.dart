@@ -107,11 +107,11 @@ mixin PdfGraphicStream on PdfObject<PdfDict> {
     final resources = PdfDict();
 
     if (altered) {
-      resources['/ProcSet'] = PdfArray(const <PdfName>[
-        PdfName('/PDF'),
-        PdfName('/Text'),
-        PdfName('/ImageB'),
-        PdfName('/ImageC'),
+      resources[PdfNameTokens.procset] = PdfArray(const <PdfName>[
+        PdfName(PdfNameTokens.pdf),
+        PdfName(PdfNameTokens.text),
+        PdfName(PdfNameTokens.imageb),
+        PdfName(PdfNameTokens.imagec),
       ]);
     }
 
@@ -122,12 +122,12 @@ mixin PdfGraphicStream on PdfObject<PdfDict> {
 
     // shaders
     if (shading.isNotEmpty) {
-      resources['/Shading'] = PdfDict.fromObjectMap(shading);
+      resources[PdfNameTokens.shading] = PdfDict.fromObjectMap(shading);
     }
 
     // patterns
     if (patterns.isNotEmpty) {
-      resources['/Pattern'] = PdfDict.fromObjectMap(patterns);
+      resources[PdfNameTokens.pattern] = PdfDict.fromObjectMap(patterns);
     }
 
     // Now the XObjects
@@ -139,13 +139,13 @@ mixin PdfGraphicStream on PdfObject<PdfDict> {
       // Declare Transparency Group settings
       params[PdfNameTokens.group] = PdfDict.values({
         PdfNameTokens.type: const PdfName(PdfNameTokens.group),
-        '/S': const PdfName('/Transparency'),
-        '/CS': const PdfName('/DeviceRGB'),
+        PdfNameTokens.s: const PdfName(PdfNameTokens.transparency),
+        PdfNameTokens.cs: const PdfName(PdfNameTokens.deviceRgb),
         PdfNameTokens.i: PdfBool(isolatedTransparency),
-        '/K': PdfBool(knockoutTransparency),
+        PdfNameTokens.k: PdfBool(knockoutTransparency),
       });
 
-      resources['/ExtGState'] = pdfDocument.graphicStates.ref();
+      resources[PdfNameTokens.extgstate] = pdfDocument.graphicStates.ref();
     }
 
     if (resources.isNotEmpty) {
@@ -170,6 +170,7 @@ class PdfGraphicXObject extends PdfXObject with PdfGraphicStream {
     String? subtype,
   ]) : super(pdfDocument, subtype);
 }
+
 
 
 

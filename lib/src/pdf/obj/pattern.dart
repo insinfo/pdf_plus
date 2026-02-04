@@ -40,7 +40,7 @@ abstract class PdfPattern extends PdfObject<PdfDict> {
   void prepare() {
     super.prepare();
 
-    params['/PatternType'] = PdfNum(patternType);
+    params[PdfNameTokens.patterntype] = PdfNum(patternType);
 
     if (matrix != null) {
       final s = matrix!.storage;
@@ -66,13 +66,14 @@ class PdfShadingPattern extends PdfPattern {
   void prepare() {
     super.prepare();
 
-    params['/Shading'] = shading.ref();
+    params[PdfNameTokens.shading] = shading.ref();
 
     if (graphicState != null) {
-      params['/ExtGState'] = graphicState!.output();
+      params[PdfNameTokens.extgstate] = graphicState!.output();
     }
   }
 }
+
 
 
 

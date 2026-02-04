@@ -15,6 +15,7 @@
  */
 
 import 'package:meta/meta.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 import 'document.dart';
 import 'format/dict.dart';
@@ -117,25 +118,25 @@ class PdfGraphicState {
     final params = PdfDict();
 
     if (strokeOpacity != null) {
-      params['/CA'] = PdfNum(strokeOpacity!);
+      params[PdfNameTokens.ca] = PdfNum(strokeOpacity!);
     }
 
     if (fillOpacity != null) {
-      params['/ca'] = PdfNum(fillOpacity!);
+      params[PdfNameTokens.ca] = PdfNum(fillOpacity!);
     }
 
     if (blendMode != null) {
       final bm = blendMode.toString();
-      params['/BM'] =
+      params[PdfNameTokens.bm] =
           PdfName('/${bm.substring(13, 14).toUpperCase()}${bm.substring(14)}');
     }
 
     if (softMask != null) {
-      params['/SMask'] = softMask!.output();
+      params[PdfNameTokens.smask] = softMask!.output();
     }
 
     if (transferFunction != null) {
-      params['/TR'] = transferFunction!.ref();
+      params[PdfNameTokens.tr] = transferFunction!.ref();
     }
 
     return params;
@@ -170,7 +171,7 @@ class PdfGraphicStates extends PdfObject<PdfDict> {
 
   final List<PdfGraphicState> _states = <PdfGraphicState>[];
 
-  static const String _prefix = '/a';
+  static const String _prefix = PdfNameTokens.a;
 
   /// Generate a name for a state object
   String stateName(PdfGraphicState state) {

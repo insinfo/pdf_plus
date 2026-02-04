@@ -103,7 +103,7 @@ class PdfPage extends PdfObject<PdfDict> with PdfGraphicStream {
     super.prepare();
 
     // the /Parent pages object
-    params['/Parent'] = pdfDocument.pdfPageList.ref();
+    params[PdfNameTokens.parent] = pdfDocument.pdfPageList.ref();
 
     if (rotate != PdfPageRotation.none) {
       params[PdfNameTokens.rotate] = PdfNum(rotate.index * 90);
@@ -155,6 +155,7 @@ class PdfPage extends PdfObject<PdfDict> with PdfGraphicStream {
     }
   }
 }
+
 
 
 

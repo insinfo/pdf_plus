@@ -67,7 +67,7 @@ class PdfShading extends PdfObject<PdfDict> {
   void prepare() {
     super.prepare();
 
-    params['/ShadingType'] = PdfNum(shadingType.index + 2);
+    params[PdfNameTokens.shadingtype] = PdfNum(shadingType.index + 2);
     if (boundingBox != null) {
       params[PdfNameTokens.bbox] = PdfArray.fromNum([
         boundingBox!.left,
@@ -76,25 +76,26 @@ class PdfShading extends PdfObject<PdfDict> {
         boundingBox!.top,
       ]);
     }
-    params['/AntiAlias'] = const PdfBool(true);
-    params[PdfNameTokens.colorSpace] = const PdfName('/DeviceRGB');
+    params[PdfNameTokens.antialias] = const PdfBool(true);
+    params[PdfNameTokens.colorSpace] = const PdfName(PdfNameTokens.deviceRgb);
 
     if (shadingType == PdfShadingType.axial) {
-      params['/Coords'] = PdfArray.fromNum([start.x, start.y, end.x, end.y]);
+      params[PdfNameTokens.coords] = PdfArray.fromNum([start.x, start.y, end.x, end.y]);
     } else if (shadingType == PdfShadingType.radial) {
       assert(radius0 != null);
       assert(radius1 != null);
-      params['/Coords'] = PdfArray.fromNum(
+      params[PdfNameTokens.coords] = PdfArray.fromNum(
           [start.x, start.y, radius0!, end.x, end.y, radius1!]);
     }
-    // params['/Domain'] = PdfArray.fromNum(<num>[0, 1]);
+    // params[PdfNameTokens.domain] = PdfArray.fromNum(<num>[0, 1]);
     if (extendStart || extendEnd) {
-      params['/Extend'] =
+      params[PdfNameTokens.extend] =
           PdfArray(<PdfBool>[PdfBool(extendStart), PdfBool(extendEnd)]);
     }
-    params['/Function'] = function.ref();
+    params[PdfNameTokens.function] = function.ref();
   }
 }
+
 
 
 

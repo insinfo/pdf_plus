@@ -58,7 +58,7 @@ class PdfPadesSigner extends PdfSignatureBase {
       params[PdfNameTokens.location] = PdfString.fromString(location!);
     }
     if (contactInfo != null) {
-      params['/ContactInfo'] = PdfString.fromString(contactInfo!);
+      params[PdfNameTokens.contactinfo] = PdfString.fromString(contactInfo!);
     }
     if (name != null) {
       params[PdfNameTokens.name] = PdfString.fromString(name!);
@@ -289,6 +289,7 @@ int _indexOfSequence(Uint8List bytes, List<int> pattern, int start, int end) {
   }
   return -1;
 }
+
 
 
 

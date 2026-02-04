@@ -27,8 +27,8 @@ import 'package:pdf_plus/src/pdf/pdf_names.dart';
 /// Form XObject
 class PdfFormXObject extends PdfXObject {
   /// Create a Form XObject
-  PdfFormXObject(PdfDocument pdfDocument) : super(pdfDocument, '/Form') {
-    params['/FormType'] = const PdfNum(1);
+  PdfFormXObject(PdfDocument pdfDocument) : super(pdfDocument, PdfNameTokens.form) {
+    params[PdfNameTokens.formtype] = const PdfNum(1);
     params[PdfNameTokens.bbox] = PdfArray.fromNum(const <int>[0, 0, 1000, 1000]);
   }
 
@@ -67,6 +67,7 @@ class PdfFormXObject extends PdfXObject {
     }
   }
 }
+
 
 
 

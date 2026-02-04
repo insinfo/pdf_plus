@@ -66,15 +66,16 @@ class PdfBorder extends PdfObject<PdfDict> {
   void prepare() {
     super.prepare();
 
-    params['/S'] =
+    params[PdfNameTokens.s] =
         PdfName('/${'SDBIU'.substring(style.index, style.index + 1)}');
     params[PdfNameTokens.w] = PdfNum(width);
 
     if (dash != null) {
-      params['/D'] = PdfArray.fromNum(dash!);
+      params[PdfNameTokens.d] = PdfArray.fromNum(dash!);
     }
   }
 }
+
 
 
 

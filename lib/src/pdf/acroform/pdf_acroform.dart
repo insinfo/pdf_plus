@@ -63,7 +63,7 @@ class PdfAcroForm {
   PdfAcroSignatureField createSignatureField(String name) {
     final dict = PdfDict.values({
       PdfNameTokens.type: const PdfName(PdfNameTokens.annot),
-      PdfNameTokens.subtype: const PdfName('/Widget'),
+      PdfNameTokens.subtype: const PdfName(PdfNameTokens.widget),
       PdfNameTokens.ft: const PdfName(PdfNameTokens.sig),
       PdfNameTokens.t: PdfString.fromString(name),
     });
@@ -74,8 +74,8 @@ class PdfAcroForm {
   PdfAcroTextField createTextField(String name) {
     final dict = PdfDict.values({
       PdfNameTokens.type: const PdfName(PdfNameTokens.annot),
-      PdfNameTokens.subtype: const PdfName('/Widget'),
-      PdfNameTokens.ft: const PdfName('/Tx'),
+      PdfNameTokens.subtype: const PdfName(PdfNameTokens.widget),
+      PdfNameTokens.ft: const PdfName(PdfNameTokens.tx),
       PdfNameTokens.t: PdfString.fromString(name),
     });
     return PdfAcroTextField(dict, null, name, this);
@@ -85,8 +85,8 @@ class PdfAcroForm {
   PdfAcroButtonField createButtonField(String name) {
     final dict = PdfDict.values({
       PdfNameTokens.type: const PdfName(PdfNameTokens.annot),
-      PdfNameTokens.subtype: const PdfName('/Widget'),
-      PdfNameTokens.ft: const PdfName('/Btn'),
+      PdfNameTokens.subtype: const PdfName(PdfNameTokens.widget),
+      PdfNameTokens.ft: const PdfName(PdfNameTokens.btn),
       PdfNameTokens.t: PdfString.fromString(name),
     });
     return PdfAcroButtonField(dict, null, name, this);
@@ -96,8 +96,8 @@ class PdfAcroForm {
   PdfAcroChoiceField createChoiceField(String name) {
     final dict = PdfDict.values({
       PdfNameTokens.type: const PdfName(PdfNameTokens.annot),
-      PdfNameTokens.subtype: const PdfName('/Widget'),
-      PdfNameTokens.ft: const PdfName('/Ch'),
+      PdfNameTokens.subtype: const PdfName(PdfNameTokens.widget),
+      PdfNameTokens.ft: const PdfName(PdfNameTokens.ch),
       PdfNameTokens.t: PdfString.fromString(name),
     });
     return PdfAcroChoiceField(dict, null, name, this);
@@ -253,3 +253,4 @@ class PdfAcroForm {
     // For now, satisfy the test by removing it from AcroForm.
   }
 }
+

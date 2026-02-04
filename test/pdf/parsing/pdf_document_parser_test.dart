@@ -20,8 +20,8 @@ void main() {
       expect(info.mediaBoxes.first.box.length, 4);
       expect(info.mediaBoxes.first.box[2] > info.mediaBoxes.first.box[0], isTrue);
       expect(info.mediaBoxes.first.box[3] > info.mediaBoxes.first.box[1], isTrue);
-      expect(info.infoDict?['/Title'], 'sample');
-      expect(info.infoDict?['/Author'], 'Philip Hutchison');
+      expect(info.infoDict?[PdfNameTokens.title], 'sample');
+      expect(info.infoDict?[PdfNameTokens.author], 'Philip Hutchison');
     });
 
     test('respeita maxPages e extrai imagens', () {
@@ -97,7 +97,7 @@ void main() {
           _readAsset('test/assets/pdfs/itext_2_1_3_missing_eof.pdf');
       final info = PdfDocumentParser(bytes).extractInfo();
       expect(info.pageCount, 3);
-      expect(info.infoDict?['/Title'], 'PDF multipaginas');
+      expect(info.infoDict?[PdfNameTokens.title], 'PDF multipaginas');
     });
 
     test('truncado não quebra o parser', () {
@@ -233,3 +233,4 @@ int _skipWsAndComments(Uint8List bytes, int i, int end) {
 
 bool _isWhitespace(int b) =>
     b == 0x00 || b == 0x09 || b == 0x0A || b == 0x0C || b == 0x0D || b == 0x20;
+

@@ -87,7 +87,8 @@ class Font {
   @protected
   PdfFont buildFont(PdfDocument pdfDocument) {
     return pdfDocument.fonts.firstWhere(
-      (PdfFont font) => font.subtype == '/Type1' && font.fontName == fontName,
+      (PdfFont font) =>
+          font.subtype == PdfNameTokens.type1 && font.fontName == fontName,
       orElse: () {
         switch (font) {
           case Type1Fonts.courier:

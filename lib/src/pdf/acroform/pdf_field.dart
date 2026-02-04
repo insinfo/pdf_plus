@@ -17,13 +17,13 @@ class PdfAcroField {
     if (dictionary.containsKey(PdfNameTokens.ft)) {
       final ft = dictionary[PdfNameTokens.ft];
       if (ft is PdfName) {
-        if (ft.value == '/Tx') {
+        if (ft.value == PdfNameTokens.tx) {
           return PdfAcroTextField(
               dictionary, indirectReference, name, acroForm);
-        } else if (ft.value == '/Btn') {
+        } else if (ft.value == PdfNameTokens.btn) {
           return PdfAcroButtonField(
               dictionary, indirectReference, name, acroForm);
-        } else if (ft.value == '/Ch') {
+        } else if (ft.value == PdfNameTokens.ch) {
           return PdfAcroChoiceField(
               dictionary, indirectReference, name, acroForm);
         } else if (ft.value == PdfNameTokens.sig) {
@@ -223,3 +223,4 @@ class PdfAcroSignatureField extends PdfAcroField {
     }
   }
 }
+

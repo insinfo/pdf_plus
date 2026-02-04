@@ -350,7 +350,7 @@ class PdfDocument {
       if (ob is PdfInfo) {
         xref.params[PdfNameTokens.info] = ob.ref();
       } else if (ob is PdfEncryption) {
-        xref.params['/Encrypt'] = ob.ref();
+        xref.params[PdfNameTokens.encrypt] = ob.ref();
       } else if (ob is PdfSignature) {
         assert(signature == null, 'Only one document signature is allowed');
         signature = ob;
@@ -732,6 +732,7 @@ class PdfSignatureFieldEditor {
     return _writeFieldsArray(updatedArray);
   }
 }
+
 
 
 

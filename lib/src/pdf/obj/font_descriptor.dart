@@ -46,22 +46,23 @@ class PdfFontDescriptor extends PdfObject<PdfDict> {
   void prepare() {
     super.prepare();
 
-    params['/FontName'] = PdfName('/${ttfFont.fontName}');
-    params['/FontFile2'] = file.ref();
-    params['/Flags'] = PdfNum(ttfFont.font.unicode ? 4 : 32);
-    params['/FontBBox'] = PdfArray.fromNum(<int>[
+    params[PdfNameTokens.fontname] = PdfName('/${ttfFont.fontName}');
+    params[PdfNameTokens.fontfile2] = file.ref();
+    params[PdfNameTokens.flags] = PdfNum(ttfFont.font.unicode ? 4 : 32);
+    params[PdfNameTokens.fontbbox] = PdfArray.fromNum(<int>[
       (ttfFont.font.xMin / ttfFont.font.unitsPerEm * 1000).toInt(),
       (ttfFont.font.yMin / ttfFont.font.unitsPerEm * 1000).toInt(),
       (ttfFont.font.xMax / ttfFont.font.unitsPerEm * 1000).toInt(),
       (ttfFont.font.yMax / ttfFont.font.unitsPerEm * 1000).toInt()
     ]);
-    params['/Ascent'] = PdfNum((ttfFont.ascent * 1000).toInt());
-    params['/Descent'] = PdfNum((ttfFont.descent * 1000).toInt());
-    params['/ItalicAngle'] = const PdfNum(0);
-    params['/CapHeight'] = const PdfNum(10);
-    params['/StemV'] = const PdfNum(79);
+    params[PdfNameTokens.ascent] = PdfNum((ttfFont.ascent * 1000).toInt());
+    params[PdfNameTokens.descent] = PdfNum((ttfFont.descent * 1000).toInt());
+    params[PdfNameTokens.italicangle] = const PdfNum(0);
+    params[PdfNameTokens.capheight] = const PdfNum(10);
+    params[PdfNameTokens.stemv] = const PdfNum(79);
   }
 }
+
 
 
 

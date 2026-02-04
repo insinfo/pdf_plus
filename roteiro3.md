@@ -146,11 +146,11 @@ Resultado: arquivos menores, teste e debug mais simples.
 
 2) Centralizar nomes PDF em constantes
 
-Criar `pdf_names.dart` com constantes `const` para tokens:
-`kPages = '/Pages'`, `kKids = '/Kids'`, `kXObject = '/XObject'`, `kAcroForm`,
-`kFields`, `kSig`, `kByteRange`, `kContents`, `kSubFilter`, etc.
-Evita typos e facilita grep/refactor. Dica: manter `String` para nao impactar
-performance ou comportamento.
+Concluido. Criado `lib/src/pdf/pdf_names.dart` com `PdfNameTokens` (consts
+`String`) e substituido o uso de literais `'/...'` em `lib/src/pdf` e
+`lib/src/widgets`. Mantive `String` para evitar impacto de performance e
+comportamento. Em casos de palavra reservada, usei nome seguro
+(`nullName` para `'/Null'`).
 
 3) Agrupar estruturas auxiliares
 

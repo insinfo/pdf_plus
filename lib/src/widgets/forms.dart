@@ -124,7 +124,7 @@ class ChoiceField extends StatelessWidget with AnnotationAppearance {
         bf,
         mat,
         Text(value!, style: _textStyle),
-        tag: const PdfName('/Tx'),
+        tag: const PdfName(PdfNameTokens.tx),
       );
     }
 
@@ -189,8 +189,8 @@ class Checkbox extends SingleChildWidget with AnnotationAppearance {
     final bf = PdfButtonField(
       rect: context.localToGlobal(box!),
       fieldName: name,
-      value: value ? '/Yes' : null,
-      defaultValue: value ? '/Yes' : null,
+      value: value ? PdfNameTokens.yes : null,
+      defaultValue: value ? PdfNameTokens.yes : null,
       flags: <PdfAnnotFlags>{PdfAnnotFlags.print},
     );
 
@@ -200,7 +200,7 @@ class Checkbox extends SingleChildWidget with AnnotationAppearance {
       context,
       bf,
       mat,
-      name: '/Yes',
+      name: PdfNameTokens.yes,
       selected: value,
       CustomPaint(
         size: bf.rect.size,
@@ -223,7 +223,7 @@ class Checkbox extends SingleChildWidget with AnnotationAppearance {
       context,
       bf,
       mat,
-      name: '/Off',
+      name: PdfNameTokens.off,
       selected: !value,
       child!,
     );
@@ -408,7 +408,7 @@ class TextField extends StatelessWidget with AnnotationAppearance {
         tf,
         mat,
         Text(value!, style: _textStyle),
-        tag: const PdfName('/Tx'),
+        tag: const PdfName(PdfNameTokens.tx),
       );
     }
 

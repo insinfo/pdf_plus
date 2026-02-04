@@ -36,7 +36,7 @@ void main() {
         settings: settings,
         params: PdfDict.values({
           PdfNameTokens.type: const PdfName(PdfNameTokens.pages),
-          '/Count': const PdfNum(1),
+          PdfNameTokens.count: const PdfNum(1),
         }));
 
     final content = PdfObjectBase(
@@ -51,11 +51,11 @@ void main() {
         settings: settings,
         params: PdfDict.values({
           PdfNameTokens.type: const PdfName(PdfNameTokens.page),
-          '/Parent': pages.ref(),
+          PdfNameTokens.parent: pages.ref(),
           PdfNameTokens.mediaBox: PdfArray.fromNum([0, 0, 595.27559, 841.88976]),
           PdfNameTokens.resources: PdfDict.values({
-            '/ProcSet': PdfArray([
-              const PdfName('/PDF'),
+            PdfNameTokens.procset: PdfArray([
+              const PdfName(PdfNameTokens.pdf),
             ]),
           }),
           PdfNameTokens.contents: content.ref(),
@@ -87,5 +87,7 @@ void main() {
     await file.writeAsBytes(os.output());
   });
 }
+
+
 
 

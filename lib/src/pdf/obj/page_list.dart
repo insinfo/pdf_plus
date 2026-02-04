@@ -47,9 +47,10 @@ class PdfPageList extends PdfObject<PdfDict> {
     super.prepare();
 
     params[PdfNameTokens.kids] = PdfArray.fromObjects(pages);
-    params['/Count'] = PdfNum(pages.length);
+    params[PdfNameTokens.count] = PdfNum(pages.length);
   }
 }
+
 
 
 

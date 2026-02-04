@@ -49,7 +49,7 @@ class PdfaAttachedFiles {
 
   PdfDict catalogNames() {
     return PdfDict({
-      '/EmbeddedFiles': _names.ref(),
+      PdfNameTokens.embeddedfiles: _names.ref(),
     });
   }
 
@@ -75,7 +75,7 @@ class _AttachedFileNames extends PdfObject<PdfDict> {
   @override
   void prepare() {
     super.prepare();
-    params['/Names'] = PdfArray(
+    params[PdfNameTokens.names] = PdfArray(
       [
         _PdfRaw(0, _files.first),
       ],
@@ -98,16 +98,16 @@ class _AttachedFileSpec extends PdfObject<PdfDict> {
     super.prepare();
 
     params[PdfNameTokens.type] = const PdfName(PdfNameTokens.filespec);
-    params['/F'] = PdfString(
+    params[PdfNameTokens.f] = PdfString(
       Uint8List.fromList(_file.fileName.codeUnits),
     );
-    params['/UF'] = PdfString(
+    params[PdfNameTokens.uf] = PdfString(
       Uint8List.fromList(_file.fileName.codeUnits),
     );
-    params['/EF'] = PdfDict({
-      '/F': _file.ref(),
+    params[PdfNameTokens.ef] = PdfDict({
+      PdfNameTokens.f: _file.ref(),
     });
-    params['/AFRelationship'] = const PdfName('/Unspecified');
+    params[PdfNameTokens.afrelationship] = const PdfName(PdfNameTokens.unspecified);
   }
 }
 
@@ -134,9 +134,9 @@ class _AttachedFile extends PdfObject<PdfDictStream> {
     final modDate = PdfaDateFormat().format(dt: DateTime.now());
     params[PdfNameTokens.type] = const PdfName(PdfNameTokens.embeddedFile);
     params[PdfNameTokens.subtype] = const PdfName(PdfNameTokens.applicationOctetStream);
-    params['/Params'] = PdfDict({
+    params[PdfNameTokens.params] = PdfDict({
       PdfNameTokens.size: PdfNum(content.codeUnits.length),
-      '/ModDate': PdfString(
+      PdfNameTokens.moddate: PdfString(
         Uint8List.fromList('D:$modDate+00\'00\''.codeUnits),
       ),
     });
@@ -163,6 +163,7 @@ class _PdfRaw extends PdfDataType {
     s.putString('(${nr.toString().padLeft(3, '0')}) ${spec.ref()}');
   }
 }
+
 
 
 

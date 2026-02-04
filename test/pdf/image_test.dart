@@ -55,7 +55,7 @@ void main() {
 
     expect(image.params[PdfNameTokens.width], const PdfNum(300));
     expect(image.params[PdfNameTokens.height], const PdfNum(200));
-    expect(image.params['/SMask'], isA<PdfIndirect>());
+    expect(image.params[PdfNameTokens.smask], isA<PdfIndirect>());
 
     final buf = image.buf.output();
     for (var pixelIndex = 0; pixelIndex < 300 * 200; pixelIndex++) {
@@ -80,7 +80,7 @@ void main() {
 
     expect(image.params[PdfNameTokens.width], const PdfNum(300));
     expect(image.params[PdfNameTokens.height], const PdfNum(200));
-    expect(image.params['/SMask'], isNull);
+    expect(image.params[PdfNameTokens.smask], isNull);
 
     final buf = image.buf.output();
     for (var pixelIndex = 0; pixelIndex < 300 * 200; pixelIndex++) {
@@ -90,5 +90,7 @@ void main() {
     }
   });
 }
+
+
 
 

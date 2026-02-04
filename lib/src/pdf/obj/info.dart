@@ -15,6 +15,7 @@
  */
 
 import 'package:pdf_plus/src/pdf/global_constants.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 import '../document.dart';
 import '../format/dict.dart';
@@ -36,16 +37,21 @@ class PdfInfo extends PdfObject<PdfDict> {
   }) : super(
           pdfDocument,
           params: PdfDict.values({
-            if (author != null) '/Author': PdfString.fromString(author),
-            if (creator != null) '/Creator': PdfString.fromString(creator),
-            if (title != null) '/Title': PdfString.fromString(title),
-            if (subject != null) '/Subject': PdfString.fromString(subject),
-            if (keywords != null) '/Keywords': PdfString.fromString(keywords),
+            if (author != null)
+              PdfNameTokens.author: PdfString.fromString(author),
+            if (creator != null)
+              PdfNameTokens.creator: PdfString.fromString(creator),
+            if (title != null) PdfNameTokens.title: PdfString.fromString(title),
+            if (subject != null)
+              PdfNameTokens.subject: PdfString.fromString(subject),
+            if (keywords != null)
+              PdfNameTokens.keywords: PdfString.fromString(keywords),
             if (producer != null)
-              '/Producer': PdfString.fromString('$producer (${libraryName})')
+              PdfNameTokens.producer:
+                  PdfString.fromString('$producer (${libraryName})')
             else
-              '/Producer': PdfString.fromString(libraryName),
-            '/CreationDate': PdfString.fromDate(DateTime.now()),
+              PdfNameTokens.producer: PdfString.fromString(libraryName),
+            PdfNameTokens.creationdate: PdfString.fromDate(DateTime.now()),
           }),
         );
 

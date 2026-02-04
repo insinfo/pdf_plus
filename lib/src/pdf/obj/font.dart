@@ -295,7 +295,7 @@ See https://github.com/DavBfr/dart_pdf/wiki/Fonts-Management
 
     params[PdfNameTokens.subtype] = PdfName(subtype);
     params[PdfNameTokens.name] = PdfName(name);
-    params['/Encoding'] = const PdfName('/WinAnsiEncoding');
+    params[PdfNameTokens.encoding] = const PdfName(PdfNameTokens.winAnsiEncoding);
   }
 
   /// Calculate the [PdfFontMetrics] for this glyph
@@ -347,6 +347,7 @@ See https://github.com/DavBfr/dart_pdf/wiki/Fonts-Management
     }
   }
 }
+
 
 
 

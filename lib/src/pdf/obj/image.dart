@@ -81,7 +81,7 @@ class PdfImage extends PdfXObject {
 
     im.params[PdfNameTokens.bitsPerComponent] = const PdfNum(8);
     im.params[PdfNameTokens.name] = PdfName(im.name);
-    im.params[PdfNameTokens.colorSpace] = const PdfName('/DeviceRGB');
+    im.params[PdfNameTokens.colorSpace] = const PdfName(PdfNameTokens.deviceRgb);
 
     if (alpha) {
       final _sMask = PdfImage._alpha(
@@ -91,7 +91,7 @@ class PdfImage extends PdfXObject {
         height,
         orientation,
       );
-      im.params['/SMask'] = PdfIndirect(_sMask.objser, 0);
+      im.params[PdfNameTokens.smask] = PdfIndirect(_sMask.objser, 0);
     }
 
     final w = width;
@@ -141,13 +141,13 @@ class PdfImage extends PdfXObject {
     }());
     im.params[PdfNameTokens.bitsPerComponent] = const PdfNum(8);
     im.params[PdfNameTokens.name] = PdfName(im.name);
-    im.params['/Intent'] = const PdfName('/RelativeColorimetric');
+    im.params[PdfNameTokens.intent] = const PdfName(PdfNameTokens.relativecolorimetric);
     im.params[PdfNameTokens.filter] = const PdfName(PdfNameTokens.dctDecode);
 
     if (info.isRGB) {
-      im.params[PdfNameTokens.colorSpace] = const PdfName('/DeviceRGB');
+      im.params[PdfNameTokens.colorSpace] = const PdfName(PdfNameTokens.deviceRgb);
     } else {
-      im.params[PdfNameTokens.colorSpace] = const PdfName('/DeviceGray');
+      im.params[PdfNameTokens.colorSpace] = const PdfName(PdfNameTokens.deviceGray);
     }
 
     im.buf.putBytes(image);
@@ -217,7 +217,7 @@ class PdfImage extends PdfXObject {
     }());
     im.params[PdfNameTokens.bitsPerComponent] = const PdfNum(8);
     im.params[PdfNameTokens.name] = PdfName(im.name);
-    im.params[PdfNameTokens.colorSpace] = const PdfName('/DeviceGray');
+    im.params[PdfNameTokens.colorSpace] = const PdfName(PdfNameTokens.deviceGray);
 
     final w = width;
     final h = height;
@@ -242,7 +242,7 @@ class PdfImage extends PdfXObject {
     this._width,
     this._height,
     this.orientation,
-  ) : super(pdfDocument, '/Image', isBinary: true) {
+  ) : super(pdfDocument, PdfNameTokens.image, isBinary: true) {
     params[PdfNameTokens.width] = PdfNum(_width);
     params[PdfNameTokens.height] = PdfNum(_height);
     assert(() {
@@ -268,6 +268,7 @@ class PdfImage extends PdfXObject {
   @override
   String get name => '/I$objser';
 }
+
 
 
 

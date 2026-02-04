@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
+
 import '../document.dart';
 import '../format/array.dart';
 import '../format/base.dart';
@@ -43,9 +45,9 @@ class PdfNames extends PdfObject<PdfDict> {
     assert(page.pdfDocument == pdfDocument);
 
     _dests[name] = PdfDict.values({
-      '/D': PdfArray([
+      PdfNameTokens.d: PdfArray([
         page.ref(),
-        const PdfName('/XYZ'),
+        const PdfName(PdfNameTokens.xyz),
         if (posX == null) const PdfNull() else PdfNum(posX),
         if (posY == null) const PdfNull() else PdfNum(posY),
         if (posZ == null) const PdfNull() else PdfNum(posZ),
@@ -68,12 +70,12 @@ class PdfNames extends PdfObject<PdfDict> {
 
     final dict = PdfDict();
     if (dests.values.isNotEmpty) {
-      dict['/Names'] = dests;
-      dict['/Limits'] = PdfArray([
+      dict[PdfNameTokens.names] = dests;
+      dict[PdfNameTokens.limits] = PdfArray([
         PdfString.fromString(keys.first),
         PdfString.fromString(keys.last),
       ]);
     }
-    params['/Dests'] = dict;
+    params[PdfNameTokens.dests] = dict;
   }
 }

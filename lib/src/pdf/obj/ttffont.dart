@@ -41,7 +41,7 @@ class PdfTtfFont extends PdfFont {
   /// Constructs a [PdfTtfFont]
   PdfTtfFont(PdfDocument pdfDocument, ByteData bytes, {bool protect = false})
       : font = TtfParser(bytes),
-        super.create(pdfDocument, subtype: '/TrueType') {
+        super.create(pdfDocument, subtype: PdfNameTokens.truetype) {
     file = PdfObjectStream(pdfDocument, isBinary: true);
     unicodeCMap = PdfUnicodeCmap(pdfDocument, protect);
     descriptor = PdfFontDescriptor(this, file);
@@ -49,7 +49,7 @@ class PdfTtfFont extends PdfFont {
   }
 
   @override
-  String get subtype => font.unicode ? '/Type0' : super.subtype;
+  String get subtype => font.unicode ? PdfNameTokens.type0 : super.subtype;
 
   late PdfUnicodeCmap unicodeCMap;
 
@@ -99,9 +99,9 @@ class PdfTtfFont extends PdfFont {
     int charMax;
 
     file.buf.putBytes(font.bytes.buffer.asUint8List());
-    file.params['/Length1'] = PdfNum(font.bytes.lengthInBytes);
+    file.params[PdfNameTokens.length1] = PdfNum(font.bytes.lengthInBytes);
 
-    params['/BaseFont'] = PdfName('/$fontName');
+    params[PdfNameTokens.basefont] = PdfName('/$fontName');
     params[PdfNameTokens.fontDescriptor] = descriptor.ref();
     charMin = 32;
     charMax = 255;
@@ -109,9 +109,9 @@ class PdfTtfFont extends PdfFont {
       widthsObject.params
           .add(PdfNum((glyphMetrics(i).advanceWidth * 1000.0).toInt()));
     }
-    params['/FirstChar'] = PdfNum(charMin);
-    params['/LastChar'] = PdfNum(charMax);
-    params['/Widths'] = widthsObject.ref();
+    params[PdfNameTokens.firstchar] = PdfNum(charMin);
+    params[PdfNameTokens.lastchar] = PdfNum(charMax);
+    params[PdfNameTokens.widths] = widthsObject.ref();
   }
 
   void _buildType0(PdfDict params) {
@@ -121,31 +121,31 @@ class PdfTtfFont extends PdfFont {
     final ttfWriter = TtfWriter(font);
     final data = ttfWriter.withChars(unicodeCMap.cmap);
     file.buf.putBytes(data);
-    file.params['/Length1'] = PdfNum(data.length);
+    file.params[PdfNameTokens.length1] = PdfNum(data.length);
 
     final descendantFont = PdfDict.values({
       PdfNameTokens.type: const PdfName(PdfNameTokens.font),
-      '/BaseFont': PdfName('/$fontName'),
-      '/FontFile2': file.ref(),
+      PdfNameTokens.basefont: PdfName('/$fontName'),
+      PdfNameTokens.fontfile2: file.ref(),
       PdfNameTokens.fontDescriptor: descriptor.ref(),
       PdfNameTokens.w: PdfArray([
         const PdfNum(0),
         widthsObject.ref(),
       ]),
-      '/CIDToGIDMap': const PdfName('/Identity'),
-      '/DW': const PdfNum(1000),
+      PdfNameTokens.cidToGidMap: const PdfName(PdfNameTokens.identity),
+      PdfNameTokens.dw: const PdfNum(1000),
       PdfNameTokens.subtype: const PdfName(PdfNameTokens.cidFontType2),
-      '/CIDSystemInfo': PdfDict.values({
-        '/Supplement': const PdfNum(0),
-        '/Registry': PdfString.fromString('Adobe'),
-        '/Ordering': PdfString.fromString('Identity-H'),
+      PdfNameTokens.cidsysteminfo: PdfDict.values({
+        PdfNameTokens.supplement: const PdfNum(0),
+        PdfNameTokens.registry: PdfString.fromString('Adobe'),
+        PdfNameTokens.ordering: PdfString.fromString('Identity-H'),
       })
     });
 
-    params['/BaseFont'] = PdfName('/$fontName');
-    params['/Encoding'] = const PdfName('/Identity-H');
-    params['/DescendantFonts'] = PdfArray([descendantFont]);
-    params['/ToUnicode'] = unicodeCMap.ref();
+    params[PdfNameTokens.basefont] = PdfName('/$fontName');
+    params[PdfNameTokens.encoding] = const PdfName(PdfNameTokens.identityH);
+    params[PdfNameTokens.descendantfonts] = PdfArray([descendantFont]);
+    params[PdfNameTokens.tounicode] = unicodeCMap.ref();
 
     charMin = 0;
     charMax = unicodeCMap.cmap.length - 1;
@@ -206,6 +206,7 @@ class PdfTtfFont extends PdfFont {
     return font.charToGlyphIndexMap.containsKey(charCode);
   }
 }
+
 
 
 

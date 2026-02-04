@@ -27,7 +27,7 @@ void main() {
   });
 
   test('PdfDataTypes Name ', () {
-    expect(const PdfName('/Test').toString(), '/Test');
+    expect(const PdfName(PdfNameTokens.test).toString(), PdfNameTokens.test);
     expect(const PdfName('/Type 1').toString(), '/Type#201');
     expect(const PdfName('/Num#1').toString(), '/Num#231');
   });
@@ -67,7 +67,7 @@ void main() {
   });
 
   test('PdfDataTypes Name', () {
-    expect(const PdfName('/Hello').toString(), '/Hello');
+    expect(const PdfName(PdfNameTokens.hello).toString(), PdfNameTokens.hello);
   });
 
   test('PdfDataTypes Null', () {
@@ -87,7 +87,7 @@ void main() {
     expect(
       PdfArray([
         const PdfName(PdfNameTokens.name),
-        const PdfName('/Other'),
+        const PdfName(PdfNameTokens.other),
         const PdfBool(false),
         const PdfNum(2.5),
         const PdfNull(),
@@ -104,18 +104,19 @@ void main() {
 
     expect(
       PdfDict.values({
-        PdfNameTokens.name: const PdfName('/Value'),
-        '/Bool': const PdfBool(true),
-        '/Num': const PdfNum(42),
-        '/String': PdfString.fromString('hello'),
-        '/Null': const PdfNull(),
-        '/Indirect': const PdfIndirect(55, 0),
-        '/Array': PdfArray(),
-        '/Dict': PdfDict(),
+        PdfNameTokens.name: const PdfName(PdfNameTokens.value),
+        PdfNameTokens.bool: const PdfBool(true),
+        PdfNameTokens.num: const PdfNum(42),
+        PdfNameTokens.string: PdfString.fromString('hello'),
+        PdfNameTokens.nullName: const PdfNull(),
+        PdfNameTokens.indirect: const PdfIndirect(55, 0),
+        PdfNameTokens.array: PdfArray(),
+        PdfNameTokens.dict: PdfDict(),
       }).toString(),
       '<</Name/Value/Bool true/Num 42/String(hello)/Null null/Indirect 55 0 R/Array[]/Dict<<>>>>',
     );
   });
 }
+
 
 

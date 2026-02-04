@@ -57,28 +57,28 @@ class PdfPageLabel {
     final PdfName? s;
     switch (style) {
       case PdfPageLabelStyle.arabic:
-        s = const PdfName('/D');
+        s = const PdfName(PdfNameTokens.d);
         break;
       case PdfPageLabelStyle.romanUpper:
-        s = const PdfName('/R');
+        s = const PdfName(PdfNameTokens.r);
         break;
       case PdfPageLabelStyle.romanLower:
-        s = const PdfName('/r');
+        s = const PdfName(PdfNameTokens.r);
         break;
       case PdfPageLabelStyle.lettersUpper:
-        s = const PdfName('/A');
+        s = const PdfName(PdfNameTokens.a);
         break;
       case PdfPageLabelStyle.lettersLower:
-        s = const PdfName('/a');
+        s = const PdfName(PdfNameTokens.a);
         break;
       case null:
         s = null;
     }
     return PdfDict.values({
-      if (s != null) '/S': s,
+      if (s != null) PdfNameTokens.s: s,
       if (prefix != null && prefix!.isNotEmpty)
         PdfNameTokens.p: PdfString.fromString(prefix!),
-      if (subsequent != null) '/St': PdfNum(subsequent!)
+      if (subsequent != null) PdfNameTokens.st: PdfNum(subsequent!)
     });
   }
 
@@ -195,9 +195,10 @@ class PdfPageLabels extends PdfObject<PdfDict> {
       nums.add(entry.value.toDict());
     }
 
-    params['/Nums'] = nums;
+    params[PdfNameTokens.nums] = nums;
   }
 }
+
 
 
 

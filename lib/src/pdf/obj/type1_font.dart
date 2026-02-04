@@ -50,16 +50,16 @@ class PdfType1Font extends PdfFont {
               '$fontName has no Unicode support see https://github.com/DavBfr/dart_pdf/wiki/Fonts-Management');
           return true;
         }()),
-        super.create(pdfDocument, subtype: '/Type1') {
-    params['/BaseFont'] = PdfName('/$fontName');
+        super.create(pdfDocument, subtype: PdfNameTokens.type1) {
+    params[PdfNameTokens.basefont] = PdfName('/$fontName');
     if (settings.version.index >= PdfVersion.pdf_1_5.index) {
-      params['/FirstChar'] = const PdfNum(0);
-      params['/LastChar'] = const PdfNum(255);
+      params[PdfNameTokens.firstchar] = const PdfNum(0);
+      params[PdfNameTokens.lastchar] = const PdfNum(255);
       if (widths.isNotEmpty) {
-        params['/Widths'] =
+        params[PdfNameTokens.widths] =
             PdfArray.fromNum(widths.map((e) => (e * unitsPerEm).toInt()));
       } else {
-        params['/Widths'] = PdfArray.fromNum(
+        params[PdfNameTokens.widths] = PdfArray.fromNum(
             List<int>.filled(256, (missingWidth * unitsPerEm).toInt()));
       }
 
@@ -67,16 +67,16 @@ class PdfType1Font extends PdfFont {
         pdfDocument,
         params: PdfDict.values({
           PdfNameTokens.type: const PdfName(PdfNameTokens.fontDescriptor),
-          '/FontName': PdfName('/$fontName'),
-          '/Flags': PdfNum(32 + (isFixedPitch ? 1 : 0)),
-          '/FontBBox': PdfArray.fromNum(fontBBox),
-          '/Ascent': PdfNum((ascent * unitsPerEm).toInt()),
-          '/Descent': PdfNum((descent * unitsPerEm).toInt()),
-          '/ItalicAngle': PdfNum(italicAngle),
-          '/CapHeight': PdfNum(capHeight),
-          '/StemV': PdfNum(stdVW),
-          '/StemH': PdfNum(stdHW),
-          '/MissingWidth': PdfNum((missingWidth * unitsPerEm).toInt()),
+          PdfNameTokens.fontname: PdfName('/$fontName'),
+          PdfNameTokens.flags: PdfNum(32 + (isFixedPitch ? 1 : 0)),
+          PdfNameTokens.fontbbox: PdfArray.fromNum(fontBBox),
+          PdfNameTokens.ascent: PdfNum((ascent * unitsPerEm).toInt()),
+          PdfNameTokens.descent: PdfNum((descent * unitsPerEm).toInt()),
+          PdfNameTokens.italicangle: PdfNum(italicAngle),
+          PdfNameTokens.capheight: PdfNum(capHeight),
+          PdfNameTokens.stemv: PdfNum(stdVW),
+          PdfNameTokens.stemh: PdfNum(stdHW),
+          PdfNameTokens.missingwidth: PdfNum((missingWidth * unitsPerEm).toInt()),
         }),
       );
 
@@ -122,6 +122,7 @@ class PdfType1Font extends PdfFont {
     return charCode >= 0x00 && charCode <= 0xff;
   }
 }
+
 
 
 

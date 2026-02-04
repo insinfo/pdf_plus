@@ -18,7 +18,7 @@ void main() {
       final textField = acroForm.createTextField('user.name');
       expect(textField, isA<PdfAcroTextField>());
       expect(textField.name, 'user.name');
-      expect(textField.fieldType, '/Tx');
+      expect(textField.fieldType, PdfNameTokens.tx);
 
       final page = PdfPage(document);
       acroForm.addField(textField, page);
@@ -79,3 +79,5 @@ void main() {
     });
   });
 }
+
+

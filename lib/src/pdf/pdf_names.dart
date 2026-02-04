@@ -5,6 +5,7 @@ class PdfNameTokens {
   static const adbePkcs7Detached = '/adbe.pkcs7.detached';
   static const annot = '/Annot';
   static const annots = '/Annots';
+
   static const ap = '/AP';
   static const applicationOctetStream = '/application/octet-stream';
   static const ascii85Decode = '/ASCII85Decode';
@@ -75,6 +76,7 @@ class PdfNameTokens {
   static const xObject = '/XObject';
   static const xRef = '/XRef';
   static const xml = '/XML';
+  static const yes = '/Yes';
   static const a = '/a';
   static const af = '/AF';
   static const afrelationship = '/AFRelationship';
@@ -177,11 +179,14 @@ class PdfNameTokens {
   static const names = '/Names';
   static const next = '/Next';
   static const nm = '/NM';
-  static const null = '/Null';
+// TODO no futuro talver ver um nome melhor
+  static const nullName = '/Null';
+
   static const num = '/Num';
   static const nums = '/Nums';
   static const o = '/O';
   static const ocsps = '/OCSPs';
+  static const off = '/Off';
   static const order = '/Order';
   static const ordering = '/Ordering';
   static const other = '/Other';

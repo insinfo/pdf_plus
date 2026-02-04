@@ -159,7 +159,7 @@ class PdfDocumentParser extends PdfDocumentParserBase {
             final dict = obj.value as PdfDictToken;
             final subtype =
                 PdfParserObjects.asName(dict.values[PdfNameTokens.subtype]);
-            if (subtype != '/Image') continue;
+            if (subtype != PdfNameTokens.image) continue;
 
             final filter = _asFilterName(dict.values[PdfNameTokens.filter]);
             final colorSpace =
@@ -269,7 +269,7 @@ class PdfDocumentParser extends PdfDocumentParserBase {
         final dict = obj.value as PdfDictToken;
         final subtype =
             PdfParserObjects.asName(dict.values[PdfNameTokens.subtype]);
-        if (subtype != '/Image') continue;
+        if (subtype != PdfNameTokens.image) continue;
 
         final filter = _asFilterName(dict.values[PdfNameTokens.filter]);
         final colorSpace =
@@ -513,7 +513,7 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     final direct =
         _resolveDictFromValueNoStream(pageDict.values[PdfNameTokens.resources]);
     PdfDictToken? parentRes;
-    var parentVal = pageDict.values['/Parent'];
+    var parentVal = pageDict.values[PdfNameTokens.parent];
     for (int depth = 0; depth < 32; depth++) {
       final parentRef = PdfParserObjects.asRef(parentVal);
       if (parentRef == null) break;
@@ -524,7 +524,7 @@ class PdfDocumentParser extends PdfDocumentParserBase {
       parentRes = _resolveDictFromValueNoStream(
           parentDict.values[PdfNameTokens.resources]);
       if (parentRes != null) break;
-      parentVal = parentDict.values['/Parent'];
+      parentVal = parentDict.values[PdfNameTokens.parent];
     }
 
     if (direct == null) return parentRes;
@@ -557,9 +557,9 @@ class PdfDocumentParser extends PdfDocumentParserBase {
   List<double>? _resolvePageMediaBox(PdfDictToken pageDict) {
     final direct =
         PdfParserObjects.asNumArray(pageDict.values[PdfNameTokens.mediaBox]) ??
-            PdfParserObjects.asNumArray(pageDict.values['/CropBox']);
+            PdfParserObjects.asNumArray(pageDict.values[PdfNameTokens.cropbox]);
     if (direct != null) return direct;
-    var parentVal = pageDict.values['/Parent'];
+    var parentVal = pageDict.values[PdfNameTokens.parent];
     for (int depth = 0; depth < 32; depth++) {
       final parentRef = PdfParserObjects.asRef(parentVal);
       if (parentRef == null) break;
@@ -569,9 +569,9 @@ class PdfDocumentParser extends PdfDocumentParserBase {
       final parentDict = parentObj.value as PdfDictToken;
       final box = PdfParserObjects.asNumArray(
               parentDict.values[PdfNameTokens.mediaBox]) ??
-          PdfParserObjects.asNumArray(parentDict.values['/CropBox']);
+          PdfParserObjects.asNumArray(parentDict.values[PdfNameTokens.cropbox]);
       if (box != null) return box;
-      parentVal = parentDict.values['/Parent'];
+      parentVal = parentDict.values[PdfNameTokens.parent];
     }
     return null;
   }
@@ -606,7 +606,7 @@ class PdfDocumentParser extends PdfDocumentParserBase {
       final dict = obj.value as PdfDictToken;
       final subtype =
           PdfParserObjects.asName(dict.values[PdfNameTokens.subtype]);
-      if (subtype != '/Image') continue;
+      if (subtype != PdfNameTokens.image) continue;
       final filter = _asFilterName(dict.values[PdfNameTokens.filter]);
       final colorSpace =
           _asColorSpaceName(dict.values[PdfNameTokens.colorSpace]);
@@ -1103,9 +1103,9 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     switch (name.value) {
       case PdfNameTokens.dctDecode:
         return 'DCT';
-      case '/JPXDecode':
+      case PdfNameTokens.jpxDecode:
         return 'JPX';
-      case '/JBIG2Decode':
+      case PdfNameTokens.jbig2Decode:
         return 'JBIG2';
       case PdfNameTokens.flateDecode:
         return 'Flate';
@@ -1540,7 +1540,7 @@ class PdfDocumentParser extends PdfDocumentParserBase {
   ) {
     final mediaBox =
         PdfParserObjects.asNumArray(dict.values[PdfNameTokens.mediaBox]) ??
-            PdfParserObjects.asNumArray(dict.values['/CropBox']);
+            PdfParserObjects.asNumArray(dict.values[PdfNameTokens.cropbox]);
     final format = PdfParserPages.pageFormatFromBox(mediaBox);
     final rotate =
         PdfParserPages.pageRotationFromValue(dict.values[PdfNameTokens.rotate]);
@@ -1556,7 +1556,7 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     final filtered = PdfParserObjects.toPdfDict(
       dict,
       ignoreKeys: const {
-        '/Parent',
+        PdfNameTokens.parent,
         PdfNameTokens.type,
         PdfNameTokens.mediaBox,
         PdfNameTokens.rotate
@@ -1723,3 +1723,4 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     }
   }
 }
+
