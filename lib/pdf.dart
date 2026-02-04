@@ -25,6 +25,7 @@ export 'src/pdf/format/name.dart';
 export 'src/pdf/format/object_base.dart' show DeflateCallback, PdfVersion;
 export 'src/pdf/graphic_state.dart';
 export 'src/pdf/graphics.dart';
+export 'src/pdf/pdf_names.dart';
 export 'src/pdf/io/pdf_random_access_reader.dart';
 export 'src/pdf/io/pdf_random_access_reader_cache.dart';
 export 'src/pdf/obj/annotation.dart';

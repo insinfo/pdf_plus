@@ -17,6 +17,7 @@
 import 'dart:typed_data';
 
 import 'package:pdf_plus/src/priv.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -85,7 +86,7 @@ void main() {
     );
     expect(
       PdfArray([
-        const PdfName('/Name'),
+        const PdfName(PdfNameTokens.name),
         const PdfName('/Other'),
         const PdfBool(false),
         const PdfNum(2.5),
@@ -103,7 +104,7 @@ void main() {
 
     expect(
       PdfDict.values({
-        '/Name': const PdfName('/Value'),
+        PdfNameTokens.name: const PdfName('/Value'),
         '/Bool': const PdfBool(true),
         '/Num': const PdfNum(42),
         '/String': PdfString.fromString('hello'),
@@ -116,3 +117,5 @@ void main() {
     );
   });
 }
+
+

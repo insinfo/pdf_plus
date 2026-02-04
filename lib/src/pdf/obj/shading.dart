@@ -24,6 +24,7 @@ import '../point.dart';
 import '../rect.dart';
 import 'function.dart';
 import 'object.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 enum PdfShadingType { axial, radial }
 
@@ -68,7 +69,7 @@ class PdfShading extends PdfObject<PdfDict> {
 
     params['/ShadingType'] = PdfNum(shadingType.index + 2);
     if (boundingBox != null) {
-      params['/BBox'] = PdfArray.fromNum([
+      params[PdfNameTokens.bbox] = PdfArray.fromNum([
         boundingBox!.left,
         boundingBox!.bottom,
         boundingBox!.right,
@@ -76,7 +77,7 @@ class PdfShading extends PdfObject<PdfDict> {
       ]);
     }
     params['/AntiAlias'] = const PdfBool(true);
-    params['/ColorSpace'] = const PdfName('/DeviceRGB');
+    params[PdfNameTokens.colorSpace] = const PdfName('/DeviceRGB');
 
     if (shadingType == PdfShadingType.axial) {
       params['/Coords'] = PdfArray.fromNum([start.x, start.y, end.x, end.y]);
@@ -94,3 +95,7 @@ class PdfShading extends PdfObject<PdfDict> {
     params['/Function'] = function.ref();
   }
 }
+
+
+
+

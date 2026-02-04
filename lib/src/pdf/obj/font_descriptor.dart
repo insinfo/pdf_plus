@@ -21,6 +21,7 @@ import '../format/num.dart';
 import 'object.dart';
 import 'object_stream.dart';
 import 'ttffont.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 /// Font descriptor object
 class PdfFontDescriptor extends PdfObject<PdfDict> {
@@ -31,7 +32,7 @@ class PdfFontDescriptor extends PdfObject<PdfDict> {
   ) : super(
           ttfFont.pdfDocument,
           params: PdfDict.values({
-            '/Type': const PdfName('/FontDescriptor'),
+            PdfNameTokens.type: const PdfName(PdfNameTokens.fontDescriptor),
           }),
         );
 
@@ -61,3 +62,7 @@ class PdfFontDescriptor extends PdfObject<PdfDict> {
     params['/StemV'] = const PdfNum(79);
   }
 }
+
+
+
+

@@ -22,6 +22,7 @@ import '../format/name.dart';
 import '../format/stream.dart';
 import 'object.dart';
 import 'object_stream.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 /// Signature flags
 enum PdfSigFlags {
@@ -46,7 +47,7 @@ class PdfSignature extends PdfObject<PdfDict> {
   }) : super(
           pdfDocument,
           params: PdfDict.values({
-            '/Type': const PdfName('/Sig'),
+            PdfNameTokens.type: const PdfName(PdfNameTokens.sig),
           }),
         ) {
     if (crl != null) {
@@ -113,3 +114,7 @@ abstract class PdfSignatureBase {
   Future<void> sign(PdfObject object, PdfStream os, PdfDict params,
       int? offsetStart, int? offsetEnd);
 }
+
+
+
+

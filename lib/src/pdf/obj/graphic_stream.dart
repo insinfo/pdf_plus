@@ -25,6 +25,7 @@ import 'object.dart';
 import 'pattern.dart';
 import 'shading.dart';
 import 'xobject.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 /// Helper functions for graphic objects
 mixin PdfGraphicStream on PdfObject<PdfDict> {
@@ -116,7 +117,7 @@ mixin PdfGraphicStream on PdfObject<PdfDict> {
 
     // fonts
     if (fonts.isNotEmpty) {
-      resources['/Font'] = PdfDict.fromObjectMap(fonts);
+      resources[PdfNameTokens.font] = PdfDict.fromObjectMap(fonts);
     }
 
     // shaders
@@ -131,16 +132,16 @@ mixin PdfGraphicStream on PdfObject<PdfDict> {
 
     // Now the XObjects
     if (xObjects.isNotEmpty) {
-      resources['/XObject'] = PdfDict.fromObjectMap(xObjects);
+      resources[PdfNameTokens.xObject] = PdfDict.fromObjectMap(xObjects);
     }
 
-    if (pdfDocument.hasGraphicStates && !params.containsKey('/Group')) {
+    if (pdfDocument.hasGraphicStates && !params.containsKey(PdfNameTokens.group)) {
       // Declare Transparency Group settings
-      params['/Group'] = PdfDict.values({
-        '/Type': const PdfName('/Group'),
+      params[PdfNameTokens.group] = PdfDict.values({
+        PdfNameTokens.type: const PdfName(PdfNameTokens.group),
         '/S': const PdfName('/Transparency'),
         '/CS': const PdfName('/DeviceRGB'),
-        '/I': PdfBool(isolatedTransparency),
+        PdfNameTokens.i: PdfBool(isolatedTransparency),
         '/K': PdfBool(knockoutTransparency),
       });
 
@@ -148,15 +149,15 @@ mixin PdfGraphicStream on PdfObject<PdfDict> {
     }
 
     if (resources.isNotEmpty) {
-      if (params.containsKey('/Resources')) {
-        final res = params['/Resources'];
+      if (params.containsKey(PdfNameTokens.resources)) {
+        final res = params[PdfNameTokens.resources];
         if (res is PdfDict) {
           res.merge(resources);
           return;
         }
       }
 
-      params['/Resources'] = resources;
+      params[PdfNameTokens.resources] = resources;
     }
   }
 }
@@ -169,3 +170,7 @@ class PdfGraphicXObject extends PdfXObject with PdfGraphicStream {
     String? subtype,
   ]) : super(pdfDocument, subtype);
 }
+
+
+
+

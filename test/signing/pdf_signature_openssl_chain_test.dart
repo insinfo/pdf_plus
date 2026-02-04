@@ -474,9 +474,9 @@ bool _tsaEnabled() {
 pdf.PdfTimestampClient _buildTsaClient() {
   final url = Platform.environment['PDFPLUS_TSA_URL'];
   if (url == null || url.trim().isEmpty) {
-    return pdf.PdfTimestampClient.freetsa(logTimings: true);
+    return pdf.PdfTimestampClient.freetsa();
   }
-  return pdf.PdfTimestampClient(endpoint: Uri.parse(url), logTimings: true);
+  return pdf.PdfTimestampClient(endpoint: Uri.parse(url));
 }
 
 Uint8List _extractByteRangeData(Uint8List bytes, List<int> range) {

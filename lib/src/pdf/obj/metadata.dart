@@ -23,6 +23,7 @@ import '../document.dart';
 import '../format/dict_stream.dart';
 import '../format/name.dart';
 import 'object.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 /// Pdf Metadata
 class PdfMetadata extends PdfObject<PdfDictStream> {
@@ -45,8 +46,12 @@ class PdfMetadata extends PdfObject<PdfDictStream> {
   @override
   void prepare() {
     super.prepare();
-    params['/Type'] = const PdfName('/Metadata');
-    params['/Subtype'] = const PdfName('/XML');
+    params[PdfNameTokens.type] = const PdfName(PdfNameTokens.metadata);
+    params[PdfNameTokens.subtype] = const PdfName(PdfNameTokens.xml);
     params.data = Uint8List.fromList(utf8.encode(metadata.toString()));
   }
 }
+
+
+
+

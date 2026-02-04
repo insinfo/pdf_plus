@@ -25,6 +25,7 @@ import '../format/name.dart';
 import '../format/num.dart';
 import '../raster.dart';
 import 'xobject.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 /// Represents the position of the first pixel in the data stream
 /// This corresponds to the exif orientations
@@ -78,9 +79,9 @@ class PdfImage extends PdfXObject {
       return true;
     }());
 
-    im.params['/BitsPerComponent'] = const PdfNum(8);
-    im.params['/Name'] = PdfName(im.name);
-    im.params['/ColorSpace'] = const PdfName('/DeviceRGB');
+    im.params[PdfNameTokens.bitsPerComponent] = const PdfNum(8);
+    im.params[PdfNameTokens.name] = PdfName(im.name);
+    im.params[PdfNameTokens.colorSpace] = const PdfName('/DeviceRGB');
 
     if (alpha) {
       final _sMask = PdfImage._alpha(
@@ -138,15 +139,15 @@ class PdfImage extends PdfXObject {
       im.debugFill('Jpeg Image ${info.width}x${info.height}');
       return true;
     }());
-    im.params['/BitsPerComponent'] = const PdfNum(8);
-    im.params['/Name'] = PdfName(im.name);
+    im.params[PdfNameTokens.bitsPerComponent] = const PdfNum(8);
+    im.params[PdfNameTokens.name] = PdfName(im.name);
     im.params['/Intent'] = const PdfName('/RelativeColorimetric');
-    im.params['/Filter'] = const PdfName('/DCTDecode');
+    im.params[PdfNameTokens.filter] = const PdfName(PdfNameTokens.dctDecode);
 
     if (info.isRGB) {
-      im.params['/ColorSpace'] = const PdfName('/DeviceRGB');
+      im.params[PdfNameTokens.colorSpace] = const PdfName('/DeviceRGB');
     } else {
-      im.params['/ColorSpace'] = const PdfName('/DeviceGray');
+      im.params[PdfNameTokens.colorSpace] = const PdfName('/DeviceGray');
     }
 
     im.buf.putBytes(image);
@@ -214,9 +215,9 @@ class PdfImage extends PdfXObject {
       im.debugFill('Image alpha channel ${width}x$height');
       return true;
     }());
-    im.params['/BitsPerComponent'] = const PdfNum(8);
-    im.params['/Name'] = PdfName(im.name);
-    im.params['/ColorSpace'] = const PdfName('/DeviceGray');
+    im.params[PdfNameTokens.bitsPerComponent] = const PdfNum(8);
+    im.params[PdfNameTokens.name] = PdfName(im.name);
+    im.params[PdfNameTokens.colorSpace] = const PdfName('/DeviceGray');
 
     final w = width;
     final h = height;
@@ -242,8 +243,8 @@ class PdfImage extends PdfXObject {
     this._height,
     this.orientation,
   ) : super(pdfDocument, '/Image', isBinary: true) {
-    params['/Width'] = PdfNum(_width);
-    params['/Height'] = PdfNum(_height);
+    params[PdfNameTokens.width] = PdfNum(_width);
+    params[PdfNameTokens.height] = PdfNum(_height);
     assert(() {
       debugFill('Orientation: $orientation');
       return true;
@@ -267,3 +268,7 @@ class PdfImage extends PdfXObject {
   @override
   String get name => '/I$objser';
 }
+
+
+
+

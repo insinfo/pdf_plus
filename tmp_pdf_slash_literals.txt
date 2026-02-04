@@ -1,0 +1,391 @@
+/
+/></linearGradient><radialGradient id=
+/></radialGradient></defs><rect x=
+/></radialGradient><radialGradient id=
+/></svg> ';
+
+    pdf.addPage(
+      Page(
+        build: (context) => Container(
+          decoration: const BoxDecoration(
+            color: PdfColors.blue100,
+            image: DecorationSvgImage(svg: svg),
+            borderRadius: BorderRadius.all(Radius.circular(20)),
+          ),
+          padding: const EdgeInsets.all(20),
+          child: PdfLogo(),
+        ),
+      ),
+    );
+  });
+
+  test('SVG Widgets Text custom fonts', () {
+    const customFamilyName1 = 'Test-Font-Family1';
+    const customFamilyName2 = 'Test-Font-Family2';
+    final customFont1 =
+        loadFont('test/assets/fonts/open-sans/OpenSans-Bold.ttf');
+    final customFont2 = loadFont('test/assets/fonts/GenWanMinTW-Regular.ttf');
+    pdf.addPage(
+      Page(
+        build: (context) => SvgImage(
+            svg:
+                '<?xml version=
+/></svg>';
+
+    pdf.addPage(
+      Page(
+        build: (context) => Column(
+          children: [
+            GridView(
+              crossAxisCount: 3,
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: 0.3,
+              children: [
+                for (final align in <Alignment>[
+                  Alignment.topLeft,
+                  Alignment.topCenter,
+                  Alignment.topRight,
+                  Alignment.centerLeft,
+                  Alignment.center,
+                  Alignment.centerRight,
+                  Alignment.bottomLeft,
+                  Alignment.bottomCenter,
+                  Alignment.bottomRight,
+                ])
+                  SvgImage(
+                    svg: svg,
+                    fit: BoxFit.cover,
+                    alignment: align,
+                  ),
+              ],
+            ),
+            SizedBox(height: 10),
+            SizedBox(
+              width: 180,
+              child: GridView(
+                crossAxisCount: 3,
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
+                childAspectRatio: 3.3,
+                children: [
+                  for (final align in <Alignment>[
+                    Alignment.topLeft,
+                    Alignment.topCenter,
+                    Alignment.topRight,
+                    Alignment.centerLeft,
+                    Alignment.center,
+                    Alignment.centerRight,
+                    Alignment.bottomLeft,
+                    Alignment.bottomCenter,
+                    Alignment.bottomRight,
+                  ])
+                    SvgImage(
+                      svg: svg,
+                      fit: BoxFit.cover,
+                      alignment: align,
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  });
+
+  test('SVG Decoration', () {
+    const svg =
+        '<?xml version=
+/><ellipse cx=
+/><line style=
+/><path d=
+/><rect x=
+/><stop offset=
+/><stop stop-color=
+/${
+/${bm.substring(13, 14).toUpperCase()}${bm.substring(14)}
+/${pdfDocument.versionString}
+/${ttfFont.fontName}
+/$fontName
+/$key
+/$name
+/$raw
+/1.2
+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
+/a
+/A
+/AcroForm
+/adbe.pkcs7.detached
+/Adobe.PPKLite
+/AF
+/AFRelationship
+/Annot
+/Annots
+/AntiAlias
+/AP
+/application/octet-stream
+/Array
+/AS
+/Ascent
+/ASCII85Decode
+/Author
+/BaseFont
+/BBox
+/BC
+/BG
+/BitsPerComponent
+/BitsPerSample
+/BM
+/Bool
+/Border
+/Bounds
+/BS
+/Btn
+/ByteRange
+/ByteRange\s*\[\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*\]
+/C
+/ca
+/CA
+/CapHeight
+/Catalog
+/Certs
+/Ch
+/CIDFontType2
+/CIDInit/ProcSet\nfindresource begin\n
+/CIDSystemInfo
+/CIDSystemInfo<<\n
+/CIDToGIDMap
+/Circle
+/CMapName/Adobe-Identity-UCS def\n
+/CMapType 2 def\n
+/ColorSpace
+/ContactInfo
+/Contents
+/Coords
+/Count
+/CreationDate
+/Creator
+/CRLs
+/CropBox
+/CS
+/D
+/DA
+/DCTDecode
+/DescendantFonts
+/Descent
+/Dest
+/DestOutputProfile
+/Dests
+/DeviceGray
+/DeviceRGB
+/Dict
+/DigestMethod
+/DocMDP
+/DocTimeStamp
+/Domain
+/DR
+/DSS
+/DV
+/DW
+/EF
+/EmbeddedFile
+/EmbeddedFiles
+/Encode
+/Encoding
+/Encrypt
+/ETSI.RFC3161
+/Extend
+/ExtGState
+/F
+/F$objser
+/Ff
+/Fields
+/Filespec
+/Filter
+/First
+/FirstChar
+/Fit
+/FitR
+/Flags
+/FlateDecode
+/Font
+/FontBBox
+/FontDescriptor
+/FontFile2
+/FontName
+/Form
+/FormType
+/FT
+/FullScreen
+/Function
+/Functions
+/FunctionType
+/G
+/GoTo
+/Group
+/GTS_PDFA1
+/H
+/Height
+/Hello
+/I
+/I$objser
+/IC
+/ID
+/Identity
+/Identity-H
+/Image
+/ImageB
+/ImageC
+/Index
+/Indirect
+/Info
+/Ink
+/InkList
+/Intent
+/ItalicAngle
+/JBIG2Decode
+/JPXDecode
+/K
+/Keywords
+/Kids
+/Last
+/LastChar
+/Length
+/Length1
+/Limits
+/Link
+/Location
+/Lock
+/Luminosity
+/M
+/M\s*\(([^)]*)\)
+/Matrix
+/MaxLen
+/MediaBox
+/Metadata
+/MissingWidth
+/MK
+/ModDate
+/N
+/Name
+/Names
+/Next
+/NM
+/Null
+/Num
+/Num#1
+/Num#231
+/Nums
+/O
+/ObjStm
+/OCSPs
+/Opt
+/Order
+/Ordering
+/Ordering (UCS)\n
+/Other
+/Outlines
+/OutputConditionIdentifier
+/OutputIntent
+/OutputIntents
+/P
+/P$objser
+/Page
+/PageLabels
+/PageMode
+/Pages
+/Params
+/Parent
+/Pattern
+/Pattern CS${pattern.name} SCN 
+/Pattern cs${pattern.name} scn 
+/PatternType
+/PDF
+/Perms
+/Polygon
+/PolyLine
+/Prev
+/ProcSet
+/Producer
+/Q
+/R
+/r
+/Range
+/Reason
+/Rect
+/Reference
+/Registry
+/Registry (Adobe)\n
+/RegistryName
+/RelativeColorimetric
+/Resources
+/Root
+/Rotate
+/S
+/S$objser
+/SHA256
+/Shading
+/ShadingType
+/Sig
+/SigFlags
+/SigRef
+/Size
+/SMask
+/Square
+/St
+/StemH
+/StemV
+/String
+/SubFilter
+/Subj
+/Subject
+/Subtype
+/Supplement
+/Supplement 0\n
+/T
+/Test
+/Text
+/TI
+/Title
+/TM
+/ToUnicode
+/TR
+/TransformMethod
+/TransformParams
+/Transparency
+/TrueType
+/TU
+/Tx
+/Type
+/Type /Sig
+/Type 1
+/Type#201
+/Type0
+/Type1
+/UF
+/Unspecified
+/URI
+/UseNone
+/UseOutlines
+/UseThumbs
+/V
+/Value
+/Version
+/Vertices
+/W
+/Widget
+/Width
+/Widths
+/WinAnsiEncoding
+/XML
+/XObject
+/XRef
+/XYZ

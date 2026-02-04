@@ -24,6 +24,7 @@ import '../format/string.dart';
 import '../rect.dart';
 import 'object.dart';
 import 'page.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 /// Outline mode
 enum PdfOutlineMode {
@@ -165,7 +166,7 @@ class PdfOutline extends PdfObject<PdfDict> {
       final index = parent!.getIndex(this);
       if (index > 0) {
         // Now if were not the first, then we have a /Prev node
-        params['/Prev'] = parent!.getNode(index - 1).ref();
+        params[PdfNameTokens.prev] = parent!.getNode(index - 1).ref();
       }
 
       if (index < parent!.getLast()) {
@@ -181,7 +182,7 @@ class PdfOutline extends PdfObject<PdfDict> {
     // These only valid if we have children
     if (outlines.isNotEmpty) {
       // the number of the first outline in list
-      params['/First'] = outlines[0].ref();
+      params[PdfNameTokens.first] = outlines[0].ref();
 
       // the number of the last outline in list
       params['/Last'] = outlines[outlines.length - 1].ref();
@@ -215,3 +216,7 @@ class PdfOutline extends PdfObject<PdfDict> {
     return '$runtimeType $anchor $title';
   }
 }
+
+
+
+

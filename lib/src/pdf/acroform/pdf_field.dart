@@ -1,5 +1,3 @@
-import 'package:pdf_plus/src/pdf/parsing/pdf_parser_constants.dart';
-
 import '../format/array.dart';
 import '../format/base.dart';
 import '../format/dict.dart';
@@ -7,6 +5,7 @@ import '../format/indirect.dart';
 import '../format/name.dart';
 import '../format/num.dart';
 import 'pdf_acroform.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 class PdfAcroField {
   PdfAcroField(
@@ -15,8 +14,8 @@ class PdfAcroField {
   /// Factory to create the correct field type from a dictionary.
   factory PdfAcroField.create(PdfDict dictionary,
       PdfIndirect? indirectReference, String name, PdfAcroForm acroForm) {
-    if (dictionary.containsKey(PdfKeys.ft)) {
-      final ft = dictionary[PdfKeys.ft];
+    if (dictionary.containsKey(PdfNameTokens.ft)) {
+      final ft = dictionary[PdfNameTokens.ft];
       if (ft is PdfName) {
         if (ft.value == '/Tx') {
           return PdfAcroTextField(
@@ -27,7 +26,7 @@ class PdfAcroField {
         } else if (ft.value == '/Ch') {
           return PdfAcroChoiceField(
               dictionary, indirectReference, name, acroForm);
-        } else if (ft.value == '/Sig') {
+        } else if (ft.value == PdfNameTokens.sig) {
           return PdfAcroSignatureField(
               dictionary, indirectReference, name, acroForm);
         }
@@ -43,8 +42,8 @@ class PdfAcroField {
 
   /// Gets the field type (/FT).
   String? get fieldType {
-    if (dictionary.containsKey(PdfKeys.ft)) {
-      final ft = dictionary[PdfKeys.ft];
+    if (dictionary.containsKey(PdfNameTokens.ft)) {
+      final ft = dictionary[PdfNameTokens.ft];
       if (ft is PdfName) return ft.value;
     }
     return null;
@@ -52,8 +51,8 @@ class PdfAcroField {
 
   /// Gets the field flags (/Ff).
   int get flags {
-    if (dictionary.containsKey(PdfKeys.ff)) {
-      final ff = dictionary[PdfKeys.ff];
+    if (dictionary.containsKey(PdfNameTokens.ff)) {
+      final ff = dictionary[PdfNameTokens.ff];
       if (ff is PdfNum) return ff.value.toInt();
     }
     return 0;
@@ -61,7 +60,7 @@ class PdfAcroField {
 
   /// Sets the field flags (/Ff).
   set flags(int value) {
-    dictionary[PdfKeys.ff] = PdfNum(value);
+    dictionary[PdfNameTokens.ff] = PdfNum(value);
   }
 
   /// Helper to set or clear a specific flag bit.
@@ -80,8 +79,8 @@ class PdfAcroField {
 
   /// Gets the rectangle (/Rect) of the field (widget annotation).
   List<double>? get rect {
-    if (dictionary.containsKey(PdfKeys.rect)) {
-      final r = dictionary[PdfKeys.rect];
+    if (dictionary.containsKey(PdfNameTokens.rect)) {
+      final r = dictionary[PdfNameTokens.rect];
       if (r is PdfArray && r.values.length >= 4) {
         return r.values.map((e) => (e as PdfNum).value.toDouble()).toList();
       }
@@ -92,9 +91,9 @@ class PdfAcroField {
   /// Sets the rectangle (/Rect) of the field (widget annotation).
   set rect(List<double>? value) {
     if (value != null && value.length >= 4) {
-      dictionary[PdfKeys.rect] = PdfArray.fromNum(value);
+      dictionary[PdfNameTokens.rect] = PdfArray.fromNum(value);
     } else {
-      dictionary.values.remove(PdfKeys.rect);
+      dictionary.values.remove(PdfNameTokens.rect);
     }
   }
 
@@ -119,8 +118,8 @@ class PdfAcroTextField extends PdfAcroField {
 
   /// Gets the maximum length of the field's text (/MaxLen).
   int? get maxLength {
-    if (dictionary.containsKey(PdfKeys.maxLen)) {
-      final m = dictionary[PdfKeys.maxLen];
+    if (dictionary.containsKey(PdfNameTokens.maxLen)) {
+      final m = dictionary[PdfNameTokens.maxLen];
       if (m is PdfNum) return m.value.toInt();
     }
     return null;
@@ -129,9 +128,9 @@ class PdfAcroTextField extends PdfAcroField {
   /// Sets the maximum length of the field's text (/MaxLen).
   set maxLength(int? value) {
     if (value != null) {
-      dictionary[PdfKeys.maxLen] = PdfNum(value);
+      dictionary[PdfNameTokens.maxLen] = PdfNum(value);
     } else {
-      dictionary.values.remove(PdfKeys.maxLen);
+      dictionary.values.remove(PdfNameTokens.maxLen);
     }
   }
 }
@@ -169,21 +168,21 @@ class PdfAcroChoiceField extends PdfAcroField {
 
   /// Gets the top index (/TI).
   int get topIndex {
-    if (dictionary.containsKey(PdfKeys.ti)) {
-      final t = dictionary[PdfKeys.ti];
+    if (dictionary.containsKey(PdfNameTokens.ti)) {
+      final t = dictionary[PdfNameTokens.ti];
       if (t is PdfNum) return t.value.toInt();
     }
     return 0;
   }
 
   set topIndex(int value) {
-    dictionary[PdfKeys.ti] = PdfNum(value);
+    dictionary[PdfNameTokens.ti] = PdfNum(value);
   }
 
   /// Gets the indices (/I) of selected items in a multi-select list.
   List<int> get indices {
-    if (dictionary.containsKey(PdfKeys.i)) {
-      final i = dictionary[PdfKeys.i];
+    if (dictionary.containsKey(PdfNameTokens.i)) {
+      final i = dictionary[PdfNameTokens.i];
       if (i is PdfArray) {
         return i.values.map((e) => (e as PdfNum).value.toInt()).toList();
       }
@@ -192,7 +191,7 @@ class PdfAcroChoiceField extends PdfAcroField {
   }
 
   set indices(List<int> value) {
-    dictionary[PdfKeys.i] = PdfArray.fromNum(value);
+    dictionary[PdfNameTokens.i] = PdfArray.fromNum(value);
   }
 }
 
@@ -203,13 +202,13 @@ class PdfAcroSignatureField extends PdfAcroField {
   /// Sets the value of the signature field.
   /// The value is typically a signature dictionary or an indirect reference to one.
   void setSignatureValue(PdfDataType signature) {
-    dictionary[PdfKeys.v] = signature;
+    dictionary[PdfNameTokens.v] = signature;
   }
 
   /// Gets the Lock dictionary.
   PdfDict? get lock {
-    if (dictionary.containsKey(PdfKeys.lock)) {
-      final l = dictionary[PdfKeys.lock];
+    if (dictionary.containsKey(PdfNameTokens.lock)) {
+      final l = dictionary[PdfNameTokens.lock];
       if (l is PdfDict) return l;
     }
     return null;
@@ -218,9 +217,9 @@ class PdfAcroSignatureField extends PdfAcroField {
   /// Sets the Lock dictionary.
   set lock(PdfDict? value) {
     if (value != null) {
-      dictionary[PdfKeys.lock] = value;
+      dictionary[PdfNameTokens.lock] = value;
     } else {
-      dictionary.values.remove(PdfKeys.lock);
+      dictionary.values.remove(PdfNameTokens.lock);
     }
   }
 }

@@ -21,6 +21,7 @@ import '../format/name.dart';
 import '../format/num.dart';
 import '../format/string.dart';
 import 'object.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 enum PdfPageLabelStyle {
   arabic,
@@ -76,7 +77,7 @@ class PdfPageLabel {
     return PdfDict.values({
       if (s != null) '/S': s,
       if (prefix != null && prefix!.isNotEmpty)
-        '/P': PdfString.fromString(prefix!),
+        PdfNameTokens.p: PdfString.fromString(prefix!),
       if (subsequent != null) '/St': PdfNum(subsequent!)
     });
   }
@@ -197,3 +198,7 @@ class PdfPageLabels extends PdfObject<PdfDict> {
     params['/Nums'] = nums;
   }
 }
+
+
+
+

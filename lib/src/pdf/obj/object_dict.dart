@@ -19,6 +19,7 @@ import '../format/dict.dart';
 import '../format/name.dart';
 import '../format/stream.dart';
 import 'object.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 /// Object with a PdfDict used in the PDF file
 @Deprecated('Use PdfObject<PdfDict> instead')
@@ -32,7 +33,7 @@ class PdfObjectDict extends PdfObject<PdfDict> {
     int? objser,
   }) : super(pdfDocument, params: PdfDict(), objgen: objgen, objser: objser) {
     if (type != null) {
-      params['/Type'] = PdfName(type);
+      params[PdfNameTokens.type] = PdfName(type);
     }
   }
 
@@ -44,3 +45,7 @@ class PdfObjectDict extends PdfObject<PdfDict> {
     }
   }
 }
+
+
+
+

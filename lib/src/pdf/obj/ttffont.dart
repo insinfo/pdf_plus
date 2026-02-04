@@ -35,6 +35,7 @@ import 'font_descriptor.dart';
 import 'object.dart';
 import 'object_stream.dart';
 import 'unicode_cmap.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 class PdfTtfFont extends PdfFont {
   /// Constructs a [PdfTtfFont]
@@ -101,7 +102,7 @@ class PdfTtfFont extends PdfFont {
     file.params['/Length1'] = PdfNum(font.bytes.lengthInBytes);
 
     params['/BaseFont'] = PdfName('/$fontName');
-    params['/FontDescriptor'] = descriptor.ref();
+    params[PdfNameTokens.fontDescriptor] = descriptor.ref();
     charMin = 32;
     charMax = 255;
     for (var i = charMin; i <= charMax; i++) {
@@ -123,17 +124,17 @@ class PdfTtfFont extends PdfFont {
     file.params['/Length1'] = PdfNum(data.length);
 
     final descendantFont = PdfDict.values({
-      '/Type': const PdfName('/Font'),
+      PdfNameTokens.type: const PdfName(PdfNameTokens.font),
       '/BaseFont': PdfName('/$fontName'),
       '/FontFile2': file.ref(),
-      '/FontDescriptor': descriptor.ref(),
-      '/W': PdfArray([
+      PdfNameTokens.fontDescriptor: descriptor.ref(),
+      PdfNameTokens.w: PdfArray([
         const PdfNum(0),
         widthsObject.ref(),
       ]),
       '/CIDToGIDMap': const PdfName('/Identity'),
       '/DW': const PdfNum(1000),
-      '/Subtype': const PdfName('/CIDFontType2'),
+      PdfNameTokens.subtype: const PdfName(PdfNameTokens.cidFontType2),
       '/CIDSystemInfo': PdfDict.values({
         '/Supplement': const PdfNum(0),
         '/Registry': PdfString.fromString('Adobe'),
@@ -205,3 +206,7 @@ class PdfTtfFont extends PdfFont {
     return font.charToGlyphIndexMap.containsKey(charCode);
   }
 }
+
+
+
+

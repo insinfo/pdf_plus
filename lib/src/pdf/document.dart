@@ -54,6 +54,7 @@ import 'rect.dart';
 import 'validation/pdf_dss.dart';
 import 'acroform/pdf_acroform.dart';
 import 'parsing/pdf_document_info.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 /// Display hint for the PDF viewer
 enum PdfPageMode {
@@ -347,7 +348,7 @@ class PdfDocument {
     for (final ob in objects.where((e) => e.inUse)) {
       ob.prepare();
       if (ob is PdfInfo) {
-        xref.params['/Info'] = ob.ref();
+        xref.params[PdfNameTokens.info] = ob.ref();
       } else if (ob is PdfEncryption) {
         xref.params['/Encrypt'] = ob.ref();
       } else if (ob is PdfSignature) {
@@ -359,10 +360,10 @@ class PdfDocument {
 
     final id =
         PdfString(documentID, format: PdfStringFormat.binary, encrypted: false);
-    xref.params['/ID'] = PdfArray([id, id]);
+    xref.params[PdfNameTokens.id] = PdfArray([id, id]);
 
     if (prev != null) {
-      xref.params['/Prev'] = PdfNum(prev!.xrefOffset);
+      xref.params[PdfNameTokens.prev] = PdfNum(prev!.xrefOffset);
     }
 
     if (enableEventLoopBalancing) {
@@ -555,7 +556,7 @@ class PdfSignatureFieldEditor {
     final updated = PdfDict<PdfDataType>.values(
       Map<String, PdfDataType>.from(field.fieldDict.values),
     );
-    updated['/T'] = PdfString.fromString(newName);
+    updated[PdfNameTokens.t] = PdfString.fromString(newName);
     if (field.fieldRef != null) {
       PdfObject<PdfDict<PdfDataType>>(
         document,
@@ -579,16 +580,16 @@ class PdfSignatureFieldEditor {
       Map<String, PdfDataType>.from(field.fieldDict.values),
     );
     if (reason != null) {
-      updated['/Reason'] = PdfString.fromString(reason);
+      updated[PdfNameTokens.reason] = PdfString.fromString(reason);
     }
     if (location != null) {
-      updated['/Location'] = PdfString.fromString(location);
+      updated[PdfNameTokens.location] = PdfString.fromString(location);
     }
     if (name != null) {
-      updated['/Name'] = PdfString.fromString(name);
+      updated[PdfNameTokens.name] = PdfString.fromString(name);
     }
     if (signingTimeRaw != null) {
-      updated['/M'] = PdfString.fromString(signingTimeRaw);
+      updated[PdfNameTokens.m] = PdfString.fromString(signingTimeRaw);
     }
 
     if (field.fieldRef != null) {
@@ -623,7 +624,7 @@ class PdfSignatureFieldEditor {
     final updated = PdfDict<PdfDataType>.values(
       Map<String, PdfDataType>.from(field.fieldDict.values),
     );
-    updated['/V'] = const PdfNull();
+    updated[PdfNameTokens.v] = const PdfNull();
     if (field.fieldRef != null) {
       PdfObject<PdfDict<PdfDataType>>(
         document,
@@ -688,7 +689,7 @@ class PdfSignatureFieldEditor {
     final updatedAcroForm = PdfDict<PdfDataType>.values(
       Map<String, PdfDataType>.from(acroFormDict.values),
     );
-    updatedAcroForm['/Fields'] = fields;
+    updatedAcroForm[PdfNameTokens.fields] = fields;
 
     final acroFormRef = context.acroFormRef;
     if (acroFormRef != null) {
@@ -701,13 +702,13 @@ class PdfSignatureFieldEditor {
       return true;
     }
 
-    document.catalog.params['/AcroForm'] = updatedAcroForm;
+    document.catalog.params[PdfNameTokens.acroForm] = updatedAcroForm;
     return true;
   }
 
   void _removeAnnotationFromPages(PdfIndirectRef fieldRef) {
     for (final page in document.pdfPageList.pages) {
-      final annots = page.params['/Annots'];
+      final annots = page.params[PdfNameTokens.annots];
       if (annots is PdfArray) {
         annots.values.removeWhere((value) {
           return value is PdfIndirect &&
@@ -731,3 +732,7 @@ class PdfSignatureFieldEditor {
     return _writeFieldsArray(updatedArray);
   }
 }
+
+
+
+

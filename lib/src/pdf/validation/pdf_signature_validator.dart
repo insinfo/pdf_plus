@@ -17,6 +17,7 @@ import '../parsing/pdf_document_parser.dart';
 import '../parsing/pdf_document_info.dart';
 import '../format/indirect.dart';
 import '../format/null_value.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 class PdfSignatureValidationResult {
   const PdfSignatureValidationResult({
@@ -65,7 +66,7 @@ Map<String, String> findSignatureValueRefs(Uint8List bytes) {
         (rawName == null || rawName.trim().isEmpty) ? 'field_$i' : rawName;
 
     String? value;
-    final v = field.fieldDict['/V'];
+    final v = field.fieldDict[PdfNameTokens.v];
     if (v is PdfIndirect) {
       value = '${v.ser} ${v.gen} R';
     } else if (v is PdfNull) {
@@ -3505,3 +3506,7 @@ bool _listEquals(List<int> a, List<int> b) {
   }
   return true;
 }
+
+
+
+

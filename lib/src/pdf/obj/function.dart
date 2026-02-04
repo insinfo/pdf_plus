@@ -21,6 +21,7 @@ import '../format/dict.dart';
 import '../format/num.dart';
 import 'object.dart';
 import 'object_stream.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 abstract class PdfBaseFunction extends PdfObject<PdfDict> {
   PdfBaseFunction(PdfDocument pdfDocument)
@@ -117,7 +118,7 @@ class PdfFunction extends PdfObjectStream implements PdfBaseFunction {
     params['/Order'] = PdfNum(order);
     params['/Domain'] = PdfArray.fromNum(domain);
     params['/Range'] = PdfArray.fromNum(range);
-    params['/Size'] = PdfArray.fromNum(<int>[data!.length ~/ order]);
+    params[PdfNameTokens.size] = PdfArray.fromNum(<int>[data!.length ~/ order]);
   }
 
   @override
@@ -158,3 +159,7 @@ class PdfStitchingFunction extends PdfBaseFunction {
   String toString() =>
       '$runtimeType $domainStart $bounds $domainEnd $functions';
 }
+
+
+
+

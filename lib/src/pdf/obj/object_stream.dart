@@ -20,6 +20,7 @@ import '../format/dict_stream.dart';
 import '../format/name.dart';
 import '../format/stream.dart';
 import 'object.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 /// Stream Object
 class PdfObjectStream extends PdfObject<PdfDict> {
@@ -31,7 +32,7 @@ class PdfObjectStream extends PdfObject<PdfDict> {
   }) : super(
           pdfDocument,
           params: PdfDict.values({
-            if (type != null) '/Type': PdfName(type),
+            if (type != null) PdfNameTokens.type: PdfName(type),
           }),
         );
 
@@ -51,3 +52,7 @@ class PdfObjectStream extends PdfObject<PdfDict> {
     s.putByte(0x0a);
   }
 }
+
+
+
+

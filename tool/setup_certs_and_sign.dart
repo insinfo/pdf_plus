@@ -160,11 +160,10 @@ Future<void> main() async {
     'Pre-create signature fields',
     () => _prepareBaseSignatureFields(pdfBytes),
   );
-  final timestampClient = PdfTimestampClient.freetsa(logTimings: true);
+  final timestampClient = PdfTimestampClient.freetsa();
   final urlValidacao = 'https://exemplo.com/assinaturas/validar';
   final logoPath = 'test/assets/images/brasao_editado_1.png';
-  final logoBytes =
-      File(logoPath).existsSync() ? File(logoPath).readAsBytesSync() : null;
+  final logoBytes = File(logoPath).readAsBytesSync();
 
   final signer1 = PdfSignatureSigner.pem(
     privateKeyPem: userKeyPem,

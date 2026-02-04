@@ -12,6 +12,7 @@ import '../obj/object.dart';
 import '../obj/signature.dart';
 import 'pdf_cms_signer.dart';
 import 'pdf_external_signer.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 /// Implementação PAdES baseada em PdfSignatureBase.
 class PdfPadesSigner extends PdfSignatureBase {
@@ -39,28 +40,28 @@ class PdfPadesSigner extends PdfSignatureBase {
 
   @override
   void preSign(PdfObject object, PdfDict params) {
-    params['/Filter'] = const PdfName('/Adobe.PPKLite');
-    params['/SubFilter'] = const PdfName('/adbe.pkcs7.detached');
-    params['/ByteRange'] = _PdfByteRangePlaceholder(digits: byteRangeDigits);
-    params['/Contents'] = PdfString(
+    params[PdfNameTokens.filter] = const PdfName(PdfNameTokens.adobePpkLite);
+    params[PdfNameTokens.subFilter] = const PdfName(PdfNameTokens.adbePkcs7Detached);
+    params[PdfNameTokens.byteRange] = _PdfByteRangePlaceholder(digits: byteRangeDigits);
+    params[PdfNameTokens.contents] = PdfString(
       Uint8List(contentsReserveSize),
       format: PdfStringFormat.binary,
       encrypted: false,
     );
 
     final when = (signingTime ?? DateTime.now()).toUtc();
-    params['/M'] = PdfString.fromDate(when, encrypted: false);
+    params[PdfNameTokens.m] = PdfString.fromDate(when, encrypted: false);
     if (reason != null) {
-      params['/Reason'] = PdfString.fromString(reason!);
+      params[PdfNameTokens.reason] = PdfString.fromString(reason!);
     }
     if (location != null) {
-      params['/Location'] = PdfString.fromString(location!);
+      params[PdfNameTokens.location] = PdfString.fromString(location!);
     }
     if (contactInfo != null) {
       params['/ContactInfo'] = PdfString.fromString(contactInfo!);
     }
     if (name != null) {
-      params['/Name'] = PdfString.fromString(name!);
+      params[PdfNameTokens.name] = PdfString.fromString(name!);
     }
   }
 
@@ -288,3 +289,7 @@ int _indexOfSequence(Uint8List bytes, List<int> pattern, int start, int end) {
   }
   return -1;
 }
+
+
+
+

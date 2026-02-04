@@ -9,6 +9,8 @@ O mais importante nao e replicar nomes de APIs do `dart_pdf`, e sim garantir que
 2) edicao de PDF (anotacoes, campos, incremental update)
 3) assinatura digital (preparar, embutir e validar PKCS#7)
 4) LTV / revogacao (DSS/CRL/OCSP)
+5) Timestamp (TSA / DocTimeStamp)
+6) PKI/keystore (JKS/BKS/PKCS12 para cadeias ICP-Brasil)
 
 Uso real no SALI (modulo de assinatura)
 
@@ -47,10 +49,17 @@ Roadmap por recursos (prioridade)
 
 Estado atual no pdf_plus (resumo)
 
-- Assinatura externa e CMS: ja existe (PdfExternalSigning, PdfCmsSigner).
+- Assinatura externa e CMS: existe (PdfExternalSigning + PdfCmsSigner).
+  - Prepare/Embed com placeholder /Contents e ByteRange.
+  - Parsers de ByteRange/Contents com fallback (fast e interno) e verificacoes.
 - Validacao: existe (PdfSignatureValidator + report).
+  - Helpers publicos: extractAllSignatureContents, extractSignatureContentsAt,
+    findAllSignatureByteRanges, findSignatureValueRefs.
 - LTV: existe (PdfLtvService.applyLtv).
 - Incremental update: implementado no PdfDocument.save (append do PDF anterior + /Prev).
+- Timestamp: suporte a DocTimeStamp via PdfTimestampClient + PdfExternalSigning.
+- PKI: parser PKCS12, keystores JKS/BKS e loader ICP-Brasil.
+- Crypto interno: SHA1/SHA256/SHA512, HMAC, 3DES/CBC/PKCS7, sem dependencia externa.
 - Visual: existe PdfGraphics, mas faltam helpers para uso direto (texto com bounds,
   imagem a partir de bytes e metricas de fonte).
 
@@ -72,7 +81,13 @@ Implementado agora (primeiros passos)
   - embedExternalSignature(...)
 - Testes de incremental update e multi-assinatura:
   - `test/pdf/parsing/pdf_incremental_update_test.dart`
-  - `test/pki/pdf_signature_validator_multi_test.dart`
+  - `test/signing/pdf_signature_validator_multi_test.dart`
+- Teste robusto de multi-assinaturas + openssl verify:
+  - `test/signing/pdf_signature_openssl_chain_test.dart`
+- DocTimeStamp (TSA) com parse e verify via openssl:
+  - `test/signing/pdf_signature_openssl_chain_test.dart` (ts -reply + ts -verify)
+- Testes de keystore ICP-Brasil (JKS/BKS) + roundtrip:
+  - `test/pki/icp_brasil_keystore_test.dart`
 
 Refatoracao do parser (organizado sem `part`)
 
@@ -100,48 +115,72 @@ Proximos passos sugeridos (nao implementados ainda)
 4) Validacao/LTV avancado
    - Expor objetos de validacao simplificados.
    - Opcional: fetch CRL/OCSP.
+5) TSA mais robusto
+   - Validacao de token com truststore configuravel (CAfile + chain).
+   - Politicas/oid e validacao de nonce.
+6) PKI/keystore
+   - Decodificacao completa de PrivateKeyEntry em JKS/JCEKS.
+   - Melhorar deduplicacao/normalizacao de certificados ICP-Brasil.
 
 
-profissionalizar e organizar esse parser sem perder robustez/perf:
+Profissionalizar e organizar o parser sem perder robustez/perf:
 
 1) Quebra por responsabilidade (sem alterar lógica)
 
-pdf_document_parser.dart vira orquestrador + API pública.
-Extrair para arquivos internos:
-parser_xref.dart: _parseXrefChain, _parseXrefAtOffset*, _parseXrefTable*, _parseXrefStream*, _XrefEntry, _TrailerInfo.
-parser_objects.dart: _getObject*, _readIndirectObject*, _ParsedIndirectObject, _indexObjectStreams.
-parser_tokens.dart: _readInt, _readHexString, _readLiteralString, _skipPdfWsAndComments, _matchToken, _indexOfSequence, _lastIndexOfSequence, _readIdArray.
-parser_fields.dart: extractSignatureFields, extractSignatureFieldEditContext, _collectSignatureFieldObjects, _collectSignatureFields, _tryRead*FromObject.
-parser_pages.dart: _collectPages, _collectPageRefs, _buildPageFromDict, _pageFormatFromBox, _pageRotationFromValue.
+`pdf_document_parser.dart` vira orquestrador + API pública. Extrair para
+arquivos internos:
+- `parser_xref.dart`: `_parseXrefChain`, `_parseXrefAtOffset*`, `_parseXrefTable*`,
+  `_parseXrefStream*`, `_XrefEntry`, `_TrailerInfo`.
+- `parser_objects.dart`: `_getObject*`, `_readIndirectObject*`,
+  `_ParsedIndirectObject`, `_indexObjectStreams`.
+- `parser_tokens.dart`: `_readInt`, `_readHexString`, `_readLiteralString`,
+  `_skipPdfWsAndComments`, `_matchToken`, `_indexOfSequence`,
+  `_lastIndexOfSequence`, `_readIdArray`.
+- `parser_fields.dart`: `extractSignatureFields`,
+  `extractSignatureFieldEditContext`, `_collectSignatureFieldObjects`,
+  `_collectSignatureFields`, `_tryRead*FromObject`.
+- `parser_pages.dart`: `_collectPages`, `_collectPageRefs`,
+  `_buildPageFromDict`, `_pageFormatFromBox`, `_pageRotationFromValue`.
+
 Resultado: arquivos menores, teste e debug mais simples.
+
 2) Centralizar nomes PDF em constantes
 
-Criar pdf_names.dart com constantes const para tokens:
-kPages = '/Pages', kKids = '/Kids', kXObject = '/XObject', kAcroForm, kFields, kSig, kByteRange, kContents, kSubFilter, etc.
-Evita typos e facilita grep/refactor.
-Dica: não mude o tipo (continuar String) pra não impactar performance ou comportamento.
+Criar `pdf_names.dart` com constantes `const` para tokens:
+`kPages = '/Pages'`, `kKids = '/Kids'`, `kXObject = '/XObject'`, `kAcroForm`,
+`kFields`, `kSig`, `kByteRange`, `kContents`, `kSubFilter`, etc.
+Evita typos e facilita grep/refactor. Dica: manter `String` para nao impactar
+performance ou comportamento.
+
 3) Agrupar estruturas auxiliares
 
-class _ParsedIndirectObject, _PdfRef, _ImageScanInfo em parser_types.dart.
-Ajuda leitura e reduz ruído no arquivo principal.
+Mover `class _ParsedIndirectObject`, `_PdfRef`, `_ImageScanInfo` para
+`parser_types.dart`. Ajuda leitura e reduz ruído no arquivo principal.
+
 4) Isolar “robustez vs. performance”
 
 Separar paths críticos:
-fast_path: quando xref/trailer OK.
-repair_path: fallback por scan.
-Isso deixa claro quando custa mais CPU/IO e evita regressões.
-5) Evitar dependências cíclicas
+- `fast_path`: quando xref/trailer OK.
+- `repair_path`: fallback por scan.
 
-separar em arquivos e usar classes com metodos estaticos para poder controlar a visibilidade no export da lib
-Alternativa: _internal library com arquivos separados + library pdf_parser; e part para tudo interno.
+Isso deixa claro quando custa mais CPU/IO e evita regressões.
+
+5) Evitar dependências cíclicas se possivel
+
+Separar em arquivos e usar classes com métodos estáticos publicos, para controlar
+visibilidade no export da lib pode usar show ou hide no export se necessario 
+
 6) Manter testes como “red flag”
 
 Qualquer refactor deve rodar pelo menos:
-dart test test/pki
-dart test test/pdf/parsing
+`dart test test/pki`
+`dart test test/signing`
+`dart test test/pdf/parsing`
+
 Isso pega regressões de parsing e assinatura.
+
 7) Inspiração do iText
 
-Eles separam parsing: PdfTokenizer, PdfXref, PdfDocument.
+Eles separam parsing: `PdfTokenizer`, `PdfXref`, `PdfDocument`.
 A ideia aqui: tokenização isolada, xref isolado, parser orquestra.
 Você já tem isso misturado em um arquivo; separar ajuda clareza e manutenção.

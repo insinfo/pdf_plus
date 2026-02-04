@@ -20,6 +20,7 @@ import '../font/font_metrics.dart';
 import '../format/object_base.dart';
 import 'font.dart';
 import 'ttffont.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 /// Type 1 font object.
 /// this font is a default PDF font available in all PDF readers,
@@ -65,7 +66,7 @@ class PdfType1Font extends PdfFont {
       final fontDescriptor = PdfObject<PdfDict>(
         pdfDocument,
         params: PdfDict.values({
-          '/Type': const PdfName('/FontDescriptor'),
+          PdfNameTokens.type: const PdfName(PdfNameTokens.fontDescriptor),
           '/FontName': PdfName('/$fontName'),
           '/Flags': PdfNum(32 + (isFixedPitch ? 1 : 0)),
           '/FontBBox': PdfArray.fromNum(fontBBox),
@@ -79,7 +80,7 @@ class PdfType1Font extends PdfFont {
         }),
       );
 
-      params['/FontDescriptor'] = fontDescriptor.ref();
+      params[PdfNameTokens.fontDescriptor] = fontDescriptor.ref();
     }
   }
 
@@ -121,3 +122,7 @@ class PdfType1Font extends PdfFont {
     return charCode >= 0x00 && charCode <= 0xff;
   }
 }
+
+
+
+

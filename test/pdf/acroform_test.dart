@@ -1,7 +1,7 @@
 import 'package:pdf_plus/pdf.dart';
 import 'package:pdf_plus/src/pdf/acroform/pdf_acroform.dart';
 import 'package:pdf_plus/src/pdf/acroform/pdf_field.dart';
-import 'package:pdf_plus/src/pdf/parsing/pdf_parser_constants.dart';
+
 import 'package:test/test.dart';
 
 void main() {
@@ -27,14 +27,14 @@ void main() {
       expect(acroForm.fields['user.name'], same(textField));
 
       final catalog = document.catalog.params;
-      expect(catalog.containsKey(PdfKeys.acroForm), isTrue);
+      expect(catalog.containsKey(PdfNameTokens.acroForm), isTrue);
     });
 
     test('can create and add a signature field', () {
       final sigField = acroForm.createSignatureField('signature1');
       expect(sigField, isA<PdfAcroSignatureField>());
       expect(sigField.name, 'signature1');
-      expect(sigField.fieldType, '/Sig');
+      expect(sigField.fieldType, PdfNameTokens.sig);
 
       acroForm.addField(sigField, null);
 
@@ -68,11 +68,13 @@ void main() {
       final field = acroForm.createTextField('foo');
       acroForm.addField(field, null);
 
-      expect(document.catalog.params.containsKey(PdfKeys.acroForm), isTrue);
+      expect(
+          document.catalog.params.containsKey(PdfNameTokens.acroForm), isTrue);
 
       acroForm.flattenFields();
 
-      expect(document.catalog.params.containsKey(PdfKeys.acroForm), isFalse);
+      expect(
+          document.catalog.params.containsKey(PdfNameTokens.acroForm), isFalse);
       expect(acroForm.fields, isEmpty);
     });
   });

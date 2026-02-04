@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:pdf_plus/src/pdf/parsing/pdf_parser_constants.dart';
 
 import '../document.dart';
 import '../format/array.dart';
@@ -11,6 +10,7 @@ import '../format/name.dart';
 import '../format/string.dart';
 import '../obj/object.dart';
 import 'pdf_field.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 class PdfAcroForm {
   PdfAcroForm(this.document) {
@@ -33,8 +33,8 @@ class PdfAcroForm {
 
   void _ensureAcroForm() {
     final root = document.catalog.params;
-    if (!root.containsKey(PdfKeys.acroForm)) {
-      root[PdfKeys.acroForm] = PdfDict();
+    if (!root.containsKey(PdfNameTokens.acroForm)) {
+      root[PdfNameTokens.acroForm] = PdfDict();
     }
   }
 
@@ -43,12 +43,12 @@ class PdfAcroForm {
     _fieldsLoaded = true;
 
     final root = document.catalog.params;
-    if (!root.containsKey(PdfKeys.acroForm)) return;
+    if (!root.containsKey(PdfNameTokens.acroForm)) return;
 
-    final acroForm = _resolveDict(root[PdfKeys.acroForm]);
-    if (acroForm == null || !acroForm.containsKey(PdfKeys.fields)) return;
+    final acroForm = _resolveDict(root[PdfNameTokens.acroForm]);
+    if (acroForm == null || !acroForm.containsKey(PdfNameTokens.fields)) return;
 
-    final fieldsArray = _resolveArray(acroForm[PdfKeys.fields]);
+    final fieldsArray = _resolveArray(acroForm[PdfNameTokens.fields]);
     if (fieldsArray == null) return;
 
     // Cache objects for faster resolution
@@ -62,10 +62,10 @@ class PdfAcroForm {
   /// Creates a new Signature Field.
   PdfAcroSignatureField createSignatureField(String name) {
     final dict = PdfDict.values({
-      PdfKeys.type: const PdfName('/Annot'),
-      PdfKeys.subtype: const PdfName('/Widget'),
-      PdfKeys.ft: const PdfName('/Sig'),
-      PdfKeys.t: PdfString.fromString(name),
+      PdfNameTokens.type: const PdfName(PdfNameTokens.annot),
+      PdfNameTokens.subtype: const PdfName('/Widget'),
+      PdfNameTokens.ft: const PdfName(PdfNameTokens.sig),
+      PdfNameTokens.t: PdfString.fromString(name),
     });
     return PdfAcroSignatureField(dict, null, name, this);
   }
@@ -73,10 +73,10 @@ class PdfAcroForm {
   /// Creates a new Text Field.
   PdfAcroTextField createTextField(String name) {
     final dict = PdfDict.values({
-      PdfKeys.type: const PdfName('/Annot'),
-      PdfKeys.subtype: const PdfName('/Widget'),
-      PdfKeys.ft: const PdfName('/Tx'),
-      PdfKeys.t: PdfString.fromString(name),
+      PdfNameTokens.type: const PdfName(PdfNameTokens.annot),
+      PdfNameTokens.subtype: const PdfName('/Widget'),
+      PdfNameTokens.ft: const PdfName('/Tx'),
+      PdfNameTokens.t: PdfString.fromString(name),
     });
     return PdfAcroTextField(dict, null, name, this);
   }
@@ -84,10 +84,10 @@ class PdfAcroForm {
   /// Creates a new Button Field.
   PdfAcroButtonField createButtonField(String name) {
     final dict = PdfDict.values({
-      PdfKeys.type: const PdfName('/Annot'),
-      PdfKeys.subtype: const PdfName('/Widget'),
-      PdfKeys.ft: const PdfName('/Btn'),
-      PdfKeys.t: PdfString.fromString(name),
+      PdfNameTokens.type: const PdfName(PdfNameTokens.annot),
+      PdfNameTokens.subtype: const PdfName('/Widget'),
+      PdfNameTokens.ft: const PdfName('/Btn'),
+      PdfNameTokens.t: PdfString.fromString(name),
     });
     return PdfAcroButtonField(dict, null, name, this);
   }
@@ -95,10 +95,10 @@ class PdfAcroForm {
   /// Creates a new Choice Field.
   PdfAcroChoiceField createChoiceField(String name) {
     final dict = PdfDict.values({
-      PdfKeys.type: const PdfName('/Annot'),
-      PdfKeys.subtype: const PdfName('/Widget'),
-      PdfKeys.ft: const PdfName('/Ch'),
-      PdfKeys.t: PdfString.fromString(name),
+      PdfNameTokens.type: const PdfName(PdfNameTokens.annot),
+      PdfNameTokens.subtype: const PdfName('/Widget'),
+      PdfNameTokens.ft: const PdfName('/Ch'),
+      PdfNameTokens.t: PdfString.fromString(name),
     });
     return PdfAcroChoiceField(dict, null, name, this);
   }
@@ -111,8 +111,8 @@ class PdfAcroForm {
     if (fieldDict == null) return;
 
     String? name;
-    if (fieldDict.containsKey(PdfKeys.t)) {
-      final t = fieldDict[PdfKeys.t];
+    if (fieldDict.containsKey(PdfNameTokens.t)) {
+      final t = fieldDict[PdfNameTokens.t];
       if (t is PdfString) {
         try {
           name = latin1.decode(t.value);
@@ -131,8 +131,8 @@ class PdfAcroForm {
       parent = field;
     }
 
-    if (fieldDict.containsKey(PdfKeys.kids)) {
-      final kids = _resolveArray(fieldDict[PdfKeys.kids]);
+    if (fieldDict.containsKey(PdfNameTokens.kids)) {
+      final kids = _resolveArray(fieldDict[PdfNameTokens.kids]);
       if (kids != null) {
         for (final kid in kids.values) {
           _processField(kid, parent, fullName);
@@ -145,20 +145,20 @@ class PdfAcroForm {
   void addField(PdfAcroField field, PdfObject? page) {
     final root = document.catalog.params;
     PdfDict acroForm;
-    if (root.containsKey(PdfKeys.acroForm)) {
-      final val = root[PdfKeys.acroForm];
+    if (root.containsKey(PdfNameTokens.acroForm)) {
+      final val = root[PdfNameTokens.acroForm];
       acroForm = _resolveDict(val) ?? PdfDict();
     } else {
       acroForm = PdfDict();
-      root[PdfKeys.acroForm] = acroForm;
+      root[PdfNameTokens.acroForm] = acroForm;
     }
 
     PdfArray fieldsArray;
-    if (acroForm.containsKey(PdfKeys.fields)) {
-      fieldsArray = _resolveArray(acroForm[PdfKeys.fields]) ?? PdfArray();
+    if (acroForm.containsKey(PdfNameTokens.fields)) {
+      fieldsArray = _resolveArray(acroForm[PdfNameTokens.fields]) ?? PdfArray();
     } else {
       fieldsArray = PdfArray();
-      acroForm[PdfKeys.fields] = fieldsArray;
+      acroForm[PdfNameTokens.fields] = fieldsArray;
     }
 
     // Ensure field is an indirect object so it can be referenced
@@ -178,11 +178,11 @@ class PdfAcroForm {
       if (page.params is PdfDict) {
         final pageDict = page.params as PdfDict;
         PdfArray annots;
-        if (pageDict.containsKey(PdfKeys.annots)) {
-          annots = _resolveArray(pageDict[PdfKeys.annots]) ?? PdfArray();
+        if (pageDict.containsKey(PdfNameTokens.annots)) {
+          annots = _resolveArray(pageDict[PdfNameTokens.annots]) ?? PdfArray();
         } else {
           annots = PdfArray();
-          pageDict[PdfKeys.annots] = annots;
+          pageDict[PdfNameTokens.annots] = annots;
         }
         annots.add(fieldRef);
       }
@@ -237,7 +237,7 @@ class PdfAcroForm {
     if (_fields.isEmpty) return;
 
     // Remove AcroForm from catalog
-    document.catalog.params.values.remove(PdfKeys.acroForm);
+    document.catalog.params.values.remove(PdfNameTokens.acroForm);
 
     // Optionally remove the field objects from document.objects (complex as they are referenced elsewhere)
     // For now we just clear our internal map.

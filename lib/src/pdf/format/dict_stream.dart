@@ -23,6 +23,7 @@ import 'name.dart';
 import 'num.dart';
 import 'object_base.dart';
 import 'stream.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 class PdfDictStream extends PdfDict<PdfDataType> {
   PdfDictStream({
@@ -57,14 +58,14 @@ class PdfDictStream extends PdfDict<PdfDataType> {
 
     Uint8List? _data;
 
-    if (_values.containsKey('/Filter')) {
+    if (_values.containsKey(PdfNameTokens.filter)) {
       // The data is already in the right format
       _data = data;
     } else if (compress && o.settings.deflate != null) {
       // Compress the data
       final newData = Uint8List.fromList(o.settings.deflate!(data));
       if (newData.lengthInBytes < data.lengthInBytes) {
-        _values['/Filter'] = const PdfName('/FlateDecode');
+        _values[PdfNameTokens.filter] = const PdfName(PdfNameTokens.flateDecode);
         _data = newData;
       }
     }
@@ -74,7 +75,7 @@ class PdfDictStream extends PdfDict<PdfDataType> {
         // This is an Ascii85 stream
         final e = Ascii85Encoder();
         _data = e.convert(data);
-        _values['/Filter'] = const PdfName('/ASCII85Decode');
+        _values[PdfNameTokens.filter] = const PdfName(PdfNameTokens.ascii85Decode);
       } else {
         // This is a non-deflated stream
         _data = data;
@@ -85,7 +86,7 @@ class PdfDictStream extends PdfDict<PdfDataType> {
       _data = o.settings.encryptCallback!(_data, o);
     }
 
-    _values['/Length'] = PdfNum(_data.length);
+    _values[PdfNameTokens.length] = PdfNum(_data.length);
 
     _values.output(o, s, indent);
     if (indent != null) {
@@ -96,3 +97,7 @@ class PdfDictStream extends PdfDict<PdfDataType> {
     s.putString('\nendstream');
   }
 }
+
+
+
+

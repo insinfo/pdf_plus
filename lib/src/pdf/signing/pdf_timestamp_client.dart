@@ -38,27 +38,24 @@ class PdfTimestampClient {
     required this.endpoint,
     this.hashAlgorithm = PdfTimestampHashAlgorithm.sha256,
     this.validationOptions,
-    this.logTimings = false,
     PdfHttpFetcherBase? httpClient,
   }) : _httpClient = httpClient ?? PdfHttpFetcher();
 
   factory PdfTimestampClient.freetsa({
     PdfTimestampHashAlgorithm hashAlgorithm = PdfTimestampHashAlgorithm.sha256,
     PdfTimestampValidationOptions? validationOptions,
-    bool logTimings = false,
   }) {
     return PdfTimestampClient(
       endpoint: Uri.parse('https://freetsa.org/tsr'),
       hashAlgorithm: hashAlgorithm,
       validationOptions: validationOptions,
-      logTimings: logTimings,
     );
   }
 
   final Uri endpoint;
   final PdfTimestampHashAlgorithm hashAlgorithm;
   final PdfTimestampValidationOptions? validationOptions;
-  final bool logTimings;
+
   final PdfHttpFetcherBase _httpClient;
 
   Future<Uint8List> timestampSignature(
@@ -108,9 +105,6 @@ class PdfTimestampClient {
   }
 
   Future<Uint8List> _postRequest(Uint8List requestBytes) async {
-    if (logTimings) {
-      print('TSA request size: ${requestBytes.length} bytes');
-    }
     final response = await _httpClient.postBytes(
       endpoint,
       headers: const <String, String>{
@@ -118,19 +112,6 @@ class PdfTimestampClient {
       },
       body: requestBytes,
     );
-
-    if (logTimings) {
-      if (response.requestTime != null) {
-        print('TSA request time: ${_formatElapsed(response.requestTime!)}');
-      }
-      if (response.responseTime != null) {
-        print('TSA response time: ${_formatElapsed(response.responseTime!)}');
-      }
-      if (response.totalTime != null) {
-        print('TSA total time: ${_formatElapsed(response.totalTime!)}');
-      }
-      print('TSA response size: ${response.body.length} bytes');
-    }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw StateError(
@@ -164,9 +145,7 @@ class PdfTimestampClient {
 
     final token = resp.elements[1];
     final tokenBytes = Uint8List.fromList(token.encodedBytes);
-    if (logTimings) {
-      print('TSA token size: ${tokenBytes.length} bytes');
-    }
+
     return tokenBytes;
   }
 
@@ -209,10 +188,4 @@ class PdfTimestampClient {
       requireTrustedChain: options.requireTrustedChain,
     );
   }
-}
-
-String _formatElapsed(Duration duration) {
-  final ms = duration.inMilliseconds;
-  final seconds = (ms / 1000).toStringAsFixed(2);
-  return '${seconds}s';
 }

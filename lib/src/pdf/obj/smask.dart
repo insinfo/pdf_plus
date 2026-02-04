@@ -23,6 +23,7 @@ import '../graphics.dart';
 import '../rect.dart';
 import 'function.dart';
 import 'graphic_stream.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 class PdfSoftMask {
   PdfSoftMask(this.document,
@@ -31,14 +32,14 @@ class PdfSoftMask {
       bool knockout = false,
       bool invert = false}) {
     _mask = PdfGraphicXObject(document, '/Form');
-    _mask.params['/BBox'] = PdfArray.fromNum([
+    _mask.params[PdfNameTokens.bbox] = PdfArray.fromNum([
       boundingBox.left,
       boundingBox.bottom,
       boundingBox.width,
       boundingBox.height,
     ]);
     if (isolated) {
-      _mask.params['/I'] = const PdfBool(true);
+      _mask.params[PdfNameTokens.i] = const PdfBool(true);
     }
     if (knockout) {
       _mask.params['/K'] = const PdfBool(true);
@@ -79,3 +80,7 @@ class PdfSoftMask {
     return params;
   }
 }
+
+
+
+

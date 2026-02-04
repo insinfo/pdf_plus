@@ -1,6 +1,35 @@
+import 'dart:typed_data';
+
 import '../format/array.dart';
 import '../format/base.dart';
 import '../format/dict.dart';
+import 'parser_fields.dart';
+
+/// Fast checks without fully parsing the document structure.
+class PdfQuickInfo {
+  PdfQuickInfo._({
+    required this.pdfVersion,
+    required this.hasSignatures,
+    required this.docMdpPermissionP,
+  });
+
+  factory PdfQuickInfo.fromBytes(Uint8List bytes) {
+    final version = PdfParserFields.readPdfVersion(bytes);
+    final hasSignatures = PdfParserFields.findByteRangeToken(bytes) != -1;
+    final permissionP = PdfParserFields.extractDocMdpPermissionFromBytes(bytes);
+    return PdfQuickInfo._(
+      pdfVersion: version,
+      hasSignatures: hasSignatures,
+      docMdpPermissionP: permissionP,
+    );
+  }
+
+  final double pdfVersion;
+  final bool hasSignatures;
+  final int? docMdpPermissionP;
+
+  bool get isPdf15OrAbove => pdfVersion >= 1.5;
+}
 
 class PdfIndirectRef {
   const PdfIndirectRef(this.obj, this.gen);

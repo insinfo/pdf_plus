@@ -22,13 +22,14 @@ import '../format/dict.dart';
 import '../format/num.dart';
 import 'font.dart';
 import 'xobject.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 /// Form XObject
 class PdfFormXObject extends PdfXObject {
   /// Create a Form XObject
   PdfFormXObject(PdfDocument pdfDocument) : super(pdfDocument, '/Form') {
     params['/FormType'] = const PdfNum(1);
-    params['/BBox'] = PdfArray.fromNum(const <int>[0, 0, 1000, 1000]);
+    params[PdfNameTokens.bbox] = PdfArray.fromNum(const <int>[0, 0, 1000, 1000]);
   }
 
   /// The fonts associated with this page
@@ -40,7 +41,7 @@ class PdfFormXObject extends PdfXObject {
   /// Transformation matrix
   void setMatrix(Matrix4 t) {
     final s = t.storage;
-    params['/Matrix'] =
+    params[PdfNameTokens.matrix] =
         PdfArray.fromNum(<double>[s[0], s[1], s[4], s[5], s[12], s[13]]);
   }
 
@@ -53,16 +54,20 @@ class PdfFormXObject extends PdfXObject {
 
     // fonts
     if (fonts.isNotEmpty) {
-      resources['/Font'] = PdfDict.fromObjectMap(fonts);
+      resources[PdfNameTokens.font] = PdfDict.fromObjectMap(fonts);
     }
 
     // Now the XObjects
     if (xobjects.isNotEmpty) {
-      resources['/XObject'] = PdfDict.fromObjectMap(xobjects);
+      resources[PdfNameTokens.xObject] = PdfDict.fromObjectMap(xobjects);
     }
 
     if (resources.isNotEmpty) {
-      params['/Resources'] = resources;
+      params[PdfNameTokens.resources] = resources;
     }
   }
 }
+
+
+
+

@@ -21,6 +21,7 @@ import '../format/name.dart';
 import '../format/num.dart';
 import 'annotation.dart';
 import 'object.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 /// Border style
 enum PdfBorderStyle {
@@ -67,10 +68,14 @@ class PdfBorder extends PdfObject<PdfDict> {
 
     params['/S'] =
         PdfName('/${'SDBIU'.substring(style.index, style.index + 1)}');
-    params['/W'] = PdfNum(width);
+    params[PdfNameTokens.w] = PdfNum(width);
 
     if (dash != null) {
       params['/D'] = PdfArray.fromNum(dash!);
     }
   }
 }
+
+
+
+

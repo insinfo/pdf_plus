@@ -21,6 +21,7 @@ import '../obj/object.dart';
 import '../obj/signature.dart';
 import '../rect.dart';
 import 'pdf_signature_config.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 class PdfExternalSigningPrepared {
   const PdfExternalSigningPrepared({
@@ -202,16 +203,16 @@ class PdfExternalSigning {
       final updated = PdfDict<PdfDataType>.values(
         Map<String, PdfDataType>.from(existingField.fieldDict.values),
       );
-      updated['/V'] = document.sign!.ref();
+      updated[PdfNameTokens.v] = document.sign!.ref();
 
       if (drawAppearance != null && fieldBounds != null) {
         final appearance = PdfGraphicXObject(document, '/Form');
-        appearance.params['/BBox'] = PdfArray.fromNum(
+        appearance.params[PdfNameTokens.bbox] = PdfArray.fromNum(
           [0, 0, fieldBounds.width, fieldBounds.height],
         );
         final g = PdfGraphics(appearance, appearance.buf);
         drawAppearance(g, PdfRect(0, 0, fieldBounds.width, fieldBounds.height));
-        updated['/AP'] = PdfDict.values({'/N': appearance.ref()});
+        updated[PdfNameTokens.ap] = PdfDict.values({PdfNameTokens.n: appearance.ref()});
       }
 
       document.signatures.updateFieldDict(existingField, updated);
@@ -262,50 +263,50 @@ class _PdfExternalSignaturePlaceholder extends PdfSignatureBase {
 
   @override
   void preSign(PdfObject object, PdfDict params) {
-    params['/Filter'] = const PdfName('/Adobe.PPKLite');
+    params[PdfNameTokens.filter] = const PdfName(PdfNameTokens.adobePpkLite);
     if (signature?.isDocTimeStamp == true) {
-      params['/Type'] = const PdfName('/DocTimeStamp');
-      params['/SubFilter'] = const PdfName('/ETSI.RFC3161');
+      params[PdfNameTokens.type] = const PdfName(PdfNameTokens.docTimeStamp);
+      params[PdfNameTokens.subFilter] = const PdfName(PdfNameTokens.etsiRfc3161);
     } else if (signature?.subFilter != null) {
       final raw = signature!.subFilter!;
       final name = raw.startsWith('/') ? raw : '/$raw';
-      params['/SubFilter'] = PdfName(name);
+      params[PdfNameTokens.subFilter] = PdfName(name);
     } else {
-      params['/SubFilter'] = const PdfName('/adbe.pkcs7.detached');
+      params[PdfNameTokens.subFilter] = const PdfName(PdfNameTokens.adbePkcs7Detached);
     }
-    params['/ByteRange'] = _PdfByteRangePlaceholder(digits: byteRangeDigits);
-    params['/Contents'] = PdfString(
+    params[PdfNameTokens.byteRange] = _PdfByteRangePlaceholder(digits: byteRangeDigits);
+    params[PdfNameTokens.contents] = PdfString(
       Uint8List(contentsReserveSize),
       format: PdfStringFormat.binary,
       encrypted: false,
     );
 
     final when = (signature?.signingTime ?? DateTime.now()).toUtc();
-    params['/M'] = PdfString.fromDate(when, encrypted: false);
+    params[PdfNameTokens.m] = PdfString.fromDate(when, encrypted: false);
     if (signature?.reason != null) {
-      params['/Reason'] = PdfString.fromString(signature!.reason!);
+      params[PdfNameTokens.reason] = PdfString.fromString(signature!.reason!);
     }
     if (signature?.location != null) {
-      params['/Location'] = PdfString.fromString(signature!.location!);
+      params[PdfNameTokens.location] = PdfString.fromString(signature!.location!);
     }
     if (signature?.contactInfo != null) {
       params['/ContactInfo'] = PdfString.fromString(signature!.contactInfo!);
     }
     if (signature?.name != null) {
-      params['/Name'] = PdfString.fromString(signature!.name!);
+      params[PdfNameTokens.name] = PdfString.fromString(signature!.name!);
     }
 
     final p = signature?.docMdpPermissionP;
     if (p != null) {
       params['/Reference'] = PdfArray<PdfDataType>([
         PdfDict.values({
-          '/Type': const PdfName('/SigRef'),
-          '/TransformMethod': const PdfName('/DocMDP'),
+          PdfNameTokens.type: const PdfName(PdfNameTokens.sigRef),
+          '/TransformMethod': const PdfName(PdfNameTokens.docMdp),
           '/DigestMethod': const PdfName('/SHA256'),
-          '/TransformParams': PdfDict.values({
-            '/Type': const PdfName('/TransformParams'),
-            '/P': PdfNum(p),
-            '/V': const PdfName('/1.2'),
+          PdfNameTokens.transformParams: PdfDict.values({
+            PdfNameTokens.type: const PdfName(PdfNameTokens.transformParams),
+            PdfNameTokens.p: PdfNum(p),
+            PdfNameTokens.v: const PdfName(PdfNameTokens.v1_2),
           }),
         })
       ]);
@@ -696,7 +697,7 @@ _ContentsRange _findContentsRangeStringSearch(Uint8List pdfBytes) {
   if (dictStart == -1 || dictEnd == -1 || dictEnd <= dictStart) {
     throw StateError('Could not find signature dictionary bounds');
   }
-  final contentsLabelPos = text.indexOf('/Contents', dictStart);
+  final contentsLabelPos = text.indexOf(PdfNameTokens.contents, dictStart);
   if (contentsLabelPos == -1 || contentsLabelPos > dictEnd) {
     throw StateError('No /Contents found in signature dictionary');
   }
@@ -856,3 +857,7 @@ int _skipPdfWsAndComments(Uint8List bytes, int i, int end) {
   if (digits == 0) throw StateError('Inteiro inválido');
   return (value: neg ? -value : value, nextIndex: i);
 }
+
+
+
+

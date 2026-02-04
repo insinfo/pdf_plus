@@ -28,6 +28,7 @@ import 'page_label.dart';
 import 'page_list.dart';
 import 'pdfa/pdfa_attached_files.dart';
 import 'pdfa/pdfa_color_profile.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 /// Pdf Catalog object
 class PdfCatalog extends PdfObject<PdfDict> {
@@ -41,7 +42,7 @@ class PdfCatalog extends PdfObject<PdfDict> {
   }) : super(
           pdfDocument,
           params: PdfDict.values({
-            '/Type': const PdfName('/Catalog'),
+            PdfNameTokens.type: const PdfName(PdfNameTokens.catalog),
           }),
           objser: objser,
           objgen: objgen,
@@ -86,7 +87,7 @@ class PdfCatalog extends PdfObject<PdfDict> {
     /// the PDF specification version, overrides the header version starting from 1.4
     params['/Version'] = PdfName('/${pdfDocument.versionString}');
 
-    params['/Pages'] = pdfPageList.ref();
+    params[PdfNameTokens.pages] = pdfPageList.ref();
 
     // the Outlines object
     if (outlines != null && outlines!.outlines.isNotEmpty) {
@@ -94,7 +95,7 @@ class PdfCatalog extends PdfObject<PdfDict> {
     }
 
     if (metadata != null) {
-      params['/Metadata'] = metadata!.ref();
+      params[PdfNameTokens.metadata] = metadata!.ref();
     }
 
     if (attached != null && attached!.isNotEmpty) {
@@ -120,7 +121,7 @@ class PdfCatalog extends PdfObject<PdfDict> {
     if (pdfDocument.sign != null) {
       if (pdfDocument.sign!.value.hasMDP) {
         params['/Perms'] = PdfDict.values({
-          '/DocMDP': pdfDocument.sign!.ref(),
+          PdfNameTokens.docMdp: pdfDocument.sign!.ref(),
         });
       }
     }
@@ -164,10 +165,10 @@ class PdfCatalog extends PdfObject<PdfDict> {
     }
 
     if (widgets.isNotEmpty) {
-      final acroForm = (params['/AcroForm'] ??= PdfDict()) as PdfDict;
+      final acroForm = (params[PdfNameTokens.acroForm] ??= PdfDict()) as PdfDict;
       acroForm['/SigFlags'] = PdfNum(pdfDocument.sign?.flagsValue ?? 0) |
           (acroForm['/SigFlags'] as PdfNum? ?? const PdfNum(0));
-      final fields = (acroForm['/Fields'] ??= PdfArray()) as PdfArray;
+      final fields = (acroForm[PdfNameTokens.fields] ??= PdfArray()) as PdfArray;
       final fontRefs = PdfDict();
       for (final w in widgets) {
         if (w.annot is PdfTextField) {
@@ -182,7 +183,7 @@ class PdfCatalog extends PdfObject<PdfDict> {
       }
       if (fontRefs.isNotEmpty) {
         acroForm['/DR'] = PdfDict.values(// "Document Resources"
-            {'/Font': fontRefs});
+            {PdfNameTokens.font: fontRefs});
       }
     }
 
@@ -191,3 +192,7 @@ class PdfCatalog extends PdfObject<PdfDict> {
     }
   }
 }
+
+
+
+

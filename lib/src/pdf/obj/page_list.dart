@@ -21,6 +21,7 @@ import '../format/name.dart';
 import '../format/num.dart';
 import 'object.dart';
 import 'page.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 /// PdfPageList object
 class PdfPageList extends PdfObject<PdfDict> {
@@ -32,7 +33,7 @@ class PdfPageList extends PdfObject<PdfDict> {
   }) : super(
           pdfDocument,
           params: PdfDict.values({
-            '/Type': const PdfName('/Pages'),
+            PdfNameTokens.type: const PdfName(PdfNameTokens.pages),
           }),
           objgen: objgen,
           objser: objser,
@@ -45,7 +46,11 @@ class PdfPageList extends PdfObject<PdfDict> {
   void prepare() {
     super.prepare();
 
-    params['/Kids'] = PdfArray.fromObjects(pages);
+    params[PdfNameTokens.kids] = PdfArray.fromObjects(pages);
     params['/Count'] = PdfNum(pages.length);
   }
 }
+
+
+
+

@@ -26,6 +26,7 @@ import '../format/string.dart';
 import '../point.dart';
 import 'object.dart';
 import 'type1_font.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 /// Pdf font object
 abstract class PdfFont extends PdfObject<PdfDict> {
@@ -35,7 +36,7 @@ abstract class PdfFont extends PdfObject<PdfDict> {
       : super(
           pdfDocument,
           params: PdfDict.values({
-            '/Type': const PdfName('/Font'),
+            PdfNameTokens.type: const PdfName(PdfNameTokens.font),
           }),
         ) {
     pdfDocument.fonts.add(this);
@@ -292,8 +293,8 @@ See https://github.com/DavBfr/dart_pdf/wiki/Fonts-Management
   void prepare() {
     super.prepare();
 
-    params['/Subtype'] = PdfName(subtype);
-    params['/Name'] = PdfName(name);
+    params[PdfNameTokens.subtype] = PdfName(subtype);
+    params[PdfNameTokens.name] = PdfName(name);
     params['/Encoding'] = const PdfName('/WinAnsiEncoding');
   }
 
@@ -346,3 +347,7 @@ See https://github.com/DavBfr/dart_pdf/wiki/Fonts-Management
     }
   }
 }
+
+
+
+

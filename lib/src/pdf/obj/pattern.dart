@@ -23,6 +23,7 @@ import '../format/num.dart';
 import '../graphic_state.dart';
 import 'object.dart';
 import 'shading.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 abstract class PdfPattern extends PdfObject<PdfDict> {
   PdfPattern(PdfDocument pdfDocument, this.patternType, this.matrix)
@@ -43,7 +44,7 @@ abstract class PdfPattern extends PdfObject<PdfDict> {
 
     if (matrix != null) {
       final s = matrix!.storage;
-      params['/Matrix'] =
+      params[PdfNameTokens.matrix] =
           PdfArray.fromNum(<double>[s[0], s[1], s[4], s[5], s[12], s[13]]);
     }
   }
@@ -72,3 +73,7 @@ class PdfShadingPattern extends PdfPattern {
     }
   }
 }
+
+
+
+

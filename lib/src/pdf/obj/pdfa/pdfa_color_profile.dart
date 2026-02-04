@@ -8,6 +8,7 @@ import '../../format/name.dart';
 import '../../format/num.dart';
 import '../../format/string.dart';
 import '../object.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 class PdfaColorProfile extends PdfObject<PdfDictStream> {
   PdfaColorProfile(
@@ -28,18 +29,18 @@ class PdfaColorProfile extends PdfObject<PdfDictStream> {
   @override
   void prepare() {
     super.prepare();
-    params['/N'] = const PdfNum(3);
+    params[PdfNameTokens.n] = const PdfNum(3);
     params.data = icc;
   }
 
   PdfArray outputIntents() {
     return PdfArray<PdfDict>([
       PdfDict({
-        '/Type': const PdfName('/OutputIntent'),
+        PdfNameTokens.type: const PdfName(PdfNameTokens.outputIntent),
         '/S': const PdfName('/GTS_PDFA1'),
         '/OutputConditionIdentifier':
             PdfString(Uint8List.fromList('sRGB2014.icc'.codeUnits)),
-        '/Info': PdfString(Uint8List.fromList('sRGB2014.icc'.codeUnits)),
+        PdfNameTokens.info: PdfString(Uint8List.fromList('sRGB2014.icc'.codeUnits)),
         '/RegistryName':
             PdfString(Uint8List.fromList('http://www.color.org'.codeUnits)),
         '/DestOutputProfile': ref(),
@@ -47,3 +48,7 @@ class PdfaColorProfile extends PdfObject<PdfDictStream> {
     ]);
   }
 }
+
+
+
+

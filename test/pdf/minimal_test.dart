@@ -35,7 +35,7 @@ void main() {
         objser: objser++,
         settings: settings,
         params: PdfDict.values({
-          '/Type': const PdfName('/Pages'),
+          PdfNameTokens.type: const PdfName(PdfNameTokens.pages),
           '/Count': const PdfNum(1),
         }));
 
@@ -50,25 +50,25 @@ void main() {
         objser: objser++,
         settings: settings,
         params: PdfDict.values({
-          '/Type': const PdfName('/Page'),
+          PdfNameTokens.type: const PdfName(PdfNameTokens.page),
           '/Parent': pages.ref(),
-          '/MediaBox': PdfArray.fromNum([0, 0, 595.27559, 841.88976]),
-          '/Resources': PdfDict.values({
+          PdfNameTokens.mediaBox: PdfArray.fromNum([0, 0, 595.27559, 841.88976]),
+          PdfNameTokens.resources: PdfDict.values({
             '/ProcSet': PdfArray([
               const PdfName('/PDF'),
             ]),
           }),
-          '/Contents': content.ref(),
+          PdfNameTokens.contents: content.ref(),
         }));
 
-    pages.params['/Kids'] = PdfArray([page.ref()]);
+    pages.params[PdfNameTokens.kids] = PdfArray([page.ref()]);
 
     final catalog = PdfObjectBase(
         objser: objser++,
         settings: settings,
         params: PdfDict.values({
-          '/Type': const PdfName('/Catalog'),
-          '/Pages': pages.ref(),
+          PdfNameTokens.type: const PdfName(PdfNameTokens.catalog),
+          PdfNameTokens.pages: pages.ref(),
         }));
 
     final os = PdfStream();
@@ -87,3 +87,5 @@ void main() {
     await file.writeAsBytes(os.output());
   });
 }
+
+

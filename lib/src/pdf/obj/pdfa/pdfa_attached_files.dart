@@ -14,6 +14,7 @@ import '../../format/stream.dart';
 import '../../format/string.dart';
 import '../object.dart';
 import 'pdfa_date_format.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 class PdfaAttachedFiles {
   PdfaAttachedFiles(
@@ -96,7 +97,7 @@ class _AttachedFileSpec extends PdfObject<PdfDict> {
   void prepare() {
     super.prepare();
 
-    params['/Type'] = const PdfName('/Filespec');
+    params[PdfNameTokens.type] = const PdfName(PdfNameTokens.filespec);
     params['/F'] = PdfString(
       Uint8List.fromList(_file.fileName.codeUnits),
     );
@@ -131,10 +132,10 @@ class _AttachedFile extends PdfObject<PdfDictStream> {
     super.prepare();
 
     final modDate = PdfaDateFormat().format(dt: DateTime.now());
-    params['/Type'] = const PdfName('/EmbeddedFile');
-    params['/Subtype'] = const PdfName('/application/octet-stream');
+    params[PdfNameTokens.type] = const PdfName(PdfNameTokens.embeddedFile);
+    params[PdfNameTokens.subtype] = const PdfName(PdfNameTokens.applicationOctetStream);
     params['/Params'] = PdfDict({
-      '/Size': PdfNum(content.codeUnits.length),
+      PdfNameTokens.size: PdfNum(content.codeUnits.length),
       '/ModDate': PdfString(
         Uint8List.fromList('D:$modDate+00\'00\''.codeUnits),
       ),
@@ -162,3 +163,7 @@ class _PdfRaw extends PdfDataType {
     s.putString('(${nr.toString().padLeft(3, '0')}) ${spec.ref()}');
   }
 }
+
+
+
+

@@ -30,6 +30,7 @@ import 'name.dart';
 import 'num.dart';
 import 'object_base.dart';
 import 'stream.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 enum PdfCrossRefEntryType { free, inUse, compressed }
 
@@ -162,7 +163,7 @@ class PdfXrefTable extends PdfDataType with PdfDiagnostic {
 
     final int xrefOffset;
 
-    params['/Root'] = o.ref();
+    params[PdfNameTokens.root] = o.ref();
 
     switch (o.settings.version) {
       case PdfVersion.pdf_1_4:
@@ -248,7 +249,7 @@ class PdfXrefTable extends PdfDataType with PdfDiagnostic {
 
     final int xrefOffset;
 
-    params['/Root'] = o.ref();
+    params[PdfNameTokens.root] = o.ref();
 
     switch (o.settings.version) {
       case PdfVersion.pdf_1_4:
@@ -332,7 +333,7 @@ class PdfXrefTable extends PdfDataType with PdfDiagnostic {
       return true;
     }());
     s.putString('trailer\n');
-    params['/Size'] = PdfNum(size);
+    params[PdfNameTokens.size] = PdfNum(size);
     params.output(o, s, o.settings.verbose ? 0 : null);
     s.putByte(0x0a);
 
@@ -351,8 +352,8 @@ class PdfXrefTable extends PdfDataType with PdfDiagnostic {
     final size = id + 1;
     xrefList.add(PdfXref(id, offset));
 
-    params['/Type'] = const PdfName('/XRef');
-    params['/Size'] = PdfNum(size);
+    params[PdfNameTokens.type] = const PdfName(PdfNameTokens.xRef);
+    params[PdfNameTokens.size] = PdfNum(size);
 
     var firstId = 0; // First id in block
     var lastId = 0; // The last id used
@@ -374,12 +375,12 @@ class PdfXrefTable extends PdfDataType with PdfDiagnostic {
     blocks.add(lastId - firstId + 1);
 
     if (!(blocks.length == 2 && blocks[0] == 0 && blocks[1] == size)) {
-      params['/Index'] = PdfArray.fromNum(blocks);
+      params[PdfNameTokens.index] = PdfArray.fromNum(blocks);
     }
 
     final bytes = ((math.log(offset) / math.ln2).ceil() / 8).ceil();
     final w = [1, bytes, 1];
-    params['/W'] = PdfArray.fromNum(w);
+    params[PdfNameTokens.w] = PdfArray.fromNum(w);
     final wl = w.reduce((a, b) => a + b);
 
     final binOffsets = ByteData((xrefList.length + 1) * wl);
@@ -407,3 +408,7 @@ class PdfXrefTable extends PdfDataType with PdfDiagnostic {
     return objOffset;
   }
 }
+
+
+
+

@@ -26,6 +26,7 @@ import 'annotation.dart';
 import 'graphic_stream.dart';
 import 'object.dart';
 import 'object_stream.dart';
+import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 /// Page rotation
 enum PdfPageRotation {
@@ -55,7 +56,7 @@ class PdfPage extends PdfObject<PdfDict> with PdfGraphicStream {
     int objgen = 0,
   }) : super(pdfDocument,
             params: PdfDict.values({
-              '/Type': const PdfName('/Page'),
+              PdfNameTokens.type: const PdfName(PdfNameTokens.page),
             }),
             objser: objser,
             objgen: objgen) {
@@ -105,11 +106,11 @@ class PdfPage extends PdfObject<PdfDict> with PdfGraphicStream {
     params['/Parent'] = pdfDocument.pdfPageList.ref();
 
     if (rotate != PdfPageRotation.none) {
-      params['/Rotate'] = PdfNum(rotate.index * 90);
+      params[PdfNameTokens.rotate] = PdfNum(rotate.index * 90);
     }
 
     // the /MediaBox for the page size
-    params['/MediaBox'] =
+    params[PdfNameTokens.mediaBox] =
         PdfArray.fromNum(<double>[0, 0, pageFormat.width, pageFormat.height]);
 
     for (final content in contents) {
@@ -122,8 +123,8 @@ class PdfPage extends PdfObject<PdfDict> with PdfGraphicStream {
     final contentList =
         PdfArray.fromObjects(contents.where((e) => e.inUse).toList());
 
-    if (params.containsKey('/Contents')) {
-      final prevContent = params['/Contents']!;
+    if (params.containsKey(PdfNameTokens.contents)) {
+      final prevContent = params[PdfNameTokens.contents]!;
       if (prevContent is PdfArray) {
         contentList.values
             .insertAll(0, prevContent.values.whereType<PdfIndirect>());
@@ -135,22 +136,26 @@ class PdfPage extends PdfObject<PdfDict> with PdfGraphicStream {
     contentList.uniq();
 
     if (contentList.values.length == 1) {
-      params['/Contents'] = contentList.values.first;
+      params[PdfNameTokens.contents] = contentList.values.first;
     } else if (contentList.isNotEmpty) {
-      params['/Contents'] = contentList;
+      params[PdfNameTokens.contents] = contentList;
     }
 
     // The /Annots object
     if (annotations.isNotEmpty) {
-      if (params.containsKey('/Annots')) {
-        final annotationList = params['/Annots'];
+      if (params.containsKey(PdfNameTokens.annots)) {
+        final annotationList = params[PdfNameTokens.annots];
         if (annotationList is PdfArray) {
           annotationList.values
               .addAll(PdfArray.fromObjects(annotations).values);
         }
       } else {
-        params['/Annots'] = PdfArray.fromObjects(annotations);
+        params[PdfNameTokens.annots] = PdfArray.fromObjects(annotations);
       }
     }
   }
 }
+
+
+
+

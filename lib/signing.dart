@@ -10,11 +10,10 @@ export 'src/pdf/validation/pdf_iti_report.dart';
 export 'src/pdf/validation/pdf_lpa.dart';
 export 'src/pdf/validation/pdf_ltv_service.dart';
 export 'src/pdf/validation/pdf_dss.dart';
+export 'src/pdf/pdf_names.dart';
 
 export 'src/pdf/validation/pdf_revocation_provider_stub.dart'
     if (dart.library.io) 'src/pdf/validation/pdf_revocation_provider_io.dart';
-
-// PdfCertificateFetcher e implementacoes ficam em pdf_signature_validator.dart.
 
 export 'src/pdf/visual/visual.dart';
 export 'src/pdf/parsing/pdf_document_parser.dart';
