@@ -1,3 +1,4 @@
+//C:\MyDartProjects\pdf_plus\lib\src\pki\pki_builder.dart
 import 'dart:typed_data';
 
 import 'package:pdf_plus/src/crypto/asn1/asn1.dart';
@@ -7,6 +8,7 @@ import 'package:pdf_plus/src/crypto/fortuna_random.dart';
 import 'package:pdf_plus/src/crypto/key_generator.dart';
 import 'package:pdf_plus/src/crypto/digests.dart';
 import 'package:pdf_plus/src/crypto/signers.dart';
+import 'package:pdf_plus/src/pki/x509_certificate.dart';
 
 /// Utilities for cryptographic operations and random data.
 class PkiUtils {
@@ -19,10 +21,11 @@ class PkiUtils {
   static SecureRandom getSecureRandom() => _secureRandom;
 
   static AsymmetricKeyPair<PublicKey, PrivateKey> generateRsaKeyPair(
-      {int bitStrength = 2048}) {
+      {int bitStrength = 2048, int certainty = 64}) {
     final keyGen = KeyGenerator('RSA')
       ..init(ParametersWithRandom(
-          RSAKeyGeneratorParameters(BigInt.parse('65537'), bitStrength, 64),
+          RSAKeyGeneratorParameters(
+              BigInt.parse('65537'), bitStrength, certainty),
           _secureRandom));
     return keyGen.generateKeyPair();
   }
@@ -66,7 +69,7 @@ class PkiBuilder {
   static const String rsaEncryption = '1.2.840.113549.1.1.1';
 
   /// Generates a Self-Signed Root CA Certificate.
-  static Uint8List createRootCertificate({
+  static X509Certificate createRootCertificate({
     required AsymmetricKeyPair<PublicKey, PrivateKey> keyPair,
     required String dn,
     int validityYears = 10,
@@ -85,7 +88,7 @@ class PkiBuilder {
   }
 
   /// Generates an Intermediate CA Certificate signed by [issuerKeyPair].
-  static Uint8List createIntermediateCertificate({
+  static X509Certificate createIntermediateCertificate({
     required AsymmetricKeyPair<PublicKey, PrivateKey> keyPair,
     required AsymmetricKeyPair<PublicKey, PrivateKey> issuerKeyPair,
     required String subjectDn,
@@ -115,7 +118,7 @@ class PkiBuilder {
   }
 
   /// Generates a User (End-Entity) Certificate signed by [issuerKeyPair].
-  static Uint8List createUserCertificate({
+  static X509Certificate createUserCertificate({
     required AsymmetricKeyPair<PublicKey, PrivateKey> keyPair,
     required AsymmetricKeyPair<PublicKey, PrivateKey> issuerKeyPair,
     required String subjectDn,
@@ -145,7 +148,7 @@ class PkiBuilder {
   }
 
   /// Low-level X.509 Certificate creation.
-  static Uint8List createCertificate({
+  static X509Certificate createCertificate({
     required AsymmetricKeyPair<PublicKey, PrivateKey> keyPair,
     required AsymmetricKeyPair<PublicKey, PrivateKey> issuerKeyPair,
     required String subjectDn,
@@ -281,7 +284,7 @@ class PkiBuilder {
     cert.add(createAlgorithmIdentifier(sha256WithRSAEncryption));
     cert.add(ASN1BitString(signature));
 
-    return cert.encodedBytes;
+    return X509Certificate.fromDer(cert.encodedBytes);
   }
 
   static Uint8List _encodePublicKeyInfo(RSAPublicKey publicKey) {

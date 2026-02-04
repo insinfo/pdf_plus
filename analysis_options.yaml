@@ -2,7 +2,8 @@
 
 analyzer:
   exclude:
-    - insinfo_dart_pdf/**
+    - referencias/**
+
 
 # analyzer:
 #   errors:

@@ -724,7 +724,7 @@ class PdfAnnotSign extends PdfAnnotWidget {
   @override
   void build(PdfPage page, PdfObject object, PdfDict params) {
     super.build(page, object, params);
-    if (page.pdfDocument.sign != null) {
+    if (!params.containsKey('/V') && page.pdfDocument.sign != null) {
       params['/V'] = page.pdfDocument.sign!.ref();
     }
   }

@@ -53,14 +53,98 @@ pdf.addPage(
 
 ### 3. Assinando um PDF Digitalmente
 ```dart
+import 'dart:io';
 import 'package:pdf_plus/signing.dart';
 
-final signedPdf = PdfCmsSigner.signDetachedSha256RsaFromPem(
-	contentDigest: /* digest do conteúdo do PDF */,
-	privateKeyPem: '-----BEGIN PRIVATE KEY-----...-----END PRIVATE KEY-----',
-	certificatePem: '-----BEGIN CERTIFICATE-----...-----END CERTIFICATE-----',
+final inputBytes = File('documento.pdf').readAsBytesSync();
+final document = PdfLoadedDocument.fromBytes(inputBytes);
+
+final cert = X509Certificate.fromPem(userCertPem);
+final inter = X509Certificate.fromPem(interCertPem);
+final root = X509Certificate.fromPem(rootCertPem);
+
+final signer = PdfSignatureSigner.pem(
+	privateKeyPem: userKeyPem,
+	certificate: cert,
+	chain: [inter, root],
 );
-// O resultado é um CMS (PKCS#7) que pode ser embutido no PDF
+
+// PKCS#12 (.pfx/.p12) com decoder em Dart
+// final signer = await PdfSignatureSigner.fromPkcs12Bytes(
+// 	pkcs12Bytes: File('certificado.pfx').readAsBytesSync(),
+// 	password: 'senha123',
+// 	decoder: MeuPkcs12Decoder(),
+// );
+
+await document.addSignature(
+	PdfSignatureRequest(
+		pageNumber: 1,
+		signer: signer,
+		fieldName: 'AssinaturaDigital',
+		bounds: PdfSignatureBounds.topLeft(
+			left: 50,
+			top: 50,
+			width: 200,
+			height: 100,
+		),
+		reason: 'Aprovacao de documento',
+		location: 'Brasil',
+		contactInfo: 'suporte@empresa.com',
+		appearance: PdfSignatureAppearance(
+			title: 'Assinatura Digital',
+			reason: 'Aprovacao de documento',
+			location: 'Brasil',
+		),
+	),
+);
+
+final outputBytes = await document.save();
+File('output_signed.pdf').writeAsBytesSync(outputBytes);
+document.dispose();
+```
+
+### 3.1 Timestamp RFC 3161 (FreeTSA opcional)
+```dart
+import 'dart:io';
+import 'package:pdf_plus/signing.dart';
+
+final inputBytes = File('documento.pdf').readAsBytesSync();
+final document = PdfLoadedDocument.fromBytes(inputBytes);
+
+final signer = PdfSignatureSigner.pem(
+	privateKeyPem: userKeyPem,
+	certificate: X509Certificate.fromPem(userCertPem),
+	chain: [
+		X509Certificate.fromPem(interCertPem),
+		X509Certificate.fromPem(rootCertPem),
+	],
+);
+
+final tsa = PdfTimestampClient.freetsa(
+	hashAlgorithm: PdfTimestampHashAlgorithm.sha512,
+	validationOptions: PdfTimestampValidationOptions(
+		// Baixe o cacert.pem da FreeTSA e passe como raiz confiavel.
+		trustedRootsPem: [File('cacert.pem').readAsStringSync()],
+		requireTrustedChain: true,
+	),
+);
+
+await document.addSignature(
+	PdfSignatureRequest(
+		pageNumber: 1,
+		signer: signer,
+		fieldName: 'AssinaturaDigital',
+		bounds: PdfSignatureBounds.topLeft(
+			left: 50,
+			top: 50,
+			width: 200,
+			height: 100,
+		),
+		reason: 'Aprovacao de documento',
+		location: 'Brasil',
+		timestampProvider: tsa.timestampSignature,
+	),
+);
 ```
 
 ### 4. Gerando Certificados X.509 (PKI)
@@ -73,6 +157,7 @@ final rootCert = PkiBuilder.createRootCertificate(
 	keyPair: keyPair,
 	dn: 'CN=Minha CA, O=Empresa, C=BR',
 );
+final rootPem = rootCert.toPem();
 ```
 
 ---
@@ -127,6 +212,7 @@ final cert = PkiBuilder.createUserCertificate(
 	issuerDn: 'CN=CA',
 	serialNumber: 123,
 );
+final certDer = cert.der;
 ```
 
 ---

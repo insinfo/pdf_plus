@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'pdf_signature_validator.dart';
+import 'package:pdf_plus/src/pdf/io/pdf_http_fetcher_base.dart';
 
 class PdfSignatureInspectionReport {
   const PdfSignatureInspectionReport({required this.signatures});
@@ -73,7 +74,7 @@ class PdfSignatureInspector {
     bool fetchCrls = false,
     bool fetchOcsp = false,
     PdfRevocationDataProvider? revocationDataProvider,
-    PdfCertificateFetcher? certificateFetcher,
+    PdfHttpFetcherBase? certificateFetcher,
     bool includeCertificates = true,
     bool includeSignatureFields = true,
   }) async {
@@ -122,7 +123,8 @@ class PdfSignatureInspector {
 PdfSignatureSignerInfo? _buildSignerInfo(PdfSignatureCertificateInfo? cert) {
   if (cert == null) return null;
   final serial = cert.serial;
-  final serialHex = serial != null ? serial.toRadixString(16).toUpperCase() : null;
+  final serialHex =
+      serial != null ? serial.toRadixString(16).toUpperCase() : null;
   final serialDec = serial?.toString();
   final subject = cert.subject;
   return PdfSignatureSignerInfo(

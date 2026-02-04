@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
+// ignore_for_file: deprecated_member_use_from_same_package
+
 import 'dart:typed_data';
 
 import 'package:pdf_plus/pdf.dart' as core;
@@ -8,12 +10,12 @@ import 'package:test/test.dart';
 
 void main() {
   test(
-    'DocMDP permission is reported for first signature',
+    'PdfLtvService adds DSS to signed PDF',
     () async {
       if (!_hasOpenSsl()) return;
 
       final Directory testDir =
-          await Directory.systemTemp.createTemp('pdf_plus_docmdp_');
+          await Directory.systemTemp.createTemp('pdf_plus_ltv_');
       try {
         final String keyPath = '${testDir.path}/user_key.pem';
         final String certPath = '${testDir.path}/user_cert.pem';
@@ -31,7 +33,7 @@ void main() {
           '365',
           '-nodes',
           '-subj',
-          '/CN=PdfPlus DocMDP',
+          '/CN=PdfPlus LTV',
           '-addext',
           'keyUsage=digitalSignature'
         ]);
@@ -42,16 +44,11 @@ void main() {
         g.drawString(
           core.PdfFont.helvetica(doc),
           12,
-          'DocMDP test',
+          'LTV test',
           50,
           750,
         );
         final Uint8List unsignedPdf = Uint8List.fromList(await doc.save());
-
-        final pdf.PdfSignatureConfig config = pdf.PdfSignatureConfig()
-          ..contactInfo = 'Unit test'
-          ..reason = 'DocMDP test'
-          ..docMdpPermissionP = 2;
 
         final pdf.PdfExternalSigningPrepared prepared =
             await pdf.PdfExternalSigning.preparePdf(
@@ -59,7 +56,9 @@ void main() {
           pageNumber: 1,
           bounds: core.PdfRect.fromLTWH(100, 100, 200, 50),
           fieldName: 'Sig1',
-          signature: config,
+          signature: pdf.PdfSignatureConfig()
+            ..contactInfo = 'Unit test'
+            ..reason = 'LTV test',
         );
 
         final Uint8List digest = base64.decode(prepared.hashBase64);
@@ -77,16 +76,24 @@ void main() {
           pkcs7Bytes: cmsDer,
         );
 
-        final pdf.PdfSignatureValidationReport report =
-            await pdf.PdfSignatureValidator().validateAllSignatures(
-          signedPdf,
-          trustedRootsPem: <String>[certificatePem],
+        final Uint8List certDer = _pemToDer(certificatePem);
+        final pdf.PdfLtvService ltv = pdf.PdfLtvService();
+        final result = await ltv.applyLtv(
+          pdfBytes: signedPdf,
+          certs: <Uint8List>[certDer],
         );
 
+        expect(result.applied, isTrue);
+        expect(_containsAscii(result.bytes, '/DSS'), isTrue);
+        expect(_containsAscii(result.bytes, '/Certs'), isTrue);
+
+        final pdf.PdfSignatureValidationReport report =
+            await pdf.PdfSignatureValidator().validateAllSignatures(
+          result.bytes,
+          trustedRootsPem: <String>[certificatePem],
+        );
         expect(report.signatures.length, 1);
-        final sig = report.signatures.single;
-        expect(sig.docMdp.isCertificationSignature, isTrue);
-        expect(sig.docMdp.permissionP, 2);
+        expect(report.signatures.single.intact, isTrue);
       } finally {
         await testDir.delete(recursive: true);
       }
@@ -94,6 +101,30 @@ void main() {
     timeout: const Timeout(Duration(minutes: 3)),
     skip: _hasOpenSsl() ? false : 'openssl not available',
   );
+}
+
+bool _containsAscii(Uint8List bytes, String token) {
+  final List<int> pattern = ascii.encode(token);
+  if (pattern.isEmpty || bytes.length < pattern.length) return false;
+  for (int i = 0; i <= bytes.length - pattern.length; i++) {
+    bool match = true;
+    for (int j = 0; j < pattern.length; j++) {
+      if (bytes[i + j] != pattern[j]) {
+        match = false;
+        break;
+      }
+    }
+    if (match) return true;
+  }
+  return false;
+}
+
+Uint8List _pemToDer(String pem) {
+  final String body = pem
+      .replaceAll('-----BEGIN CERTIFICATE-----', '')
+      .replaceAll('-----END CERTIFICATE-----', '')
+      .replaceAll(RegExp(r'\s+'), '');
+  return Uint8List.fromList(base64.decode(body));
 }
 
 bool _hasOpenSsl() {

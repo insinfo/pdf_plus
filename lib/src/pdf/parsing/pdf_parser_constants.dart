@@ -3,17 +3,25 @@ class PdfKeys {
 
   static const acroForm = '/AcroForm';
   static const annots = '/Annots';
+  static const ap = '/AP';
+  static const bbox = '/BBox';
   static const byteRange = '/ByteRange';
   static const contents = '/Contents';
   static const fields = '/Fields';
+  static const ff = '/Ff';
   static const filter = '/Filter';
+  static const ft = '/FT';
+  static const i = '/I';
   static const id = '/ID';
   static const index = '/Index';
   static const info = '/Info';
   static const kids = '/Kids';
   static const length = '/Length';
   static const location = '/Location';
+  static const lock = '/Lock';
   static const m = '/M';
+  static const maxLen = '/MaxLen';
+  static const matrix = '/Matrix';
   static const mediaBox = '/MediaBox';
   static const name = '/Name';
   static const n = '/N';
@@ -27,7 +35,12 @@ class PdfKeys {
   static const sig = '/Sig';
   static const size = '/Size';
   static const subFilter = '/SubFilter';
+  static const subtype = '/Subtype';
+  static const t = '/T';
+  static const ti = '/TI';
   static const type = '/Type';
+  static const v = '/V';
   static const w = '/W';
+  static const opt = '/Opt';
   static const xObject = '/XObject';
 }

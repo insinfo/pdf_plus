@@ -25,9 +25,13 @@ import 'document_parser.dart';
 import 'format/array.dart';
 import 'format/num.dart';
 import 'format/object_base.dart';
+import 'format/base.dart';
 import 'format/stream.dart';
 import 'format/string.dart';
 import 'format/xref.dart';
+import 'format/dict.dart';
+import 'format/indirect.dart';
+import 'format/null_value.dart';
 import 'graphic_state.dart';
 import 'graphics.dart';
 import 'io/na.dart'
@@ -48,6 +52,8 @@ import 'obj/page_list.dart';
 import 'obj/signature.dart';
 import 'rect.dart';
 import 'validation/pdf_dss.dart';
+import 'acroform/pdf_acroform.dart';
+import 'parsing/pdf_document_info.dart';
 
 /// Display hint for the PDF viewer
 enum PdfPageMode {
@@ -214,6 +220,10 @@ class PdfDocument {
   /// This holds the current fonts
   final Set<PdfFont> fonts = <PdfFont>{};
 
+  PdfSignatureFieldEditor? _signatureEditor;
+
+  PdfAcroForm? _acroForm;
+
   Uint8List? _documentID;
 
   @Deprecated('Use settings.compress')
@@ -294,6 +304,28 @@ class PdfDocument {
     dss ??= PdfDssData(this);
   }
 
+  /// Manager for signature fields (Acforms).
+  /// Allows finding, renaming, removing, and modifying signature fields.
+  PdfSignatureFieldEditor get signatures {
+    if (_signatureEditor != null) return _signatureEditor!;
+    if (prev == null) {
+      _signatureEditor = PdfSignatureFieldEditor(
+          document: this,
+          context: const PdfSignatureFieldEditContext(
+              fields: <PdfSignatureFieldObjectInfo>[]));
+    } else {
+      _signatureEditor = PdfSignatureFieldEditor(
+          document: this, context: prev!.extractSignatureFieldEditContext());
+    }
+    return _signatureEditor!;
+  }
+
+  /// AcroForm manager for handling general form fields (Text, Checkbox, etc).
+  PdfAcroForm get form {
+    _acroForm ??= PdfAcroForm(this);
+    return _acroForm!;
+  }
+
   /// Graphic states for opacity and transfer modes
   PdfGraphicStates get graphicStates {
     _graphicStates ??= PdfGraphicStates(this);
@@ -304,7 +336,7 @@ class PdfDocument {
   bool get hasGraphicStates => _graphicStates != null;
 
   /// This writes the document to an OutputStream.
-  Future<void> _write(
+  Future<void> output(
     PdfStream os, {
     bool enableEventLoopBalancing = false,
   }) async {
@@ -364,7 +396,7 @@ class PdfDocument {
       if (prev != null) {
         os.putBytes(prev!.bytes);
       }
-      await _write(os, enableEventLoopBalancing: enableEventLoopBalancing);
+      await output(os, enableEventLoopBalancing: enableEventLoopBalancing);
       return os.output();
     };
 
@@ -419,5 +451,283 @@ class PdfDocument {
     }
     PdfAnnot(page, widget);
     return this;
+  }
+
+  PdfDocument addUriAnnotationTopLeft({
+    required int pageNumber,
+    required double left,
+    required double top,
+    required double width,
+    required double height,
+    required String uri,
+  }) {
+    final pageIndex = pageNumber - 1;
+    if (pageIndex < 0 || pageIndex >= pdfPageList.pages.length) {
+      throw RangeError.index(pageIndex, pdfPageList.pages, 'pageNumber');
+    }
+    final page = pdfPageList.pages[pageIndex];
+    final bounds = _rectFromTopLeft(
+      page,
+      left: left,
+      top: top,
+      width: width,
+      height: height,
+    );
+    PdfAnnot(page, PdfUriAnnotation(bounds: bounds, uri: uri));
+    return this;
+  }
+
+  PdfDocument addSignatureFieldTopLeft({
+    required int pageNumber,
+    required double left,
+    required double top,
+    required double width,
+    required double height,
+    required String fieldName,
+    void Function(PdfGraphics graphics, PdfRect bounds)? drawAppearance,
+  }) {
+    final pageIndex = pageNumber - 1;
+    if (pageIndex < 0 || pageIndex >= pdfPageList.pages.length) {
+      throw RangeError.index(pageIndex, pdfPageList.pages, 'pageNumber');
+    }
+
+    final page = pdfPageList.pages[pageIndex];
+    final bounds = _rectFromTopLeft(
+      page,
+      left: left,
+      top: top,
+      width: width,
+      height: height,
+    );
+    final widget = PdfAnnotSign(rect: bounds, fieldName: fieldName);
+    if (drawAppearance != null) {
+      final g = widget.appearance(this, PdfAnnotAppearance.normal);
+      drawAppearance(g, PdfRect(0, 0, bounds.width, bounds.height));
+    }
+    PdfAnnot(page, widget);
+    return this;
+  }
+
+  PdfRect _rectFromTopLeft(
+    PdfPage page, {
+    required double left,
+    required double top,
+    required double width,
+    required double height,
+  }) {
+    final pageHeight = page.pageFormat.height;
+    final bottom = pageHeight - top - height;
+    return PdfRect(left, bottom, width, height);
+  }
+}
+
+class PdfSignatureFieldEditor {
+  PdfSignatureFieldEditor({
+    required this.document,
+    required this.context,
+  });
+
+  final PdfDocument document;
+  final PdfSignatureFieldEditContext context;
+
+  List<PdfSignatureFieldObjectInfo> get fields => context.fields;
+
+  PdfSignatureFieldObjectInfo? findByName(String name) {
+    for (final field in context.fields) {
+      if (field.info.fieldName == name) return field;
+    }
+    return null;
+  }
+
+  bool renameFieldByName(String currentName, String newName) {
+    final field = findByName(currentName);
+    if (field == null) return false;
+    return renameField(field, newName);
+  }
+
+  bool removeFieldByName(String name) {
+    final field = findByName(name);
+    if (field == null) return false;
+    return removeField(field);
+  }
+
+  bool renameField(PdfSignatureFieldObjectInfo field, String newName) {
+    final updated = PdfDict<PdfDataType>.values(
+      Map<String, PdfDataType>.from(field.fieldDict.values),
+    );
+    updated['/T'] = PdfString.fromString(newName);
+    if (field.fieldRef != null) {
+      PdfObject<PdfDict<PdfDataType>>(
+        document,
+        objser: field.fieldRef!.obj,
+        objgen: field.fieldRef!.gen,
+        params: updated,
+      );
+      return true;
+    }
+    return _replaceDirectField(field, updated);
+  }
+
+  bool updateFieldMetadata(
+    PdfSignatureFieldObjectInfo field, {
+    String? reason,
+    String? location,
+    String? name,
+    String? signingTimeRaw,
+  }) {
+    final updated = PdfDict<PdfDataType>.values(
+      Map<String, PdfDataType>.from(field.fieldDict.values),
+    );
+    if (reason != null) {
+      updated['/Reason'] = PdfString.fromString(reason);
+    }
+    if (location != null) {
+      updated['/Location'] = PdfString.fromString(location);
+    }
+    if (name != null) {
+      updated['/Name'] = PdfString.fromString(name);
+    }
+    if (signingTimeRaw != null) {
+      updated['/M'] = PdfString.fromString(signingTimeRaw);
+    }
+
+    if (field.fieldRef != null) {
+      PdfObject<PdfDict<PdfDataType>>(
+        document,
+        objser: field.fieldRef!.obj,
+        objgen: field.fieldRef!.gen,
+        params: updated,
+      );
+      return true;
+    }
+    return _replaceDirectField(field, updated);
+  }
+
+  bool updateFieldDict(
+    PdfSignatureFieldObjectInfo field,
+    PdfDict<PdfDataType> updated,
+  ) {
+    if (field.fieldRef != null) {
+      PdfObject<PdfDict<PdfDataType>>(
+        document,
+        objser: field.fieldRef!.obj,
+        objgen: field.fieldRef!.gen,
+        params: updated,
+      );
+      return true;
+    }
+    return _replaceDirectField(field, updated);
+  }
+
+  bool clearSignatureValue(PdfSignatureFieldObjectInfo field) {
+    final updated = PdfDict<PdfDataType>.values(
+      Map<String, PdfDataType>.from(field.fieldDict.values),
+    );
+    updated['/V'] = const PdfNull();
+    if (field.fieldRef != null) {
+      PdfObject<PdfDict<PdfDataType>>(
+        document,
+        objser: field.fieldRef!.obj,
+        objgen: field.fieldRef!.gen,
+        params: updated,
+      );
+      return true;
+    }
+    return _replaceDirectField(field, updated);
+  }
+
+  bool removeField(PdfSignatureFieldObjectInfo field) {
+    final fieldsArray = context.fieldsArray;
+    if (fieldsArray == null) return false;
+
+    final updated = PdfArray(List<PdfDataType>.from(fieldsArray.values));
+    if (field.fieldRef != null) {
+      updated.values.removeWhere((value) {
+        return value is PdfIndirect &&
+            value.ser == field.fieldRef!.obj &&
+            value.gen == field.fieldRef!.gen;
+      });
+      _removeAnnotationFromPages(field.fieldRef!);
+    } else if (field.fieldIndex != null) {
+      if (field.fieldIndex! < 0 || field.fieldIndex! >= updated.values.length) {
+        return false;
+      }
+      updated.values.removeAt(field.fieldIndex!);
+    } else {
+      return false;
+    }
+
+    return _writeFieldsArray(updated);
+  }
+
+  PdfAnnotSign addEmptySignatureField({
+    required PdfPage page,
+    required PdfRect bounds,
+    required String fieldName,
+  }) {
+    final widget = PdfAnnotSign(rect: bounds, fieldName: fieldName);
+    PdfAnnot(page, widget);
+    return widget;
+  }
+
+  bool _writeFieldsArray(PdfArray fields) {
+    final fieldsRef = context.fieldsRef;
+    if (fieldsRef != null) {
+      PdfObject<PdfArray>(
+        document,
+        objser: fieldsRef.obj,
+        objgen: fieldsRef.gen,
+        params: fields,
+      );
+      return true;
+    }
+
+    final acroFormDict = context.acroFormDict;
+    if (acroFormDict == null) return false;
+
+    final updatedAcroForm = PdfDict<PdfDataType>.values(
+      Map<String, PdfDataType>.from(acroFormDict.values),
+    );
+    updatedAcroForm['/Fields'] = fields;
+
+    final acroFormRef = context.acroFormRef;
+    if (acroFormRef != null) {
+      PdfObject<PdfDict<PdfDataType>>(
+        document,
+        objser: acroFormRef.obj,
+        objgen: acroFormRef.gen,
+        params: updatedAcroForm,
+      );
+      return true;
+    }
+
+    document.catalog.params['/AcroForm'] = updatedAcroForm;
+    return true;
+  }
+
+  void _removeAnnotationFromPages(PdfIndirectRef fieldRef) {
+    for (final page in document.pdfPageList.pages) {
+      final annots = page.params['/Annots'];
+      if (annots is PdfArray) {
+        annots.values.removeWhere((value) {
+          return value is PdfIndirect &&
+              value.ser == fieldRef.obj &&
+              value.gen == fieldRef.gen;
+        });
+      }
+    }
+  }
+
+  bool _replaceDirectField(
+    PdfSignatureFieldObjectInfo field,
+    PdfDict<PdfDataType> updated,
+  ) {
+    final fieldsArray = context.fieldsArray;
+    final index = field.fieldIndex;
+    if (fieldsArray == null || index == null) return false;
+    if (index < 0 || index >= fieldsArray.values.length) return false;
+    final updatedArray = PdfArray(List<PdfDataType>.from(fieldsArray.values));
+    updatedArray.values[index] = updated;
+    return _writeFieldsArray(updatedArray);
   }
 }

@@ -176,3 +176,10 @@ class ParametersWithRandom extends CipherParameters {
 
   ParametersWithRandom(this.parameters, this.random);
 }
+
+class ParametersWithIV<T extends CipherParameters> extends CipherParameters {
+  final T parameters;
+  final Uint8List iv;
+
+  ParametersWithIV(this.parameters, this.iv);
+}

@@ -8,7 +8,7 @@ import 'package:test/test.dart';
 
 import 'pki_asset_loader.dart';
 
-class FileCertificateFetcher implements PdfCertificateFetcher {
+class FileCertificateFetcher implements PdfHttpFetcherBase {
   FileCertificateFetcher(this._fileMap);
 
   final Map<String, String> _fileMap;
@@ -19,9 +19,19 @@ class FileCertificateFetcher implements PdfCertificateFetcher {
     if (path == null) return null;
     return File(path).readAsBytesSync();
   }
+
+  @override
+  Future<PdfHttpResponse> postBytes(
+    Uri url, {
+    Map<String, String>? headers,
+    Uint8List? body,
+    Duration? timeout,
+  }) async {
+    throw UnsupportedError('POST não suportado neste fetcher de teste.');
+  }
 }
 
-class MapCertificateFetcher implements PdfCertificateFetcher {
+class MapCertificateFetcher implements PdfHttpFetcherBase {
   MapCertificateFetcher(this._map);
 
   final Map<String, Uint8List> _map;
@@ -29,6 +39,16 @@ class MapCertificateFetcher implements PdfCertificateFetcher {
   @override
   Future<Uint8List?> fetchBytes(Uri url) async {
     return _map[url.toString()];
+  }
+
+  @override
+  Future<PdfHttpResponse> postBytes(
+    Uri url, {
+    Map<String, String>? headers,
+    Uint8List? body,
+    Duration? timeout,
+  }) async {
+    throw UnsupportedError('POST não suportado neste fetcher de teste.');
   }
 }
 

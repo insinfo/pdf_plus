@@ -11,7 +11,7 @@ import 'package:pdf_plus/src/crypto/rsa_keys.dart';
 import 'pem_utils.dart';
 
 class PdfCmsSigner {
-  /// Helper compatível com dart_pdf: assina digest com RSA/SHA-256 usando PEM.
+  /// Helper compatível assina digest com RSA/SHA-256 usando PEM.
   static Uint8List signDetachedSha256RsaFromPem({
     required Uint8List contentDigest,
     required String privateKeyPem,
@@ -30,6 +30,7 @@ class PdfCmsSigner {
     final signedAttrsDer = cms._buildSignedAttributesDer(
       contentDigest: contentDigest,
       signingTime: (signingTime ?? DateTime.now().toUtc()),
+      signerCertDer: signerCertDer,
     );
     final signedAttrsDigest = Uint8List.fromList(
       sha256.convert(signedAttrsDer).bytes,
@@ -47,6 +48,12 @@ class PdfCmsSigner {
     );
   }
 
+  /// Helper to sign a digest using RSA PKCS#1 v1.5 with SHA-256.
+  static Uint8List signDigestRsaSha256(Uint8List digest, String privateKeyPem) {
+    final key = PdfPemUtils.rsaPrivateKeyFromPem(privateKeyPem);
+    return _rsaSignDigestSha256(digest, key);
+  }
+
   Future<Uint8List> buildDetachedCms({
     required Uint8List contentDigest,
     required Uint8List signerCertDer,
@@ -56,10 +63,12 @@ class PdfCmsSigner {
       Uint8List signedAttrsDer,
       Uint8List signedAttrsDigest,
     ) signCallback,
+    Future<Uint8List> Function(Uint8List signature)? timestampProvider,
   }) async {
     final signedAttrsDer = _buildSignedAttributesDer(
       contentDigest: contentDigest,
       signingTime: signingTime ?? DateTime.now().toUtc(),
+      signerCertDer: signerCertDer,
     );
     final signedAttrsDigest = Uint8List.fromList(
       sha256.convert(signedAttrsDer).bytes,
@@ -70,18 +79,28 @@ class PdfCmsSigner {
       throw StateError('Assinatura externa retornou vazio.');
     }
 
+    Uint8List? timestampToken;
+    if (timestampProvider != null) {
+      timestampToken = await timestampProvider(signature);
+      if (timestampToken.isEmpty) {
+        throw StateError('Timestamp retornou vazio.');
+      }
+    }
+
     return _buildCmsSignedData(
       contentDigest: contentDigest,
       signerCertDer: signerCertDer,
       extraCertsDer: extraCertsDer,
       signedAttrsDer: signedAttrsDer,
       signature: signature,
+      timestampToken: timestampToken,
     );
   }
 
   Uint8List _buildSignedAttributesDer({
     required Uint8List contentDigest,
     required DateTime signingTime,
+    required Uint8List signerCertDer,
   }) {
     final attrs = <Uint8List>[
       _encodeAttribute(
@@ -95,6 +114,10 @@ class PdfCmsSigner {
       _encodeAttribute(
         oid: '1.2.840.113549.1.9.5',
         valueDer: _encodeSigningTime(signingTime),
+      ),
+      _encodeAttribute(
+        oid: '1.2.840.113549.1.9.16.2.47',
+        valueDer: _encodeSigningCertificateV2(signerCertDer),
       ),
     ];
 
@@ -110,17 +133,28 @@ class PdfCmsSigner {
     return ASN1GeneralizedTime(utc).encodedBytes;
   }
 
+  Uint8List _encodeSigningCertificateV2(Uint8List signerCertDer) {
+    final certHash = Uint8List.fromList(sha256.convert(signerCertDer).bytes);
+    final essCertId = _encodeSequence([
+      ASN1OctetString(certHash).encodedBytes,
+    ]);
+    final certsSeq = _encodeSequence([essCertId]);
+    return _encodeSequence([certsSeq]);
+  }
+
   Uint8List _buildCmsSignedData({
     required Uint8List contentDigest,
     required Uint8List signerCertDer,
     required List<Uint8List> extraCertsDer,
     required Uint8List signedAttrsDer,
     required Uint8List signature,
+    Uint8List? timestampToken,
   }) {
     final signerInfoDer = _buildSignerInfoDer(
       signerCertDer: signerCertDer,
       signedAttrsDer: signedAttrsDer,
       signature: signature,
+      timestampToken: timestampToken,
     );
 
     final digestAlgsDer = _encodeSet([
@@ -158,6 +192,7 @@ class PdfCmsSigner {
     required Uint8List signerCertDer,
     required Uint8List signedAttrsDer,
     required Uint8List signature,
+    Uint8List? timestampToken,
   }) {
     final issuerAndSerialDer = _issuerAndSerialDerFromCert(signerCertDer);
     final digestAlgDer = _encodeAlgorithmIdentifier('2.16.840.1.101.3.4.2.1');
@@ -165,14 +200,26 @@ class PdfCmsSigner {
     final signedAttrsTaggedDer =
         _encodeTagged(0, signedAttrsDer, explicit: false);
 
-    return _encodeSequence([
+    final elements = <Uint8List>[
       ASN1Integer(BigInt.from(1)).encodedBytes,
       issuerAndSerialDer,
       digestAlgDer,
       signedAttrsTaggedDer,
       sigAlgDer,
       ASN1OctetString(signature).encodedBytes,
-    ]);
+    ];
+
+    if (timestampToken != null) {
+      final unsignedAttrsDer = _encodeSet([
+        _encodeAttribute(
+          oid: '1.2.840.113549.1.9.16.2.14',
+          valueDer: timestampToken,
+        ),
+      ]);
+      elements.add(_encodeTagged(1, unsignedAttrsDer, explicit: false));
+    }
+
+    return _encodeSequence(elements);
   }
 
   Uint8List _issuerAndSerialDerFromCert(Uint8List certDer) {

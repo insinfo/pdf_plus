@@ -8,6 +8,8 @@ class PdfSignatureConfig {
     this.location,
     this.name,
     this.signingTime,
+    this.subFilter,
+    this.isDocTimeStamp = false,
   });
 
   String? contactInfo;
@@ -15,6 +17,8 @@ class PdfSignatureConfig {
   String? location;
   String? name;
   DateTime? signingTime;
+  String? subFilter;
+  bool isDocTimeStamp;
 
   int? docMdpPermissionP;
 

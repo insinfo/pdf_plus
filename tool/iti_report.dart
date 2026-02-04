@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:pdf_plus/signing.dart';
 import 'package:pdf_plus/src/pki/pki_jks_utils.dart';
+
 // dart tool/iti_report.dart test\assets\pdfs\sample_token_icpbrasil_assinado.pdf
 void main(List<String> args) async {
   if (args.isEmpty) {
@@ -27,7 +28,7 @@ void main(List<String> args) async {
   final report = await PdfSignatureValidator().validateAllSignatures(
     pdfBytes,
     trustedRootsProvider: roots.isEmpty ? null : _InMemoryRootsProvider(roots),
-    certificateFetcher: const HttpCertificateFetcher(),
+    certificateFetcher: const PdfHttpFetcher(),
     includeCertificates: true,
     includeSignatureFields: true,
   );

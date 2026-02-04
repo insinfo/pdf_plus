@@ -11,9 +11,12 @@ import 'package:pdf_plus/src/crypto/base.dart';
 import 'package:pdf_plus/src/crypto/pkcs1.dart';
 import 'package:pdf_plus/src/crypto/rsa_engine.dart';
 import 'package:pdf_plus/src/crypto/rsa_keys.dart';
+import 'package:pdf_plus/src/pdf/io/pdf_http_fetcher_base.dart';
 
 import '../parsing/pdf_document_parser.dart';
 import '../parsing/pdf_document_info.dart';
+import '../format/indirect.dart';
+import '../format/null_value.dart';
 
 class PdfSignatureValidationResult {
   const PdfSignatureValidationResult({
@@ -29,6 +32,117 @@ class PdfSignatureValidationResult {
   final bool digestValid;
   final bool intact;
   final String? message;
+}
+
+List<List<int>> findAllSignatureByteRanges(Uint8List bytes) {
+  return _findAllByteRanges(bytes);
+}
+
+List<Uint8List> extractAllSignatureContents(Uint8List bytes) {
+  final ranges = _findAllByteRanges(bytes);
+  final out = <Uint8List>[];
+  for (final range in ranges) {
+    final contents = _extractContentsFromByteRange(bytes, range);
+    out.add(contents ?? Uint8List(0));
+  }
+  return out;
+}
+
+Uint8List? extractSignatureContentsAt(Uint8List bytes, int index) {
+  final ranges = _findAllByteRanges(bytes);
+  if (index < 0 || index >= ranges.length) return null;
+  return _extractContentsFromByteRange(bytes, ranges[index]);
+}
+
+Map<String, String> findSignatureValueRefs(Uint8List bytes) {
+  final parser = PdfDocumentParser(bytes);
+  final context = parser.extractSignatureFieldEditContext();
+  final out = <String, String>{};
+  for (var i = 0; i < context.fields.length; i++) {
+    final field = context.fields[i];
+    final rawName = field.info.fieldName;
+    final name =
+        (rawName == null || rawName.trim().isEmpty) ? 'field_$i' : rawName;
+
+    String? value;
+    final v = field.fieldDict['/V'];
+    if (v is PdfIndirect) {
+      value = '${v.ser} ${v.gen} R';
+    } else if (v is PdfNull) {
+      value = 'null';
+    } else if (field.signatureRef != null) {
+      value = field.signatureRef.toString();
+    } else if (v != null) {
+      value = v.toString();
+    }
+
+    if (value != null) {
+      final key = out.containsKey(name) ? '$name#$i' : name;
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+class PdfCmsValidationResult {
+  const PdfCmsValidationResult({
+    required this.cmsValid,
+    this.chainTrusted,
+    this.chainErrors,
+    this.message,
+  });
+
+  final bool cmsValid;
+  final bool? chainTrusted;
+  final List<String>? chainErrors;
+  final String? message;
+}
+
+class PdfCmsValidator {
+  Future<PdfCmsValidationResult> validate(
+    Uint8List cmsBytes, {
+    List<String>? trustedRootsPem,
+    TrustedRootsProvider? trustedRootsProvider,
+    List<TrustedRootsProvider>? trustedRootsProviders,
+    PdfHttpFetcherBase? certificateFetcher,
+    bool requireTrustedChain = false,
+  }) async {
+    final cmsValid = _verifyCmsSignature(cmsBytes);
+    bool? chainTrusted;
+    List<String>? chainErrors;
+    String? message;
+
+    final roots = await _collectTrustedRoots(
+      trustedRootsPem: trustedRootsPem,
+      trustedRootsProvider: trustedRootsProvider,
+      trustedRootsProviders: trustedRootsProviders,
+    );
+    if (roots.isNotEmpty) {
+      final chainResult = await _buildCertificateChainFromCms(
+        cmsBytes: cmsBytes,
+        roots: roots,
+        fetcher: certificateFetcher,
+      );
+      chainTrusted = chainResult.trusted;
+      if (!chainResult.trusted) {
+        chainErrors = const <String>['Signer certificate not trusted.'];
+        if (requireTrustedChain) {
+          message = 'Signer certificate not trusted.';
+        }
+      }
+    }
+
+    if (!cmsValid && message == null) {
+      message = 'Assinatura CMS invalida.';
+    }
+
+    return PdfCmsValidationResult(
+      cmsValid: cmsValid,
+      chainTrusted: chainTrusted,
+      chainErrors: chainErrors,
+      message: message,
+    );
+  }
 }
 
 class PdfSignatureDocMdpInfo {
@@ -293,11 +407,6 @@ abstract class PdfRevocationDataProvider {
   Future<Uint8List?> fetchOcsp(Uri url, Uint8List requestDer);
 }
 
-/// Provider de download de certificados (AIA/caIssuers).
-abstract class PdfCertificateFetcher {
-  Future<Uint8List?> fetchBytes(Uri url);
-}
-
 /// Validador básico de assinaturas (PAdES).
 class PdfSignatureValidator {
   /// Valida todas as assinaturas do PDF.
@@ -310,7 +419,7 @@ class PdfSignatureValidator {
     bool fetchCrls = false,
     bool fetchOcsp = false,
     PdfRevocationDataProvider? revocationDataProvider,
-    PdfCertificateFetcher? certificateFetcher,
+    PdfHttpFetcherBase? certificateFetcher,
     bool includeCertificates = false,
     bool includeSignatureFields = true,
   }) async {
@@ -669,7 +778,7 @@ void _mergeCertificateInfos(
 Future<_ChainResult> _buildCertificateChainFromCms({
   required Uint8List cmsBytes,
   required List<Uint8List> roots,
-  PdfCertificateFetcher? fetcher,
+  PdfHttpFetcherBase? fetcher,
 }) async {
   final parsed = _parseCmsSignerInfoAndCert(cmsBytes);
   if (parsed == null || parsed.certs.isEmpty || parsed.signerInfo == null) {

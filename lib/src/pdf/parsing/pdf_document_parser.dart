@@ -1,3 +1,4 @@
+//C:\MyDartProjects\pdf_plus\lib\src\pdf\parsing\pdf_document_parser.dart
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:archive/archive.dart';
@@ -89,7 +90,8 @@ class PdfDocumentParser extends PdfDocumentParserBase {
   PdfDocumentInfo extractInfo({int? maxPages}) {
     _ensureXrefParsed();
 
-    final trailer = _trailerInfo ?? _readTrailerInfoFromReader(reader, xrefOffset);
+    final trailer =
+        _trailerInfo ?? _readTrailerInfoFromReader(reader, xrefOffset);
     final rootObjId = trailer.rootObj;
     if (rootObjId == null) {
       return const PdfDocumentInfo(
@@ -125,7 +127,8 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     final useScanImages = _repairAttempted;
     for (int i = 0; i < pageRefs.length; i++) {
       final pageRef = pageRefs[i];
-      final pageObj = _getObjectNoStream(pageRef.obj) ?? _getObject(pageRef.obj);
+      final pageObj =
+          _getObjectNoStream(pageRef.obj) ?? _getObject(pageRef.obj);
       if (pageObj == null || pageObj.value is! PdfDictToken) continue;
       final pageDict = pageObj.value as PdfDictToken;
 
@@ -140,7 +143,8 @@ class PdfDocumentParser extends PdfDocumentParserBase {
 
       if (!useScanImages) {
         final resDict = _resolvePageResources(pageDict);
-        final xObject = resDict != null ? resDict.values[PdfKeys.xObject] : null;
+        final xObject =
+            resDict != null ? resDict.values[PdfKeys.xObject] : null;
         final xObjectDict = _resolveDictFromValueNoStream(xObject);
         if (xObjectDict != null) {
           final usedXObjects = _extractXObjectNamesFromContent(pageDict);
@@ -177,12 +181,10 @@ class PdfDocumentParser extends PdfDocumentParserBase {
       images.addAll(extractImages(includeUnusedXObjects: true));
     }
 
-    final infoMap = trailer.infoObj != null
-        ? _readInfoDict(trailer.infoObj!)
-        : null;
-    final infoEntry = trailer.infoObj != null
-        ? _xrefEntries[trailer.infoObj!]
-        : null;
+    final infoMap =
+        trailer.infoObj != null ? _readInfoDict(trailer.infoObj!) : null;
+    final infoEntry =
+        trailer.infoObj != null ? _xrefEntries[trailer.infoObj!] : null;
 
     return PdfDocumentInfo(
       version: version.name.replaceAll('pdf_', '').replaceAll('_', '.'),
@@ -207,7 +209,8 @@ class PdfDocumentParser extends PdfDocumentParserBase {
   }) {
     _ensureXrefParsed();
 
-    final trailer = _trailerInfo ?? _readTrailerInfoFromReader(reader, xrefOffset);
+    final trailer =
+        _trailerInfo ?? _readTrailerInfoFromReader(reader, xrefOffset);
     final rootObjId = trailer.rootObj;
     if (rootObjId == null) return const <PdfImageInfo>[];
 
@@ -234,7 +237,8 @@ class PdfDocumentParser extends PdfDocumentParserBase {
       if (toPage != null && pageIndex > toPage) continue;
 
       final pageRef = pageRefs[i];
-      final pageObj = _getObjectNoStream(pageRef.obj) ?? _getObject(pageRef.obj);
+      final pageObj =
+          _getObjectNoStream(pageRef.obj) ?? _getObject(pageRef.obj);
       if (pageObj == null || pageObj.value is! PdfDictToken) continue;
       final pageDict = pageObj.value as PdfDictToken;
 
@@ -337,7 +341,8 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     }
     try {
       _ensureXrefParsed();
-      final trailer = _trailerInfo ?? _readTrailerInfoFromReader(reader, xrefOffset);
+      final trailer =
+          _trailerInfo ?? _readTrailerInfoFromReader(reader, xrefOffset);
       final rootObjId = trailer.rootObj;
       if (rootObjId == null) return const <PdfSignatureFieldInfo>[];
 
@@ -346,12 +351,13 @@ class PdfDocumentParser extends PdfDocumentParserBase {
         return const <PdfSignatureFieldInfo>[];
       }
       final rootDict = rootObj.value as PdfDictToken;
-        final acroForm = _resolveDictFromValueNoStream(rootDict.values[PdfKeys.acroForm]) ??
-          _resolveDictFromValueFull(rootDict.values[PdfKeys.acroForm]);
+      final acroForm =
+          _resolveDictFromValueNoStream(rootDict.values[PdfKeys.acroForm]) ??
+              _resolveDictFromValueFull(rootDict.values[PdfKeys.acroForm]);
       if (acroForm == null) return const <PdfSignatureFieldInfo>[];
 
       final fieldsVal = acroForm.values[PdfKeys.fields];
-        final fields = _resolveArrayFromValue(fieldsVal) ??
+      final fields = _resolveArrayFromValue(fieldsVal) ??
           _resolveArrayFromValueFull(fieldsVal);
       if (fields == null) return const <PdfSignatureFieldInfo>[];
 
@@ -380,15 +386,18 @@ class PdfDocumentParser extends PdfDocumentParserBase {
   PdfSignatureFieldEditContext extractSignatureFieldEditContext() {
     try {
       _ensureXrefParsed();
-      final trailer = _trailerInfo ?? _readTrailerInfoFromReader(reader, xrefOffset);
+      final trailer =
+          _trailerInfo ?? _readTrailerInfoFromReader(reader, xrefOffset);
       final rootObjId = trailer.rootObj;
       if (rootObjId == null) {
-        return const PdfSignatureFieldEditContext(fields: <PdfSignatureFieldObjectInfo>[]);
+        return const PdfSignatureFieldEditContext(
+            fields: <PdfSignatureFieldObjectInfo>[]);
       }
 
       final rootObj = _getObjectNoStream(rootObjId) ?? _getObject(rootObjId);
       if (rootObj == null || rootObj.value is! PdfDictToken) {
-        return const PdfSignatureFieldEditContext(fields: <PdfSignatureFieldObjectInfo>[]);
+        return const PdfSignatureFieldEditContext(
+            fields: <PdfSignatureFieldObjectInfo>[]);
       }
       final rootDict = rootObj.value as PdfDictToken;
 
@@ -397,7 +406,8 @@ class PdfDocumentParser extends PdfDocumentParserBase {
       final acroFormToken = _resolveDictFromValueNoStream(acroFormVal) ??
           _resolveDictFromValueFull(acroFormVal);
       if (acroFormToken == null) {
-        return const PdfSignatureFieldEditContext(fields: <PdfSignatureFieldObjectInfo>[]);
+        return const PdfSignatureFieldEditContext(
+            fields: <PdfSignatureFieldObjectInfo>[]);
       }
 
       final acroFormDict = toPdfDict(acroFormToken);
@@ -446,7 +456,8 @@ class PdfDocumentParser extends PdfDocumentParserBase {
         fieldsArray: fieldsArray,
       );
     } catch (_) {
-      return const PdfSignatureFieldEditContext(fields: <PdfSignatureFieldObjectInfo>[]);
+      return const PdfSignatureFieldEditContext(
+          fields: <PdfSignatureFieldObjectInfo>[]);
     }
   }
 
@@ -489,16 +500,19 @@ class PdfDocumentParser extends PdfDocumentParserBase {
   }
 
   PdfDictToken? _resolvePageResources(PdfDictToken pageDict) {
-    final direct = _resolveDictFromValueNoStream(pageDict.values[PdfKeys.resources]);
+    final direct =
+        _resolveDictFromValueNoStream(pageDict.values[PdfKeys.resources]);
     PdfDictToken? parentRes;
     var parentVal = pageDict.values['/Parent'];
     for (int depth = 0; depth < 32; depth++) {
       final parentRef = asRef(parentVal);
       if (parentRef == null) break;
-      final parentObj = _getObjectNoStream(parentRef.obj) ?? _getObject(parentRef.obj);
+      final parentObj =
+          _getObjectNoStream(parentRef.obj) ?? _getObject(parentRef.obj);
       if (parentObj == null || parentObj.value is! PdfDictToken) break;
       final parentDict = parentObj.value as PdfDictToken;
-      parentRes = _resolveDictFromValueNoStream(parentDict.values[PdfKeys.resources]);
+      parentRes =
+          _resolveDictFromValueNoStream(parentDict.values[PdfKeys.resources]);
       if (parentRes != null) break;
       parentVal = parentDict.values['/Parent'];
     }
@@ -516,8 +530,10 @@ class PdfDocumentParser extends PdfDocumentParserBase {
       ..addAll(parentRes.values)
       ..addAll(childRes.values);
 
-    final parentXObj = _resolveDictFromValueNoStream(parentRes.values[PdfKeys.xObject]);
-    final childXObj = _resolveDictFromValueNoStream(childRes.values[PdfKeys.xObject]);
+    final parentXObj =
+        _resolveDictFromValueNoStream(parentRes.values[PdfKeys.xObject]);
+    final childXObj =
+        _resolveDictFromValueNoStream(childRes.values[PdfKeys.xObject]);
     if (parentXObj != null || childXObj != null) {
       final xValues = <String, dynamic>{};
       if (parentXObj != null) xValues.addAll(parentXObj.values);
@@ -536,7 +552,8 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     for (int depth = 0; depth < 32; depth++) {
       final parentRef = asRef(parentVal);
       if (parentRef == null) break;
-      final parentObj = _getObjectNoStream(parentRef.obj) ?? _getObject(parentRef.obj);
+      final parentObj =
+          _getObjectNoStream(parentRef.obj) ?? _getObject(parentRef.obj);
       if (parentObj == null || parentObj.value is! PdfDictToken) break;
       final parentDict = parentObj.value as PdfDictToken;
       final box = asNumArray(parentDict.values[PdfKeys.mediaBox]) ??
@@ -557,7 +574,8 @@ class PdfDocumentParser extends PdfDocumentParserBase {
       final dict = obj.value as PdfDictToken;
       final type = asName(dict.values[PdfKeys.type]);
       final looksLikePage = type == '/Page' ||
-          (dict.values.containsKey(PdfKeys.mediaBox) && dict.values.containsKey(PdfKeys.contents));
+          (dict.values.containsKey(PdfKeys.mediaBox) &&
+              dict.values.containsKey(PdfKeys.contents));
       if (!looksLikePage) continue;
       out.add(PdfRefToken(obj.objId, obj.gen));
       if (maxPages != null && out.length >= maxPages) break;
@@ -581,19 +599,18 @@ class PdfDocumentParser extends PdfDocumentParserBase {
       entries.add((
         offset: entry.value.offset,
         info: ImageScanInfo(
-        imageRef: PdfIndirectRef(obj.objId, obj.gen),
-        width: asInt(dict.values['/Width']),
-        height: asInt(dict.values['/Height']),
-        bitsPerComponent: asInt(dict.values['/BitsPerComponent']),
-        colorSpace: colorSpace,
-        filter: filter,
+          imageRef: PdfIndirectRef(obj.objId, obj.gen),
+          width: asInt(dict.values['/Width']),
+          height: asInt(dict.values['/Height']),
+          bitsPerComponent: asInt(dict.values['/BitsPerComponent']),
+          colorSpace: colorSpace,
+          filter: filter,
         ),
       ));
     }
     entries.sort((a, b) => a.offset.compareTo(b.offset));
     return entries.map((e) => e.info).toList();
   }
-
 
   PdfDictToken? _resolveDictFromValueNoStream(dynamic value) {
     if (value is PdfDictToken) return value;
@@ -693,9 +710,8 @@ class PdfDocumentParser extends PdfDocumentParserBase {
       final rect = _findRectFromField(dict);
       out.add(PdfSignatureFieldInfo(
         fieldName: fieldName,
-        pageRef: pageRef != null
-            ? PdfIndirectRef(pageRef.obj, pageRef.gen)
-            : null,
+        pageRef:
+            pageRef != null ? PdfIndirectRef(pageRef.obj, pageRef.gen) : null,
         pageIndex: pageIndex,
         rect: rect,
         signatureDictionaryPresent: false,
@@ -703,21 +719,27 @@ class PdfDocumentParser extends PdfDocumentParserBase {
       return;
     }
 
-    if (fieldType != PdfKeys.sig && asName(sigVal.values[PdfKeys.type]) != PdfKeys.sig) {
+    if (fieldType != PdfKeys.sig &&
+        asName(sigVal.values[PdfKeys.type]) != PdfKeys.sig) {
       return;
     }
 
-    final reason = _asString(sigVal.values[PdfKeys.reason]) ?? _asString(dict.values[PdfKeys.reason]);
-    final location = _asString(sigVal.values[PdfKeys.location]) ?? _asString(dict.values[PdfKeys.location]);
-    final name = _asString(sigVal.values[PdfKeys.name]) ?? _asString(dict.values[PdfKeys.name]);
-    final signingTime = _asString(sigVal.values[PdfKeys.m]) ?? _asString(dict.values[PdfKeys.m]);
-    final filter = asName(sigVal.values[PdfKeys.filter]) ?? asName(dict.values[PdfKeys.filter]);
+    final reason = _asString(sigVal.values[PdfKeys.reason]) ??
+        _asString(dict.values[PdfKeys.reason]);
+    final location = _asString(sigVal.values[PdfKeys.location]) ??
+        _asString(dict.values[PdfKeys.location]);
+    final name = _asString(sigVal.values[PdfKeys.name]) ??
+        _asString(dict.values[PdfKeys.name]);
+    final signingTime = _asString(sigVal.values[PdfKeys.m]) ??
+        _asString(dict.values[PdfKeys.m]);
+    final filter = asName(sigVal.values[PdfKeys.filter]) ??
+        asName(dict.values[PdfKeys.filter]);
     final subFilter = asName(sigVal.values[PdfKeys.subFilter]);
     final byteRange = asIntArray(sigVal.values[PdfKeys.byteRange]);
     final pageRef = _findPageRefFromField(dict);
     final pageIndex = (pageRef != null && pageIndexByObj != null)
-      ? pageIndexByObj[pageRef.obj]
-      : null;
+        ? pageIndexByObj[pageRef.obj]
+        : null;
     final rect = _findRectFromField(dict);
 
     out.add(PdfSignatureFieldInfo(
@@ -729,7 +751,8 @@ class PdfDocumentParser extends PdfDocumentParserBase {
       filter: filter,
       subFilter: subFilter,
       byteRange: byteRange,
-      pageRef: pageRef != null ? PdfIndirectRef(pageRef.obj, pageRef.gen) : null,
+      pageRef:
+          pageRef != null ? PdfIndirectRef(pageRef.obj, pageRef.gen) : null,
       pageIndex: pageIndex,
       rect: rect,
       signatureDictionaryPresent: true,
@@ -797,43 +820,53 @@ class PdfDocumentParser extends PdfDocumentParserBase {
       sigDictToken = sigVal;
     }
 
-    if (fieldType != PdfKeys.sig && asName(sigDictToken?.values[PdfKeys.type]) != PdfKeys.sig) {
+    if (fieldType != PdfKeys.sig &&
+        asName(sigDictToken?.values[PdfKeys.type]) != PdfKeys.sig) {
       return;
     }
 
     final reason = sigDictToken != null
-        ? (_asString(sigDictToken.values[PdfKeys.reason]) ?? _asString(dict.values[PdfKeys.reason]))
+        ? (_asString(sigDictToken.values[PdfKeys.reason]) ??
+            _asString(dict.values[PdfKeys.reason]))
         : _asString(dict.values[PdfKeys.reason]);
     final location = sigDictToken != null
-        ? (_asString(sigDictToken.values[PdfKeys.location]) ?? _asString(dict.values[PdfKeys.location]))
+        ? (_asString(sigDictToken.values[PdfKeys.location]) ??
+            _asString(dict.values[PdfKeys.location]))
         : _asString(dict.values[PdfKeys.location]);
     final name = sigDictToken != null
-        ? (_asString(sigDictToken.values[PdfKeys.name]) ?? _asString(dict.values[PdfKeys.name]))
+        ? (_asString(sigDictToken.values[PdfKeys.name]) ??
+            _asString(dict.values[PdfKeys.name]))
         : _asString(dict.values[PdfKeys.name]);
     var signingTime = sigDictToken != null
-        ? (_asString(sigDictToken.values[PdfKeys.m]) ?? _asString(dict.values[PdfKeys.m]))
+        ? (_asString(sigDictToken.values[PdfKeys.m]) ??
+            _asString(dict.values[PdfKeys.m]))
         : _asString(dict.values[PdfKeys.m]);
     if (signingTime == null && sigRef != null) {
       signingTime = _tryReadPdfDateFromObject(sigRef.obj, sigRef.gen);
     }
     var filter = sigDictToken != null
-        ? (asName(sigDictToken.values[PdfKeys.filter]) ?? asName(dict.values[PdfKeys.filter]))
+        ? (asName(sigDictToken.values[PdfKeys.filter]) ??
+            asName(dict.values[PdfKeys.filter]))
         : asName(dict.values[PdfKeys.filter]);
-    var subFilter = sigDictToken != null ? asName(sigDictToken.values[PdfKeys.subFilter]) : null;
+    var subFilter = sigDictToken != null
+        ? asName(sigDictToken.values[PdfKeys.subFilter])
+        : null;
     if (subFilter == null && sigRef != null) {
       subFilter = _tryReadNameFromObject(sigRef.obj, sigRef.gen, 'SubFilter');
     }
     if (filter == null && sigRef != null) {
       filter = _tryReadNameFromObject(sigRef.obj, sigRef.gen, 'Filter');
     }
-    var byteRange = sigDictToken != null ? asIntArray(sigDictToken.values[PdfKeys.byteRange]) : null;
+    var byteRange = sigDictToken != null
+        ? asIntArray(sigDictToken.values[PdfKeys.byteRange])
+        : null;
     if (byteRange == null && sigRef != null) {
       byteRange = _tryReadByteRangeFromObject(sigRef.obj, sigRef.gen);
     }
     final pageRef = _findPageRefFromField(dict);
     final pageIndex = (pageRef != null && pageIndexByObj != null)
-      ? pageIndexByObj[pageRef.obj]
-      : null;
+        ? pageIndexByObj[pageRef.obj]
+        : null;
     final rect = _findRectFromField(dict);
 
     out.add(PdfSignatureFieldObjectInfo(
@@ -846,7 +879,8 @@ class PdfDocumentParser extends PdfDocumentParserBase {
         filter: filter,
         subFilter: subFilter,
         byteRange: byteRange,
-        pageRef: pageRef != null ? PdfIndirectRef(pageRef.obj, pageRef.gen) : null,
+        pageRef:
+            pageRef != null ? PdfIndirectRef(pageRef.obj, pageRef.gen) : null,
         pageIndex: pageIndex,
         rect: rect,
         signatureDictionaryPresent: sigDictToken != null || sigRef != null,
@@ -908,7 +942,8 @@ class PdfDocumentParser extends PdfDocumentParserBase {
 
       final endObjToken = ascii.encode('endobj');
       final searchStart = start + header.length;
-      final endObj = indexOfSequence(bytes, endObjToken, searchStart, bytes.length);
+      final endObj =
+          indexOfSequence(bytes, endObjToken, searchStart, bytes.length);
       final end = endObj == -1 ? bytes.length : endObj;
 
       const byteRangeToken = <int>[
@@ -948,7 +983,8 @@ class PdfDocumentParser extends PdfDocumentParserBase {
 
       final endObjToken = ascii.encode('endobj');
       final searchStart = start + header.length;
-      final endObj = indexOfSequence(bytes, endObjToken, searchStart, bytes.length);
+      final endObj =
+          indexOfSequence(bytes, endObjToken, searchStart, bytes.length);
       final end = endObj == -1 ? bytes.length : endObj;
 
       const token = <int>[0x2F, 0x4D]; // /M
@@ -984,7 +1020,8 @@ class PdfDocumentParser extends PdfDocumentParserBase {
 
       final endObjToken = ascii.encode('endobj');
       final searchStart = start + header.length;
-      final endObj = indexOfSequence(bytes, endObjToken, searchStart, bytes.length);
+      final endObj =
+          indexOfSequence(bytes, endObjToken, searchStart, bytes.length);
       final end = endObj == -1 ? bytes.length : endObj;
 
       final token = ascii.encode('/$key');
@@ -1000,7 +1037,12 @@ class PdfDocumentParser extends PdfDocumentParserBase {
       final startName = i;
       while (i < end) {
         final b = bytes[i];
-        if (isWhitespace(b) || b == 0x2F || b == 0x3E || b == 0x3C || b == 0x5B || b == 0x5D) {
+        if (isWhitespace(b) ||
+            b == 0x2F ||
+            b == 0x3E ||
+            b == 0x3C ||
+            b == 0x5B ||
+            b == 0x5D) {
           break;
         }
         i++;
@@ -1033,7 +1075,9 @@ class PdfDocumentParser extends PdfDocumentParserBase {
       case '/FlateDecode':
         return 'Flate';
       default:
-        return name.value.startsWith('/') ? name.value.substring(1) : name.value;
+        return name.value.startsWith('/')
+            ? name.value.substring(1)
+            : name.value;
     }
   }
 
@@ -1101,7 +1145,8 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     for (int i = 0; i < data.length; i++) {
       final b = data[i];
       if (b == 0x7E) break; // ~ end
-      if (b == 0x7A) { // z
+      if (b == 0x7A) {
+        // z
         if (count != 0) continue;
         out.addAll(const [0, 0, 0, 0]);
         continue;
@@ -1169,7 +1214,8 @@ class PdfDocumentParser extends PdfDocumentParserBase {
             dataBytes = _decodeAscii85(dataBytes);
           } else if (filter == 'Flate') {
             if (dataBytes.length > _maxStreamDecodeSize) break;
-            dataBytes = Uint8List.fromList(ZLibDecoder().decodeBytes(dataBytes));
+            dataBytes =
+                Uint8List.fromList(ZLibDecoder().decodeBytes(dataBytes));
           }
         }
       }
@@ -1179,7 +1225,8 @@ class PdfDocumentParser extends PdfDocumentParserBase {
         if (dataBytes[i] == 0x2F /* / */) {
           final name = readName(dataBytes, i, dataBytes.length);
           i = name.nextIndex;
-          final afterName = skipPdfWsAndComments(dataBytes, i, dataBytes.length);
+          final afterName =
+              skipPdfWsAndComments(dataBytes, i, dataBytes.length);
           if (afterName + 1 < dataBytes.length &&
               dataBytes[afterName] == 0x44 &&
               dataBytes[afterName + 1] == 0x6F) {
@@ -1205,7 +1252,8 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     if (entry.offset < 0 || entry.offset >= len) return null;
     final headerSize = 64 * 1024;
     final windowSize = headerSize + maxBytes;
-    final size = entry.offset + windowSize > len ? (len - entry.offset) : windowSize;
+    final size =
+        entry.offset + windowSize > len ? (len - entry.offset) : windowSize;
     if (size <= 0) return null;
 
     final window = reader.readRange(entry.offset, size);
@@ -1292,7 +1340,8 @@ class PdfDocumentParser extends PdfDocumentParserBase {
   void mergeDocument(PdfDocument pdfDocument) {
     _ensureXrefParsed();
 
-    final trailer = _trailerInfo ?? _readTrailerInfoFromReader(reader, xrefOffset);
+    final trailer =
+        _trailerInfo ?? _readTrailerInfoFromReader(reader, xrefOffset);
     if (trailer.rootObj == null) {
       pdfDocument.catalog = PdfCatalog(pdfDocument, PdfPageList(pdfDocument));
       return;
@@ -1467,7 +1516,7 @@ class PdfDocumentParser extends PdfDocumentParserBase {
       final annotsObj = _getObject(annotsValue.obj);
       if (annotsObj != null && annotsObj.value is PdfArrayToken) {
         filtered.values[PdfKeys.annots] =
-          toPdfArray(annotsObj.value as PdfArrayToken);
+            toPdfArray(annotsObj.value as PdfArrayToken);
       }
     }
 
@@ -1485,11 +1534,11 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     if (_fullScanIndexBuilt) return;
     _fullScanIndexBuilt = true;
 
-    final maxObjId = _repairXrefByScanFromReader(reader, _xrefEntries,
-        (rootObj) {
+    final maxObjId =
+        _repairXrefByScanFromReader(reader, _xrefEntries, (rootObj) {
       if (rootObj != null) {
-        _trailerInfo = _mergeTrailerInfo(
-            _trailerInfo, TrailerInfo(rootObj: rootObj));
+        _trailerInfo =
+            _mergeTrailerInfo(_trailerInfo, TrailerInfo(rootObj: rootObj));
       }
     });
 
@@ -1525,19 +1574,23 @@ class PdfDocumentParser extends PdfDocumentParserBase {
       break;
     }
 
-    if (_allowRepair && _trailerInfo?.rootObj == null && _xrefEntries.isNotEmpty) {
+    if (_allowRepair &&
+        _trailerInfo?.rootObj == null &&
+        _xrefEntries.isNotEmpty) {
       final tailRoot = _findRootFromTailFromReader(reader);
       if (tailRoot != null) {
-        _trailerInfo = _mergeTrailerInfo(
-            _trailerInfo, TrailerInfo(rootObj: tailRoot.obj));
+        _trailerInfo =
+            _mergeTrailerInfo(_trailerInfo, TrailerInfo(rootObj: tailRoot.obj));
       }
     }
 
-    if (_allowRepair && _trailerInfo?.infoObj == null && _xrefEntries.isNotEmpty) {
+    if (_allowRepair &&
+        _trailerInfo?.infoObj == null &&
+        _xrefEntries.isNotEmpty) {
       final tailInfo = _findInfoFromTailFromReader(reader);
       if (tailInfo != null) {
-        _trailerInfo = _mergeTrailerInfo(
-            _trailerInfo, TrailerInfo(infoObj: tailInfo.obj));
+        _trailerInfo =
+            _mergeTrailerInfo(_trailerInfo, TrailerInfo(infoObj: tailInfo.obj));
       }
     }
 
@@ -1545,26 +1598,28 @@ class PdfDocumentParser extends PdfDocumentParserBase {
         (_xrefEntries.isEmpty || _trailerInfo?.rootObj == null) &&
         !_repairAttempted) {
       _repairAttempted = true;
-      final maxObjId = _repairXrefByScanFromReader(reader, _xrefEntries,
-          (rootObj) {
+      final maxObjId =
+          _repairXrefByScanFromReader(reader, _xrefEntries, (rootObj) {
         if (rootObj != null) {
-          _trailerInfo = _mergeTrailerInfo(
-              _trailerInfo, TrailerInfo(rootObj: rootObj));
+          _trailerInfo =
+              _mergeTrailerInfo(_trailerInfo, TrailerInfo(rootObj: rootObj));
         }
       });
       if (maxObjId > 0) {
-        _trailerInfo = _mergeTrailerInfo(
-            _trailerInfo, TrailerInfo(size: maxObjId + 1));
+        _trailerInfo =
+            _mergeTrailerInfo(_trailerInfo, TrailerInfo(size: maxObjId + 1));
       }
       _fullScanIndexBuilt = true;
       _indexObjectStreams();
     }
 
-    if (_allowRepair && _trailerInfo?.infoObj == null && _xrefEntries.isNotEmpty) {
+    if (_allowRepair &&
+        _trailerInfo?.infoObj == null &&
+        _xrefEntries.isNotEmpty) {
       final tailInfo = _findInfoFromTailFromReader(reader);
       if (tailInfo != null) {
-        _trailerInfo = _mergeTrailerInfo(
-            _trailerInfo, TrailerInfo(infoObj: tailInfo.obj));
+        _trailerInfo =
+            _mergeTrailerInfo(_trailerInfo, TrailerInfo(infoObj: tailInfo.obj));
       }
     }
   }
@@ -1633,9 +1688,7 @@ int _findStartXref(Uint8List bytes) {
   const token = <int>[0x73, 0x74, 0x61, 0x72, 0x74, 0x78, 0x72, 0x65, 0x66];
 
   // Procura do fim para o começo, limitando a janela para robustez/perf.
-  final int windowStart = bytes.length > 4 * 1024
-      ? bytes.length - 4 * 1024
-      : 0;
+  final int windowStart = bytes.length > 4 * 1024 ? bytes.length - 4 * 1024 : 0;
   final int pos = lastIndexOfSequence(bytes, token, windowStart, bytes.length);
   if (pos == -1) return 0;
 
@@ -1668,7 +1721,8 @@ int _computeXrefOffset(Uint8List bytes) {
 
   // Fallback: procurar a última ocorrência de 'xref'
   const xrefToken = <int>[0x78, 0x72, 0x65, 0x66]; // xref
-  final windowStart = bytes.length > 1024 * 1024 ? bytes.length - 1024 * 1024 : 0;
+  final windowStart =
+      bytes.length > 1024 * 1024 ? bytes.length - 1024 * 1024 : 0;
   final pos = lastIndexOfSequence(bytes, xrefToken, windowStart, bytes.length);
   if (pos != -1) {
     return pos;
@@ -1719,7 +1773,8 @@ int _computeSizeFromReader(
     return trailerInfo.size!;
   }
 
-  final info = _readTrailerInfoFromReader(reader, _computeXrefOffsetFromReader(reader));
+  final info =
+      _readTrailerInfoFromReader(reader, _computeXrefOffsetFromReader(reader));
   if (info.size != null && info.size! > 0) {
     return info.size!;
   }
@@ -1819,9 +1874,19 @@ TrailerInfo _tryReadTrailerNearOffset(Uint8List bytes, int offset) {
 }
 
 TrailerInfo _tryReadLastTrailer(Uint8List bytes) {
-  const trailerToken = <int>[0x74, 0x72, 0x61, 0x69, 0x6C, 0x65, 0x72]; // trailer
-  final windowStart = bytes.length > 1024 * 1024 ? bytes.length - 1024 * 1024 : 0;
-  final pos = lastIndexOfSequence(bytes, trailerToken, windowStart, bytes.length);
+  const trailerToken = <int>[
+    0x74,
+    0x72,
+    0x61,
+    0x69,
+    0x6C,
+    0x65,
+    0x72
+  ]; // trailer
+  final windowStart =
+      bytes.length > 1024 * 1024 ? bytes.length - 1024 * 1024 : 0;
+  final pos =
+      lastIndexOfSequence(bytes, trailerToken, windowStart, bytes.length);
   if (pos == -1) {
     return TrailerInfo();
   }
@@ -1962,7 +2027,12 @@ TrailerInfo? _parseXrefAtOffsetFromReader(
   }
 
   final len = reader.length;
-  const windowSizes = <int>[256 * 1024, 1024 * 1024, 4 * 1024 * 1024, 16 * 1024 * 1024];
+  const windowSizes = <int>[
+    256 * 1024,
+    1024 * 1024,
+    4 * 1024 * 1024,
+    16 * 1024 * 1024
+  ];
   for (final size in windowSizes) {
     if (offset < 0 || offset >= len) return null;
     final windowSize = (offset + size > len) ? (len - offset) : size;
@@ -2000,7 +2070,8 @@ TrailerInfo? _parseXrefTableFromWindow(
     i = skipPdfWsAndComments(bytes, i, bytes.length);
     if (i >= bytes.length) break;
 
-    if (matchToken(bytes, i, const <int>[0x74, 0x72, 0x61, 0x69, 0x6C, 0x65, 0x72])) {
+    if (matchToken(
+        bytes, i, const <int>[0x74, 0x72, 0x61, 0x69, 0x6C, 0x65, 0x72])) {
       return _scanForTrailerDict(bytes, i + 7, bytes.length);
     }
 
@@ -2077,7 +2148,8 @@ TrailerInfo? _parseXrefStreamFromWindow(
   final dict = _parseXrefStreamDict(bytes, header.dictStart, bytes.length);
   if (dict.type != '/XRef') return null;
 
-  Uint8List? stream = extractStream(bytes, header.dictEnd, bytes.length, dict.length);
+  Uint8List? stream =
+      extractStream(bytes, header.dictEnd, bytes.length, dict.length);
   if (stream == null && dict.length != null) {
     final streamStart = _findStreamStart(bytes, header.dictEnd);
     if (streamStart != null) {
@@ -2090,7 +2162,8 @@ TrailerInfo? _parseXrefStreamFromWindow(
     final streamStart = _findStreamStart(bytes, header.dictEnd);
     if (streamStart != null) {
       final absStart = baseOffset + streamStart;
-      final endAbs = _skipUnknownLengthStreamReader(reader, absStart, reader.length);
+      final endAbs =
+          _skipUnknownLengthStreamReader(reader, absStart, reader.length);
       if (endAbs != null) {
         final dataEnd = endAbs - endStreamToken.length;
         final len = dataEnd - absStart;
@@ -2206,7 +2279,8 @@ int _fixOffsetReader(
 ) {
   if (offset < 0) {
     final corrected = offset + 0x100000000;
-    if (_isValidObjAtOffsetReader(reader, objId, gen, corrected)) return corrected;
+    if (_isValidObjAtOffsetReader(reader, objId, gen, corrected))
+      return corrected;
   }
   if (_isValidObjAtOffsetReader(reader, objId, gen, offset)) return offset;
 
@@ -2261,7 +2335,8 @@ TrailerInfo? _parseXrefTable(
     i = skipPdfWsAndComments(bytes, i, bytes.length);
     if (i >= bytes.length) break;
 
-    if (matchToken(bytes, i, const <int>[0x74, 0x72, 0x61, 0x69, 0x6C, 0x65, 0x72])) {
+    if (matchToken(
+        bytes, i, const <int>[0x74, 0x72, 0x61, 0x69, 0x6C, 0x65, 0x72])) {
       return _scanForTrailerDict(bytes, i + 7, bytes.length);
     }
 
@@ -2338,14 +2413,16 @@ TrailerInfo? _parseXrefStream(
   final dict = _parseXrefStreamDict(bytes, header.dictStart, bytes.length);
   if (dict.type != '/XRef') return null;
 
-  final stream = extractStream(bytes, header.dictEnd, bytes.length, dict.length);
-  if (stream == null) return TrailerInfo(
-    size: dict.size,
-    prev: dict.prev,
-    rootObj: dict.rootObj,
-    infoObj: dict.infoObj,
-    id: dict.id,
-  );
+  final stream =
+      extractStream(bytes, header.dictEnd, bytes.length, dict.length);
+  if (stream == null)
+    return TrailerInfo(
+      size: dict.size,
+      prev: dict.prev,
+      rootObj: dict.rootObj,
+      infoObj: dict.infoObj,
+      id: dict.id,
+    );
 
   Uint8List data = stream;
   if (dict.filter == '/FlateDecode') {
@@ -2502,7 +2579,6 @@ XrefStreamDict _parseXrefStreamDict(Uint8List bytes, int start, int end) {
   );
 }
 
-
 Uint8List? extractStream(Uint8List bytes, int dictEnd, int end, int? length) {
   int i = dictEnd;
   i = skipPdfWsAndComments(bytes, i, end);
@@ -2592,7 +2668,8 @@ int _repairXrefByScan(
       i = num.nextIndex;
 
       final j = skipPdfWsAndComments(bytes, i, bytes.length);
-      if (j < bytes.length && matchToken(bytes, j, const <int>[0x6F, 0x62, 0x6A])) {
+      if (j < bytes.length &&
+          matchToken(bytes, j, const <int>[0x6F, 0x62, 0x6A])) {
         // padrão: <prevInt> <lastInt> obj
         if (prevInt != null && prevIntPos != null) {
           final objId = prevInt;
@@ -2694,8 +2771,7 @@ int _repairXrefByScanFromReader(
         i = res.nextIndex;
 
         final j = skipPdfWsAndComments(bytes, i, end);
-        if (j < end &&
-          matchToken(bytes, j, const <int>[0x6F, 0x62, 0x6A])) {
+        if (j < end && matchToken(bytes, j, const <int>[0x6F, 0x62, 0x6A])) {
           if (prevInt != null && prevIntPosAbs != null) {
             final objId = prevInt;
             final gen = lastInt;
@@ -2741,9 +2817,7 @@ int _repairXrefByScanFromReader(
               if (skipAbs != null && skipAbs > offset && skipAbs <= len) {
                 offset = skipAbs;
               } else {
-                offset = (offset + end <= len)
-                  ? (offset + end)
-                    : len;
+                offset = (offset + end <= len) ? (offset + end) : len;
               }
 
               prevInt = null;
@@ -2837,9 +2911,8 @@ int? _skipUnknownLengthStreamReader(
 
   int offset = startAbs;
   while (offset < fileLength) {
-    final windowSize = (offset + chunkSize > fileLength)
-        ? (fileLength - offset)
-        : chunkSize;
+    final windowSize =
+        (offset + chunkSize > fileLength) ? (fileLength - offset) : chunkSize;
     if (windowSize <= 0) return null;
 
     final window = reader.readRange(offset, windowSize);
@@ -2913,7 +2986,8 @@ PdfRefToken? _findInfoFromTailFromReader(PdfRandomAccessReader reader) {
   if (head != null) return head;
 
   final tailStart = len - tailSize;
-  final tail = _findObjectHeaderAnyGenInRangeReader(reader, objId, tailStart, len);
+  final tail =
+      _findObjectHeaderAnyGenInRangeReader(reader, objId, tailStart, len);
   if (tail != null) return tail;
 
   return _findObjectHeaderAnyGenByScanReader(reader, objId);
@@ -2932,7 +3006,8 @@ PdfRefToken? _findInfoFromTailFromReader(PdfRandomAccessReader reader) {
         ? (reader.length - offset)
         : chunkSize;
     final window = reader.readRange(offset, windowSize);
-    final found = _findObjectHeaderAnyGenInRange(window, objId, 0, window.length);
+    final found =
+        _findObjectHeaderAnyGenInRange(window, objId, 0, window.length);
     if (found != null) {
       return (offset: offset + found.offset, gen: found.gen);
     }
@@ -3093,18 +3168,17 @@ PdfRefToken? _findRootFromTail(Uint8List bytes) {
   Uint8List bytes,
   int objId,
 ) {
-  final headSize = bytes.length > 16 * 1024 * 1024
-      ? 16 * 1024 * 1024
-      : bytes.length;
-  final tailSize = bytes.length > 16 * 1024 * 1024
-      ? 16 * 1024 * 1024
-      : bytes.length;
+  final headSize =
+      bytes.length > 16 * 1024 * 1024 ? 16 * 1024 * 1024 : bytes.length;
+  final tailSize =
+      bytes.length > 16 * 1024 * 1024 ? 16 * 1024 * 1024 : bytes.length;
 
   final head = _findObjectHeaderAnyGenInRange(bytes, objId, 0, headSize);
   if (head != null) return head;
 
   final tailStart = bytes.length - tailSize;
-  final tail = _findObjectHeaderAnyGenInRange(bytes, objId, tailStart, bytes.length);
+  final tail =
+      _findObjectHeaderAnyGenInRange(bytes, objId, tailStart, bytes.length);
   if (tail != null) return tail;
 
   return _findObjectHeaderAnyGenInRange(bytes, objId, 0, bytes.length);
@@ -3349,7 +3423,8 @@ ParsedIndirectObject? readIndirectObjectAtFromReader(
   PdfDocumentParser parser,
 ) {
   if (reader is PdfMemoryRandomAccessReader) {
-    return readIndirectObjectAt(reader.readAll(), offset, reader.length, parser);
+    return readIndirectObjectAt(
+        reader.readAll(), offset, reader.length, parser);
   }
 
   final len = reader.length;
@@ -3391,7 +3466,8 @@ ParsedIndirectObject? readIndirectObjectAtFromReader(
           streamData = reader.readRange(abs, length);
         }
       } else {
-        final data = extractStream(window, parsed.dictEnd!, window.length, length);
+        final data =
+            extractStream(window, parsed.dictEnd!, window.length, length);
         if (data != null) {
           streamData = data;
         }
@@ -3414,7 +3490,8 @@ ParsedIndirectObject? readIndirectObjectAtFromReaderNoStream(
   int offset,
 ) {
   if (reader is PdfMemoryRandomAccessReader) {
-    return readIndirectObjectAt(reader.readAll(), offset, reader.length, DummyParser());
+    return readIndirectObjectAt(
+        reader.readAll(), offset, reader.length, DummyParser());
   }
 
   final len = reader.length;
@@ -3536,8 +3613,7 @@ int? resolveLength(PdfDictToken dict, PdfDocumentParser parser) {
   return null;
 }
 
-ParseResult? parseObject(Uint8List bytes, int start, int end,
-    {int depth = 0}) {
+ParseResult? parseObject(Uint8List bytes, int start, int end, {int depth = 0}) {
   if (depth > 64) return null;
   int i = skipPdfWsAndComments(bytes, start, end);
   if (i >= end) return null;
@@ -3549,8 +3625,8 @@ ParseResult? parseObject(Uint8List bytes, int start, int end,
   }
   if (b == 0x28 /* ( */) {
     final str = readLiteralString(bytes, i, end);
-    return ParseResult(PdfStringToken(str.bytes, PdfStringFormat.literal),
-        str.nextIndex);
+    return ParseResult(
+        PdfStringToken(str.bytes, PdfStringFormat.literal), str.nextIndex);
   }
   if (b == 0x3C /* < */) {
     if (i + 1 < end && bytes[i + 1] == 0x3C) {
@@ -3558,8 +3634,8 @@ ParseResult? parseObject(Uint8List bytes, int start, int end,
       return ParseResult(dict.value, dict.nextIndex, dictEnd: dict.dictEnd);
     }
     final hex = readHexString(bytes, i, end);
-    return ParseResult(PdfStringToken(hex.bytes, PdfStringFormat.binary),
-        hex.nextIndex);
+    return ParseResult(
+        PdfStringToken(hex.bytes, PdfStringFormat.binary), hex.nextIndex);
   }
   if (b == 0x5B /* [ */) {
     final arr = readArray(bytes, i, end, depth: depth + 1);
@@ -3589,8 +3665,7 @@ ParseResult? parseObject(Uint8List bytes, int start, int end,
   return null;
 }
 
-ParseResult readDict(Uint8List bytes, int start, int end,
-    {int depth = 0}) {
+ParseResult readDict(Uint8List bytes, int start, int end, {int depth = 0}) {
   int i = start;
   if (bytes[i] != 0x3C || bytes[i + 1] != 0x3C) {
     return ParseResult(PdfDictToken(<String, dynamic>{}), i);
@@ -3619,8 +3694,7 @@ ParseResult readDict(Uint8List bytes, int start, int end,
   return ParseResult(PdfDictToken(values), i);
 }
 
-ParseResult readArray(Uint8List bytes, int start, int end,
-    {int depth = 0}) {
+ParseResult readArray(Uint8List bytes, int start, int end, {int depth = 0}) {
   int i = start;
   if (bytes[i] != 0x5B) {
     return ParseResult(PdfArrayToken(<dynamic>[]), i);
@@ -3655,7 +3729,10 @@ ParseResult readArray(Uint8List bytes, int start, int end,
   final gen = readInt(bytes, i, end);
   i = skipPdfWsAndComments(bytes, gen.nextIndex, end);
   if (i < end && bytes[i] == 0x52 /* R */) {
-    return (value: PdfRefToken(first.value as int, gen.value), nextIndex: i + 1);
+    return (
+      value: PdfRefToken(first.value as int, gen.value),
+      nextIndex: i + 1
+    );
   }
   return null;
 }
@@ -3998,21 +4075,24 @@ int findByteRangeToken(Uint8List bytes) {
 
 int? _extractDocMdpPermission(PdfDocumentParser parser) {
   parser._ensureXrefParsed();
-  final trailer =
-      parser._trailerInfo ?? _readTrailerInfoFromReader(parser.reader, parser.xrefOffset);
+  final trailer = parser._trailerInfo ??
+      _readTrailerInfoFromReader(parser.reader, parser.xrefOffset);
   final rootObjId = trailer.rootObj;
   if (rootObjId == null) return null;
 
-  final rootObj = parser._getObjectNoStream(rootObjId) ?? parser._getObject(rootObjId);
+  final rootObj =
+      parser._getObjectNoStream(rootObjId) ?? parser._getObject(rootObjId);
   if (rootObj == null || rootObj.value is! PdfDictToken) return null;
   final rootDict = rootObj.value as PdfDictToken;
 
-  final permsDict = parser._resolveDictFromValueNoStream(rootDict.values['/Perms']);
+  final permsDict =
+      parser._resolveDictFromValueNoStream(rootDict.values['/Perms']);
   if (permsDict == null) return null;
 
   dynamic docMdpVal = permsDict.values['/DocMDP'];
   if (docMdpVal is PdfRefToken) {
-    final docObj = parser._getObjectNoStream(docMdpVal.obj) ?? parser._getObject(docMdpVal.obj);
+    final docObj = parser._getObjectNoStream(docMdpVal.obj) ??
+        parser._getObject(docMdpVal.obj);
     docMdpVal = docObj?.value;
   }
   if (docMdpVal is! PdfDictToken) return null;
@@ -4023,13 +4103,15 @@ int? _extractDocMdpPermission(PdfDocumentParser parser) {
   for (final item in refVal.values) {
     dynamic refItem = item;
     if (refItem is PdfRefToken) {
-      final refObj = parser._getObjectNoStream(refItem.obj) ?? parser._getObject(refItem.obj);
+      final refObj = parser._getObjectNoStream(refItem.obj) ??
+          parser._getObject(refItem.obj);
       refItem = refObj?.value;
     }
     if (refItem is! PdfDictToken) continue;
     dynamic tp = refItem.values['/TransformParams'];
     if (tp is PdfRefToken) {
-      final tpObj = parser._getObjectNoStream(tp.obj) ?? parser._getObject(tp.obj);
+      final tpObj =
+          parser._getObjectNoStream(tp.obj) ?? parser._getObject(tp.obj);
       tp = tpObj?.value;
     }
     if (tp is! PdfDictToken) continue;
@@ -4079,7 +4161,9 @@ List<PdfSignatureFieldInfo> extractSignatureFieldsFromBytes(Uint8List bytes) {
     final gapEnd = range[2];
     const windowSize = 524288;
     final windowStart = gapStart - windowSize >= 0 ? gapStart - windowSize : 0;
-    final windowEnd = gapEnd + windowSize <= bytes.length ? gapEnd + windowSize : bytes.length;
+    final windowEnd = gapEnd + windowSize <= bytes.length
+        ? gapEnd + windowSize
+        : bytes.length;
     final window = bytes.sublist(windowStart, windowEnd);
 
     final fieldName = scanPdfStringValue(window, const <int>[
@@ -4121,7 +4205,16 @@ List<PdfSignatureFieldInfo> extractSignatureFieldsFromBytes(Uint8List bytes) {
 
 List<List<int>> findAllByteRangesFromBytes(Uint8List bytes) {
   const token = <int>[
-    0x2F, 0x42, 0x79, 0x74, 0x65, 0x52, 0x61, 0x6E, 0x67, 0x65
+    0x2F,
+    0x42,
+    0x79,
+    0x74,
+    0x65,
+    0x52,
+    0x61,
+    0x6E,
+    0x67,
+    0x65
   ];
   final out = <List<int>>[];
   var offset = 0;
@@ -4541,9 +4634,9 @@ int skipTokenRaw(Uint8List bytes, int i, int end) {
 bool isDigit(int b) => b >= 0x30 && b <= 0x39;
 
 bool isHexDigit(int b) =>
-  (b >= 0x30 && b <= 0x39) ||
-  (b >= 0x41 && b <= 0x46) ||
-  (b >= 0x61 && b <= 0x66);
+    (b >= 0x30 && b <= 0x39) ||
+    (b >= 0x41 && b <= 0x46) ||
+    (b >= 0x61 && b <= 0x66);
 
 bool isWhitespace(int b) =>
     b == 0x00 || b == 0x09 || b == 0x0A || b == 0x0C || b == 0x0D || b == 0x20;
@@ -4551,8 +4644,10 @@ bool isWhitespace(int b) =>
 bool isDelimiter(Uint8List bytes, int index) {
   if (index >= bytes.length) return true;
   final b = bytes[index];
-  return isWhitespace(b) || b == 0x3C || b == 0x3E || b == 0x2F || b == 0x28 || b == 0x29;
+  return isWhitespace(b) ||
+      b == 0x3C ||
+      b == 0x3E ||
+      b == 0x2F ||
+      b == 0x28 ||
+      b == 0x29;
 }
-
-
-

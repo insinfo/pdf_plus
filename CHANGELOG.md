@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.13.0
+
+- **Dependency Reduction**: Removed dependency on `pointycastle` by implementing necessary cryptographic primitives locally.
+- **New Signing Features**: Implemented PAdES signature support (including B-B, B-T) and an external signing interface for A3/Token/HSM integration.
+- **Signature Validation**: Added a robust validator for checking document integrity, certificate chains, and revocation status (CRL/OCSP). 
+
+- **Refactor**: Moved `PdfEditTools` functionality (TopLeft annotation/field positioning) into `PdfDocument`. 
+- **AcroForms**: Added initial support for reading and modifying AcroForm fields via `document.form`.
+- **AcroForms**: Added support for removing XFA data to force standard form rendering.
+
+
 ## 3.12.0
 
 - Reduce dependencies.

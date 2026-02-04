@@ -20,6 +20,7 @@ import 'document.dart';
 import 'format/object_base.dart';
 import 'io/pdf_random_access_reader.dart';
 import 'io/pdf_random_access_reader_cache.dart';
+import 'parsing/pdf_document_info.dart';
 
 /// Base class for loading an existing PDF document.
 abstract class PdfDocumentParserBase {
@@ -68,4 +69,7 @@ abstract class PdfDocumentParserBase {
 
   /// Import the existing objects into the new PDF document
   void mergeDocument(PdfDocument pdfDocument);
+
+  PdfSignatureFieldEditContext extractSignatureFieldEditContext() =>
+      const PdfSignatureFieldEditContext(fields: []);
 }

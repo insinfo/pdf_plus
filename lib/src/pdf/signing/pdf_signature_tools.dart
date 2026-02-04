@@ -44,7 +44,8 @@ class PdfSignatureTools {
     final document = PdfDocument.load(parser);
     final pageIndex = pageNumber - 1;
     if (pageIndex < 0 || pageIndex >= document.pdfPageList.pages.length) {
-      throw RangeError.index(pageIndex, document.pdfPageList.pages, 'pageNumber');
+      throw RangeError.index(
+          pageIndex, document.pdfPageList.pages, 'pageNumber');
     }
     final page = document.pdfPageList.pages[pageIndex];
     final pageHeight = page.pageFormat.height;
@@ -71,4 +72,3 @@ class PdfSignatureTools {
     );
   }
 }
-

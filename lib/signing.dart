@@ -14,12 +14,19 @@ export 'src/pdf/validation/pdf_dss.dart';
 export 'src/pdf/validation/pdf_revocation_provider_stub.dart'
     if (dart.library.io) 'src/pdf/validation/pdf_revocation_provider_io.dart';
 
-export 'src/pdf/validation/pdf_certificate_fetcher_stub.dart'
-    if (dart.library.io) 'src/pdf/validation/pdf_certificate_fetcher_io.dart'
-    if (dart.library.html) 'src/pdf/validation/pdf_certificate_fetcher_web.dart';
+// PdfCertificateFetcher e implementacoes ficam em pdf_signature_validator.dart.
 
 export 'src/pdf/visual/visual.dart';
 export 'src/pdf/parsing/pdf_document_parser.dart';
 export 'src/pdf/parsing/pdf_document_info.dart';
-export 'src/pdf/editing/pdf_signature_field_editor.dart';
-export 'src/pdf/editing/pdf_edit_tools.dart';
+
+export 'src/pdf/signing/pdf_pades_signer.dart';
+export 'src/pdf/signing/pdf_loaded_document.dart';
+export 'src/pdf/signing/pdf_timestamp_client.dart';
+export 'src/pki/x509_certificate.dart';
+export 'src/pdf/io/pdf_http_fetcher_base.dart';
+
+export 'src/pdf/acroform/pdf_acroform.dart';
+export 'src/pdf/acroform/pdf_field.dart';
+
+export 'src/pki/pkcs12.dart';
