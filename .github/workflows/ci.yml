@@ -6,7 +6,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,4 +20,6 @@ jobs:
         run: dart pub get
 
       - name: Run tests
+        env:
+          PDFPLUS_DISABLE_TSA: "1"
         run: dart test
