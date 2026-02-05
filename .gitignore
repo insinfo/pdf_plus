@@ -67,3 +67,7 @@ tmp/
 tool/pdf_info.exe
 # *.pdf
 # *.ttf
+
+signed_output.pdf
+
+referencias/insinfo_dart_pdf/
