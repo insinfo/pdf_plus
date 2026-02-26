@@ -3,12 +3,17 @@
 [![Dart CI](https://github.com/insinfo/pdf_plus/actions/workflows/ci.yml/badge.svg)](https://github.com/insinfo/pdf_plus/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/insinfo/pdf_plus/branch/main/graph/badge.svg)](https://codecov.io/gh/insinfo/pdf_plus)
 
-A Dart library for PDF generation and manipulation, based on `dart_pdf`, with additional focus on digital signatures and PKI workflows.
+A Dart library for PDF generation and manipulation, based on `dart_pdf`, with additional focus on digital signatures, validation, and PKI workflows.
 
 fork from https://github.com/DavBfr/dart_pdf
 
-- **New Signing Features**: Implemented PAdES signature support (including B-B, B-T) and an external signing interface for A3/Token/HSM integration.
-- **Signature Validation**: Added a robust validator for checking document integrity, certificate chains, and revocation status (CRL/OCSP).
+## What this package provides
+
+- High-level PDF creation API (`widgets.dart`) and low-level PDF object model (`pdf.dart`)
+- Incremental digital signing (PAdES/CMS) with visible signature support
+- External signing flow for tokens, HSM, and custom signers
+- Signature validation with integrity checks, certificate-chain validation, and revocation support (CRL/OCSP)
+- PKI utilities for certificates, keystores, and PKCS#12 handling
 
 ## Requirements
 
@@ -28,6 +33,13 @@ Then run:
 ```bash
 dart pub get
 ```
+
+## Package entry points
+
+- `package:pdf_plus/widgets.dart` — high-level document composition
+- `package:pdf_plus/pdf.dart` — low-level PDF API
+- `package:pdf_plus/signing.dart` — signing, validation, parsing, and security inspection
+- `package:pdf_plus/pki.dart` — PKI and keystore helpers
 
 ## Common imports
 
@@ -59,7 +71,7 @@ Future<void> main() async {
 }
 ```
 
-## Basic example: sign an existing PDF
+## Basic example: sign an existing PDF (PAdES)
 
 ```dart
 import 'dart:io';
@@ -122,11 +134,28 @@ Future<void> main() async {
 }
 ```
 
-## Useful repository scripts
+## Validation options
 
-- `dart tool/pdf_info.dart <file.pdf>`
-- `dart tool/iti_report.dart <file.pdf>`
-- `dart tool/setup_certs_and_sign.dart`
+`PdfSignatureValidator().validateAllSignatures(...)` supports common verification scenarios:
+
+- Trusted roots from PEM or custom providers
+- Optional online chain completion (`certificateFetcher`)
+- Optional revocation checks (`fetchCrls`, `fetchOcsp`, `strictRevocation`)
+- Temporal validation options (`validateTemporal`, `validationTime`, signing-time mode)
+- Certificate and signature-field extraction in reports
+
+## Signing workflow summary
+
+1. Load or generate PDF bytes.
+2. Create a signer (`fromPkcs12Bytes`, PEM, or external signer).
+3. Add signature fields and metadata (`reason`, `location`, timestamp, DocMDP).
+4. Save signed bytes incrementally.
+5. Validate signed output and inspect reports.
+
+
+## Additional project documentation
+
+- `fonts-management.md`
 
 ## Run tests
 
