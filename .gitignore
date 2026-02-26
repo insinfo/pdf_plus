@@ -36,6 +36,7 @@ node_modules
 lcov.info
 coverage.json
 .coverage
+coverage/
 package-lock.json
 lcov.info
 
