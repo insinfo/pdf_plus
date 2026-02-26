@@ -63,6 +63,7 @@ void main() {
         try {
           final keyPath = '${tempDir.path}${Platform.pathSeparator}id_ed25519';
           await File(keyPath).writeAsString(pem);
+          await _ensurePrivateKeyPermissions(keyPath);
           final result =
               await Process.run('ssh-keygen', <String>['-y', '-f', keyPath]);
           expect(result.exitCode, 0,
@@ -89,5 +90,18 @@ bool _hasSshKeygen() {
     return result.exitCode == 0 || result.exitCode == 1;
   } catch (_) {
     return false;
+  }
+}
+
+Future<void> _ensurePrivateKeyPermissions(String keyPath) async {
+  if (Platform.isWindows) {
+    return;
+  }
+
+  final chmod = await Process.run('chmod', <String>['600', keyPath]);
+  if (chmod.exitCode != 0) {
+    throw StateError(
+      'Failed to set private key permissions: ${chmod.stdout}\n${chmod.stderr}',
+    );
   }
 }
