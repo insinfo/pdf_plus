@@ -2,24 +2,134 @@ name: Dart CI
 
 on:
   push:
+    branches: [ "main" ]
   pull_request:
+    branches: [ "main" ]
 
 jobs:
   test:
-    runs-on: ubuntu-22.04
+    runs-on: ${{ matrix.os }}
+    env:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, ubuntu-latest]
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Dart
-        uses: dart-lang/setup-dart@v1
+      - uses: dart-lang/setup-dart@v1
         with:
-          sdk: 3.6.0
+          sdk: 3.6.2
 
-      - name: Install dependencies
+      - name: Use OpenSSL from Git for Windows
+        if: matrix.os == 'windows-2022'
+        shell: pwsh
+        run: |
+          $gitExe = (Get-Command git -ErrorAction SilentlyContinue).Source
+          if ($gitExe) {
+            # ...\Git\bin\git.exe -> ...\Git
+            $gitRoot = Split-Path (Split-Path $gitExe)
+          } else {
+            $gitRoot = Join-Path $env:ProgramFiles "Git"
+          }
+
+          $candidates = @(
+            (Join-Path $gitRoot "mingw64\bin"),
+            (Join-Path $gitRoot "usr\bin"),
+            (Join-Path $gitRoot "libexec\git-core")
+          )
+
+          $pf86 = ${env:ProgramFiles(x86)}
+          if ($pf86) {
+            $gitRoot86 = Join-Path $pf86 "Git"
+            $candidates += @(
+              (Join-Path $gitRoot86 "mingw64\bin"),
+              (Join-Path $gitRoot86 "usr\bin"),
+              (Join-Path $gitRoot86 "libexec\git-core")
+            )
+          }
+
+          $candidates = $candidates | Where-Object { Test-Path $_ } | Select-Object -Unique
+
+          $ssl = $null
+          $crypto = $null
+          $bin = $null
+
+          foreach ($dir in $candidates) {
+            $ssl = Get-ChildItem -Path $dir -File -Filter "libssl-3-x64.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
+            $crypto = Get-ChildItem -Path $dir -File -Filter "libcrypto-3-x64.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if (-not $ssl) {
+              $ssl = Get-ChildItem -Path $dir -File -Filter "libssl*.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
+            }
+            if (-not $crypto) {
+              $crypto = Get-ChildItem -Path $dir -File -Filter "libcrypto*.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
+            }
+            if ($ssl -and $crypto) {
+              $bin = $dir
+              break
+            }
+          }
+
+          if (-not ($ssl -and $crypto)) {
+            Write-Host "Candidatos verificados:"
+            $candidates | ForEach-Object { Write-Host "  - $_" }
+            throw "Não encontrei libssl/libcrypto do Git."
+          }
+
+          # Para o loader abrir por nome, basta adicionar ao PATH
+          $bin | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+
+          Write-Host "Usando OpenSSL do Git:"
+          Write-Host "  Bin: $bin"
+          Write-Host "  SSL: $($ssl.FullName)"
+          Write-Host "  Crypto: $($crypto.FullName)"
+
+      - name: Install OpenSSL (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev libssl3
+
+      - name: Install Dependencies
         run: dart pub get
 
-      - name: Run tests
+      - name: Run Tests (Linux - with heap corruption detection)
+        if: matrix.os == 'ubuntu-latest'
         env:
-          PDFPLUS_DISABLE_TSA: "1"
-        run: dart test
+          MALLOC_CHECK_: "3"
+          MALLOC_PERTURB_: "165"
+        run: |
+          dart test --coverage=coverage
+
+      - name: Generate LCOV report (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          dart pub global activate coverage
+          format_coverage --lcov --in=coverage --out=coverage/lcov.info --report-on=lib --packages=.dart_tool/package_config.json
+
+      - name: Upload coverage artifact (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: coverage/lcov.info
+
+      - name: Upload coverage to Codecov (Linux)
+        if: matrix.os == 'ubuntu-latest' && env.CODECOV_TOKEN != ''
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage/lcov.info
+          fail_ci_if_error: false
+          token: ${{ env.CODECOV_TOKEN }}
+
+      - name: Skip Codecov upload (missing token)
+        if: matrix.os == 'ubuntu-latest' && env.CODECOV_TOKEN == ''
+        run: |
+          echo "CODECOV_TOKEN is not configured; skipping Codecov upload."
+
+      - name: Run Tests (Windows)
+        if: matrix.os == 'windows-2022'
+        run: |
+          dart test
