@@ -8,23 +8,35 @@ import 'parser_fields.dart';
 /// Fast checks without fully parsing the document structure.
 class PdfQuickInfo {
   PdfQuickInfo._({
+    required this.hasPdfHeader,
+    required this.hasEofMarker,
     required this.pdfVersion,
+    required this.isEncrypted,
     required this.hasSignatures,
     required this.docMdpPermissionP,
   });
 
   factory PdfQuickInfo.fromBytes(Uint8List bytes) {
+    final hasPdfHeader = PdfParserFields.hasPdfHeader(bytes);
+    final hasEofMarker = PdfParserFields.hasEofMarker(bytes);
     final version = PdfParserFields.readPdfVersion(bytes);
+    final isEncrypted = PdfParserFields.hasEncryptDictionary(bytes);
     final hasSignatures = PdfParserFields.findByteRangeToken(bytes) != -1;
     final permissionP = PdfParserFields.extractDocMdpPermissionFromBytes(bytes);
     return PdfQuickInfo._(
+      hasPdfHeader: hasPdfHeader,
+      hasEofMarker: hasEofMarker,
       pdfVersion: version,
+      isEncrypted: isEncrypted,
       hasSignatures: hasSignatures,
       docMdpPermissionP: permissionP,
     );
   }
 
+  final bool hasPdfHeader;
+  final bool hasEofMarker;
   final double pdfVersion;
+  final bool isEncrypted;
   final bool hasSignatures;
   final int? docMdpPermissionP;
 

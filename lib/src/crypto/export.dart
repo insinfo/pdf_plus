@@ -1,4 +1,5 @@
 export 'base.dart';
+export 'platform_crypto.dart';
 export 'digests.dart';
 export 'md5.dart';
 export 'des.dart';
@@ -8,3 +9,6 @@ export 'pkcs7_padding.dart';
 export 'padded_block_cipher.dart';
 export 'hmac.dart';
 export 'sha1.dart';
+export 'rsa_pkcs1v15.dart';
+export 'openssh_ed25519.dart';
+export 'signature_adapter.dart';

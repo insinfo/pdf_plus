@@ -2,7 +2,7 @@
 
 Objetivo
 
-O mais importante nao e replicar nomes de APIs do `dart_pdf`, e sim garantir que
+O mais importante nao é replicar nomes de APIs do `dart_pdf`, e sim garantir que
 `pdf_plus` ofereca os recursos necessarios para:
 
 1) criacao visual de assinatura eletronica (desenho em PDF com textos/imagens)

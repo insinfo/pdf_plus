@@ -1,14 +1,14 @@
 import 'dart:typed_data';
 
 import 'package:pdf_plus/src/crypto/asn1/asn1.dart';
-import 'package:pdf_plus/src/crypto/sha256.dart';
+import 'package:pdf_plus/src/crypto/signature_adapter.dart';
+import '../crypto/pdf_crypto.dart';
 
-import 'package:pdf_plus/src/crypto/base.dart';
-import 'package:pdf_plus/src/crypto/pkcs1.dart';
-import 'package:pdf_plus/src/crypto/rsa_engine.dart';
 import 'package:pdf_plus/src/crypto/rsa_keys.dart';
 
 import 'pem_utils.dart';
+
+final SignatureAdapter _pdfSignatureAdapter = SignatureAdapter();
 
 /// Builds CMS/PKCS#7 structures for PDF signatures.
 class PdfCmsSigner {
@@ -33,9 +33,7 @@ class PdfCmsSigner {
       signingTime: (signingTime ?? DateTime.now().toUtc()),
       signerCertDer: signerCertDer,
     );
-    final signedAttrsDigest = Uint8List.fromList(
-      sha256.convert(signedAttrsDer).bytes,
-    );
+    final signedAttrsDigest = PdfCrypto.sha256(signedAttrsDer);
 
     final key = PdfPemUtils.rsaPrivateKeyFromPem(privateKeyPem);
     final signature = _rsaSignDigestSha256(signedAttrsDigest, key);
@@ -46,6 +44,8 @@ class PdfCmsSigner {
       extraCertsDer: extraCertsDer,
       signedAttrsDer: signedAttrsDer,
       signature: signature,
+      digestAlgorithmOid: '2.16.840.1.101.3.4.2.1',
+      signatureAlgorithmOid: '1.2.840.113549.1.1.1',
     );
   }
 
@@ -61,6 +61,8 @@ class PdfCmsSigner {
     required Uint8List signerCertDer,
     List<Uint8List> extraCertsDer = const <Uint8List>[],
     DateTime? signingTime,
+    String digestAlgorithmOid = '2.16.840.1.101.3.4.2.1',
+    String signatureAlgorithmOid = '1.2.840.113549.1.1.1',
     required Future<Uint8List> Function(
       Uint8List signedAttrsDer,
       Uint8List signedAttrsDigest,
@@ -72,9 +74,7 @@ class PdfCmsSigner {
       signingTime: signingTime ?? DateTime.now().toUtc(),
       signerCertDer: signerCertDer,
     );
-    final signedAttrsDigest = Uint8List.fromList(
-      sha256.convert(signedAttrsDer).bytes,
-    );
+    final signedAttrsDigest = PdfCrypto.sha256(signedAttrsDer);
 
     final signature = await signCallback(signedAttrsDer, signedAttrsDigest);
     if (signature.isEmpty) {
@@ -96,6 +96,8 @@ class PdfCmsSigner {
       signedAttrsDer: signedAttrsDer,
       signature: signature,
       timestampToken: timestampToken,
+      digestAlgorithmOid: digestAlgorithmOid,
+      signatureAlgorithmOid: signatureAlgorithmOid,
     );
   }
 
@@ -136,7 +138,7 @@ class PdfCmsSigner {
   }
 
   Uint8List _encodeSigningCertificateV2(Uint8List signerCertDer) {
-    final certHash = Uint8List.fromList(sha256.convert(signerCertDer).bytes);
+    final certHash = PdfCrypto.sha256(signerCertDer);
     final essCertId = _encodeSequence([
       ASN1OctetString(certHash).encodedBytes,
     ]);
@@ -150,6 +152,8 @@ class PdfCmsSigner {
     required List<Uint8List> extraCertsDer,
     required Uint8List signedAttrsDer,
     required Uint8List signature,
+    required String digestAlgorithmOid,
+    required String signatureAlgorithmOid,
     Uint8List? timestampToken,
   }) {
     final signerInfoDer = _buildSignerInfoDer(
@@ -157,10 +161,15 @@ class PdfCmsSigner {
       signedAttrsDer: signedAttrsDer,
       signature: signature,
       timestampToken: timestampToken,
+      digestAlgorithmOid: digestAlgorithmOid,
+      signatureAlgorithmOid: signatureAlgorithmOid,
     );
 
     final digestAlgsDer = _encodeSet([
-      _encodeAlgorithmIdentifier('2.16.840.1.101.3.4.2.1'),
+      _encodeAlgorithmIdentifier(
+        digestAlgorithmOid,
+        includeNull: _algorithmIdentifierUsesNull(digestAlgorithmOid),
+      ),
     ]);
 
     final encapContentInfoDer = _encodeSequence([
@@ -194,11 +203,19 @@ class PdfCmsSigner {
     required Uint8List signerCertDer,
     required Uint8List signedAttrsDer,
     required Uint8List signature,
+    required String digestAlgorithmOid,
+    required String signatureAlgorithmOid,
     Uint8List? timestampToken,
   }) {
     final issuerAndSerialDer = _issuerAndSerialDerFromCert(signerCertDer);
-    final digestAlgDer = _encodeAlgorithmIdentifier('2.16.840.1.101.3.4.2.1');
-    final sigAlgDer = _encodeAlgorithmIdentifier('1.2.840.113549.1.1.1');
+    final digestAlgDer = _encodeAlgorithmIdentifier(
+      digestAlgorithmOid,
+      includeNull: _algorithmIdentifierUsesNull(digestAlgorithmOid),
+    );
+    final sigAlgDer = _encodeAlgorithmIdentifier(
+      signatureAlgorithmOid,
+      includeNull: _algorithmIdentifierUsesNull(signatureAlgorithmOid),
+    );
     final signedAttrsTaggedDer =
         _encodeTagged(0, signedAttrsDer, explicit: false);
 
@@ -250,11 +267,12 @@ class PdfCmsSigner {
     ]);
   }
 
-  Uint8List _encodeAlgorithmIdentifier(String oid) {
-    return _encodeSequence([
-      _oid(oid),
-      ASN1Null().encodedBytes,
-    ]);
+  Uint8List _encodeAlgorithmIdentifier(String oid, {bool includeNull = true}) {
+    final elements = <Uint8List>[_oid(oid)];
+    if (includeNull) {
+      elements.add(ASN1Null().encodedBytes);
+    }
+    return _encodeSequence(elements);
   }
 
   Uint8List _oid(String oid) {
@@ -337,19 +355,21 @@ class PdfCmsSigner {
     }
     return out;
   }
+
+  bool _algorithmIdentifierUsesNull(String oid) {
+    // Para RSA clássico e digest algs tradicionais, NULL é mantido.
+    // Para EdDSA a recomendação é sem parâmetros.
+    if (oid == '1.3.101.112' || oid == '1.3.101.113') {
+      return false;
+    }
+    return true;
+  }
 }
 
 Uint8List _rsaSignDigestSha256(Uint8List digest, RSAPrivateKey key) {
-  final algId = ASN1Sequence()
-    ..add(ASN1ObjectIdentifier.fromComponentString('2.16.840.1.101.3.4.2.1'))
-    ..add(ASN1Null());
-  final di = ASN1Sequence()
-    ..add(algId)
-    ..add(ASN1OctetString(digest));
-  final digestInfo = di.encodedBytes;
-
-  final signer = PKCS1Encoding(RSAEngine())
-    ..init(true, PrivateKeyParameter<RSAPrivateKey>(key));
-  final sig = signer.process(digestInfo);
-  return Uint8List.fromList(sig);
+  return _pdfSignatureAdapter.rsaPkcs1v15SignDigest(
+    privateKey: key,
+    digest: digest,
+    digestOid: '2.16.840.1.101.3.4.2.1',
+  );
 }

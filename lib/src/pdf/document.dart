@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-import 'dart:math' as math;
 import 'dart:typed_data';
 
-import 'package:pdf_plus/src/crypto/sha256.dart';
 import 'package:pdf_plus/src/pdf/parsing/pdf_document_parser.dart';
+import 'crypto/pdf_crypto.dart';
 import 'io/pdf_random_access_reader.dart';
 
 import 'document_parser.dart';
@@ -236,11 +235,12 @@ class PdfDocument {
   /// Generates or returns the document ID.
   Uint8List get documentID {
     if (_documentID == null) {
-      final rnd = math.Random.secure();
-      _documentID = Uint8List.fromList(sha256
-          .convert(DateTime.now().toIso8601String().codeUnits +
-              List<int>.generate(32, (_) => rnd.nextInt(256)))
-          .bytes);
+      final now = Uint8List.fromList(DateTime.now().toIso8601String().codeUnits);
+      final random = PdfCrypto.randomBytes(32);
+      final seed = Uint8List(now.length + random.length);
+      seed.setRange(0, now.length, now);
+      seed.setRange(now.length, seed.length, random);
+      _documentID = PdfCrypto.sha256(seed);
     }
 
     return _documentID!;

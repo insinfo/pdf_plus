@@ -2,14 +2,9 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:pdf_plus/src/crypto/asn1/asn1.dart';
+import 'package:pdf_plus/src/crypto/signature_adapter.dart';
+import '../crypto/pdf_crypto.dart';
 
-import 'package:pdf_plus/src/crypto/sha1.dart';
-import 'package:pdf_plus/src/crypto/sha256.dart';
-import 'package:pdf_plus/src/crypto/sha512.dart';
-
-import 'package:pdf_plus/src/crypto/base.dart';
-import 'package:pdf_plus/src/crypto/pkcs1.dart';
-import 'package:pdf_plus/src/crypto/rsa_engine.dart';
 import 'package:pdf_plus/src/crypto/rsa_keys.dart';
 import 'package:pdf_plus/src/pdf/io/pdf_http_fetcher_base.dart';
 
@@ -18,6 +13,8 @@ import '../parsing/pdf_document_info.dart';
 import '../format/indirect.dart';
 import '../format/null_value.dart';
 import 'package:pdf_plus/src/pdf/pdf_names.dart';
+
+final SignatureAdapter _signatureAdapter = SignatureAdapter();
 
 class PdfSignatureValidationResult {
   const PdfSignatureValidationResult({
@@ -108,7 +105,7 @@ class PdfCmsValidator {
     PdfHttpFetcherBase? certificateFetcher,
     bool requireTrustedChain = false,
   }) async {
-    final cmsValid = _verifyCmsSignature(cmsBytes);
+    final cmsValid = await _verifyCmsSignature(cmsBytes);
     bool? chainTrusted;
     List<String>? chainErrors;
     String? message;
@@ -191,6 +188,7 @@ class PdfSignatureInfoReport {
     this.chainTrusted,
     this.chainErrors,
     this.certValid,
+    this.validationStatus = PdfSignatureValidationStatus.indeterminate,
     this.message,
   });
 
@@ -211,7 +209,14 @@ class PdfSignatureInfoReport {
   final bool? chainTrusted;
   final List<String>? chainErrors;
   final bool? certValid;
+  final PdfSignatureValidationStatus validationStatus;
   final String? message;
+}
+
+enum PdfSignatureValidationStatus {
+  approved,
+  indeterminate,
+  rejected,
 }
 
 class PdfSignatureSignedAttrsReport {
@@ -419,6 +424,10 @@ class PdfSignatureValidator {
     bool strictRevocation = false,
     bool fetchCrls = false,
     bool fetchOcsp = false,
+    bool validateTemporal = false,
+    bool temporalUseSigningTime = false,
+    DateTime? validationTime,
+    bool temporalExpiredNeedsLtv = true,
     PdfRevocationDataProvider? revocationDataProvider,
     PdfHttpFetcherBase? certificateFetcher,
     bool includeCertificates = false,
@@ -484,6 +493,7 @@ class PdfSignatureValidator {
           chainTrusted: null,
           chainErrors: null,
           certValid: null,
+          validationStatus: PdfSignatureValidationStatus.rejected,
           message: 'ByteRange inconsistente.',
         ));
         continue;
@@ -509,6 +519,7 @@ class PdfSignatureValidator {
           chainTrusted: null,
           chainErrors: null,
           certValid: null,
+          validationStatus: PdfSignatureValidationStatus.rejected,
           message: 'Conteúdo de assinatura ausente ou inválido.',
         ));
         continue;
@@ -519,7 +530,7 @@ class PdfSignatureValidator {
       final signerCertInfo =
           includeCertificates ? _extractSignerCertificateInfo(contents) : null;
 
-      cmsValid = _verifyCmsSignature(contents);
+      cmsValid = await _verifyCmsSignature(contents);
       signingTime = _extractSigningTimeFromCms(contents);
       if (signingTime == null && fieldInfo?.signingTimeRaw != null) {
         signingTime = _parsePdfDate(fieldInfo!.signingTimeRaw!);
@@ -585,6 +596,32 @@ class PdfSignatureValidator {
         }
       }
 
+      final temporalResult = _evaluateTemporalStatus(
+        validateTemporal: validateTemporal,
+        temporalUseSigningTime: temporalUseSigningTime,
+        validationTime: validationTime,
+        temporalExpiredNeedsLtv: temporalExpiredNeedsLtv,
+        signerCertInfo: signerCertInfo,
+        signingTime: signingTime,
+      );
+
+      if (temporalResult.certValidOverride != null) {
+        certValid = temporalResult.certValidOverride;
+      }
+
+      final status = _deriveValidationStatus(
+        intact: true,
+        cmsValid: cmsValid,
+        digestValid: digestValid,
+        chainTrusted: chainTrusted,
+        certValid: certValid,
+        temporalStatusOverride: temporalResult.statusOverride,
+      );
+
+      if (temporalResult.messageOverride != null) {
+        message = temporalResult.messageOverride;
+      }
+
       results.add(PdfSignatureInfoReport(
         signatureIndex: i,
         cmsValid: cmsValid,
@@ -603,6 +640,7 @@ class PdfSignatureValidator {
         chainTrusted: chainTrusted,
         chainErrors: chainErrors,
         certValid: certValid,
+        validationStatus: status,
         message: message,
       ));
     }
@@ -698,6 +736,104 @@ class PdfSignatureExtractor {
 
     return PdfSignatureExtractionReport(signatures: results);
   }
+}
+
+class _TemporalEvaluationResult {
+  const _TemporalEvaluationResult({
+    this.statusOverride,
+    this.certValidOverride,
+    this.messageOverride,
+  });
+
+  final PdfSignatureValidationStatus? statusOverride;
+  final bool? certValidOverride;
+  final String? messageOverride;
+}
+
+PdfSignatureValidationStatus _deriveValidationStatus({
+  required bool intact,
+  required bool cmsValid,
+  required bool digestValid,
+  required bool? chainTrusted,
+  required bool? certValid,
+  PdfSignatureValidationStatus? temporalStatusOverride,
+}) {
+  if (!intact || !cmsValid || !digestValid) {
+    return PdfSignatureValidationStatus.rejected;
+  }
+  if (chainTrusted == false || certValid == false) {
+    return PdfSignatureValidationStatus.rejected;
+  }
+  if (temporalStatusOverride != null) {
+    return temporalStatusOverride;
+  }
+  if (chainTrusted == null || certValid == null) {
+    return PdfSignatureValidationStatus.indeterminate;
+  }
+  return PdfSignatureValidationStatus.approved;
+}
+
+_TemporalEvaluationResult _evaluateTemporalStatus({
+  required bool validateTemporal,
+  required bool temporalUseSigningTime,
+  required DateTime? validationTime,
+  required bool temporalExpiredNeedsLtv,
+  required PdfSignatureCertificateInfo? signerCertInfo,
+  required DateTime? signingTime,
+}) {
+  if (!validateTemporal || signerCertInfo == null) {
+    return const _TemporalEvaluationResult();
+  }
+
+  final notBefore = signerCertInfo.notBefore?.toUtc();
+  final notAfter = signerCertInfo.notAfter?.toUtc();
+  if (notBefore == null || notAfter == null) {
+    return const _TemporalEvaluationResult(
+      statusOverride: PdfSignatureValidationStatus.indeterminate,
+      messageOverride: 'Validação temporal indeterminada: período do certificado ausente.',
+    );
+  }
+
+  if (temporalUseSigningTime) {
+    final st = signingTime?.toUtc();
+    if (st == null) {
+      return const _TemporalEvaluationResult(
+        statusOverride: PdfSignatureValidationStatus.indeterminate,
+        messageOverride: 'Validação temporal indeterminada: signingTime ausente.',
+      );
+    }
+    if (st.isBefore(notBefore) || st.isAfter(notAfter)) {
+      return const _TemporalEvaluationResult(
+        statusOverride: PdfSignatureValidationStatus.rejected,
+        certValidOverride: false,
+        messageOverride: 'Assinatura fora do período de validade do certificado.',
+      );
+    }
+    return const _TemporalEvaluationResult();
+  }
+
+  final vt = (validationTime ?? DateTime.now()).toUtc();
+  if (vt.isBefore(notBefore)) {
+    return const _TemporalEvaluationResult(
+      statusOverride: PdfSignatureValidationStatus.rejected,
+      certValidOverride: false,
+      messageOverride: 'Certificado ainda não era válido no instante de validação.',
+    );
+  }
+  if (vt.isAfter(notAfter)) {
+    if (temporalExpiredNeedsLtv) {
+      return const _TemporalEvaluationResult(
+        statusOverride: PdfSignatureValidationStatus.indeterminate,
+        messageOverride: 'Certificado expirado no instante de validação (LTV exigido).',
+      );
+    }
+    return const _TemporalEvaluationResult(
+      statusOverride: PdfSignatureValidationStatus.rejected,
+      certValidOverride: false,
+      messageOverride: 'Certificado expirado no instante de validação.',
+    );
+  }
+  return const _TemporalEvaluationResult();
 }
 
 PdfSignatureDocMdpInfo _buildDocMdpInfo(int index, int? permissionP) {
@@ -1144,15 +1280,12 @@ bool _verifyX509Signature(Uint8List certDer, RSAPublicKey key) {
       sigBytes = sigBytes.sublist(1);
     }
 
-    final digest = _digestForOid(tbs.encodedBytes, digestOid);
-    if (digest == null) return false;
-    final digestInfo = _buildDigestInfoForDigest(digest, digestOid);
-    if (digestInfo == null) return false;
-
-    final engine = PKCS1Encoding(RSAEngine())
-      ..init(false, PublicKeyParameter<RSAPublicKey>(key));
-    final decrypted = engine.process(sigBytes);
-    return _listEquals(decrypted, digestInfo);
+    return _signatureAdapter.rsaPkcs1v15VerifyData(
+      publicKey: key,
+      data: tbs.encodedBytes,
+      signature: sigBytes,
+      digestOid: digestOid,
+    );
   } catch (_) {
     return false;
   }
@@ -1169,12 +1302,16 @@ String? _readCertSignatureAlgorithmOid(ASN1Object obj) {
 String? _signatureOidToDigestOid(String? signatureOid) {
   switch (signatureOid) {
     case '1.2.840.113549.1.1.5':
+    case '1.2.840.10045.4.1':
       return '1.3.14.3.2.26'; // sha1
     case '1.2.840.113549.1.1.11':
+    case '1.2.840.10045.4.3.2':
       return '2.16.840.1.101.3.4.2.1'; // sha256
     case '1.2.840.113549.1.1.12':
+    case '1.2.840.10045.4.3.3':
       return '2.16.840.1.101.3.4.2.2'; // sha384
     case '1.2.840.113549.1.1.13':
+    case '1.2.840.10045.4.3.4':
       return '2.16.840.1.101.3.4.2.3'; // sha512
     default:
       return '2.16.840.1.101.3.4.2.1';
@@ -1464,14 +1601,14 @@ Uint8List _buildOcspRequest({
     return Uint8List(0);
   }
 
-  final issuerNameHash = sha1.convert(issuerTbs.subject).bytes;
+  final issuerNameHash = PdfCrypto.sha1(issuerTbs.subject);
   final issuerKeyHash = _computeIssuerKeyHash(issuerCertDer);
 
   final certId = ASN1Sequence()
     ..add(ASN1Sequence()
       ..add(ASN1ObjectIdentifier.fromComponentString('1.3.14.3.2.26'))
       ..add(ASN1Null()))
-    ..add(ASN1OctetString(Uint8List.fromList(issuerNameHash)))
+    ..add(ASN1OctetString(issuerNameHash))
     ..add(ASN1OctetString(issuerKeyHash))
     ..add(ASN1Integer(signerSerial));
 
@@ -1488,7 +1625,7 @@ Uint8List _computeIssuerKeyHash(Uint8List issuerCertDer) {
   final rsaSeq = ASN1Sequence()
     ..add(ASN1Integer(key.modulus))
     ..add(ASN1Integer(key.exponent));
-  return Uint8List.fromList(sha1.convert(rsaSeq.encodedBytes).bytes);
+  return PdfCrypto.sha1(rsaSeq.encodedBytes);
 }
 
 enum _OcspCertStatus { good, revoked, unknown }
@@ -1606,14 +1743,10 @@ Uint8List _computeByteRangeDigestForOid(
   final len2 = range[3];
   final part1 = bytes.sublist(start1, start1 + len1);
   final part2 = bytes.sublist(start2, start2 + len2);
-  final data = <int>[...part1, ...part2];
-  if (digestOid == '1.3.14.3.2.26') {
-    return Uint8List.fromList(sha1.convert(data).bytes);
-  }
-  if (digestOid == '2.16.840.1.101.3.4.2.3') {
-    return Uint8List.fromList(sha512.convert(data).bytes);
-  }
-  return Uint8List.fromList(sha256.convert(data).bytes);
+  final data = Uint8List(part1.length + part2.length);
+  data.setRange(0, part1.length, part1);
+  data.setRange(part1.length, data.length, part2);
+  return PdfCrypto.digestForOid(data, digestOid);
 }
 
 Uint8List? _extractContentsFromByteRange(
@@ -1791,7 +1924,7 @@ _NormalizeResult? _normalizeElement(Uint8List input, int offset) {
   return _NormalizeResult(out, contentEnd);
 }
 
-bool _verifyCmsSignature(Uint8List cmsBytes) {
+Future<bool> _verifyCmsSignature(Uint8List cmsBytes) async {
   try {
     final parsed = _parseCmsSignerInfoAndCert(cmsBytes);
     if (parsed == null || parsed.signerInfo == null || parsed.certs.isEmpty) {
@@ -1808,6 +1941,7 @@ bool _verifyCmsSignature(Uint8List cmsBytes) {
     final signedAttrsTagged = parsedSigner.signedAttrsTagged!;
     final signatureBytes = parsedSigner.signature!;
     final digestOid = parsedSigner.digestOid;
+    final signatureAlgorithmOid = parsedSigner.signatureAlgorithmOid;
 
     final candidates = _extractSignedAttrsCandidates(signedAttrsTagged);
     final signerSid = _parseSignerIdentifier(signerInfo);
@@ -1819,22 +1953,17 @@ bool _verifyCmsSignature(Uint8List cmsBytes) {
     ];
 
     for (final certDer in certsToTry) {
-      final publicKey = _rsaPublicKeyFromCert(certDer);
-      if (publicKey == null) continue;
+      final spki = _spkiInfoFromCert(certDer);
+      if (spki == null) continue;
       for (final data in candidates) {
-        if (_verifyRsaWithDigest(publicKey, data, signatureBytes, digestOid)) {
-          return true;
-        }
-      }
-
-      final engine = PKCS1Encoding(RSAEngine())
-        ..init(false, PublicKeyParameter<RSAPublicKey>(publicKey));
-      final decrypted = engine.process(signatureBytes);
-
-      for (final data in candidates) {
-        final digestInfo = _buildDigestInfoWithDigest(data, digestOid);
-        if (digestInfo == null) continue;
-        if (_listEquals(decrypted, digestInfo)) {
+        final ok = await _verifyWithSignerAlgorithm(
+          spki: spki,
+          data: data,
+          signature: signatureBytes,
+          digestOid: digestOid,
+          signatureAlgorithmOid: signatureAlgorithmOid,
+        );
+        if (ok) {
           return true;
         }
       }
@@ -2682,102 +2811,57 @@ bool _verifyRsaWithDigest(
   Uint8List signature,
   String? digestOid,
 ) {
-  try {
-    final algorithm = _digestOidToSigner(digestOid);
-    if (algorithm == null) return false;
-    final signer = Signer(algorithm)
-      ..init(false, PublicKeyParameter<RSAPublicKey>(publicKey));
-    return signer.verifySignature(data, RSASignature(signature));
-  } catch (_) {
+  return _signatureAdapter.rsaPkcs1v15VerifyData(
+    publicKey: publicKey,
+    data: data,
+    signature: signature,
+    digestOid: digestOid,
+  );
+}
+
+Future<bool> _verifyWithSignerAlgorithm({
+  required _SpkiInfo spki,
+  required Uint8List data,
+  required Uint8List signature,
+  required String? digestOid,
+  required String? signatureAlgorithmOid,
+}) async {
+  if (_isEd25519Signature(signatureAlgorithmOid) ||
+      spki.algorithmOid == _oidEd25519) {
+    try {
+      return await _signatureAdapter.ed25519Verify(
+        spkiPublicKey: spki.spkiDer,
+        data: data,
+        signature: signature,
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
+  if (_isEcdsaSignature(signatureAlgorithmOid) ||
+      spki.algorithmOid == _oidEcPublicKey) {
+    final namedCurve = _curveNameFromOid(spki.curveOid);
+    if (namedCurve == null) return false;
+    final hashAlgorithm =
+        _hashAlgorithmForSignature(digestOid, signatureAlgorithmOid);
+    try {
+      return await _signatureAdapter.ecdsaVerifyDer(
+        namedCurve: namedCurve,
+        hashAlgorithm: hashAlgorithm,
+        spkiPublicKey: spki.spkiDer,
+        data: data,
+        derSignature: signature,
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
+  if (spki.rsaKey == null) {
     return false;
   }
-}
-
-String? _digestOidToSigner(String? oid) {
-  switch (oid) {
-    case '1.3.14.3.2.26':
-      return 'SHA-1/RSA';
-    case '2.16.840.1.101.3.4.2.1':
-      return 'SHA-256/RSA';
-    case '2.16.840.1.101.3.4.2.3':
-      return 'SHA-512/RSA';
-    default:
-      return 'SHA-256/RSA';
-  }
-}
-
-Uint8List? _buildDigestInfoWithDigest(Uint8List data, String? oid) {
-  final digest = _digestForOid(data, oid);
-  if (digest == null) return null;
-  switch (oid) {
-    case '1.3.14.3.2.26':
-      return _buildDigestInfoSha1(digest);
-    case '2.16.840.1.101.3.4.2.3':
-      return _buildDigestInfoSha512(digest);
-    case '2.16.840.1.101.3.4.2.1':
-    default:
-      return _buildDigestInfoSha256(digest);
-  }
-}
-
-Uint8List? _digestForOid(Uint8List data, String? oid) {
-  if (oid == '1.3.14.3.2.26') {
-    final digest = sha1.convert(data).bytes;
-    return Uint8List.fromList(digest);
-  }
-  if (oid == '2.16.840.1.101.3.4.2.3') {
-    final digest = sha512.convert(data).bytes;
-    return Uint8List.fromList(digest);
-  }
-  final digest = sha256.convert(data).bytes;
-  return Uint8List.fromList(digest);
-}
-
-Uint8List _buildDigestInfoSha1(Uint8List digest) {
-  final algId = ASN1Sequence()
-    ..add(ASN1ObjectIdentifier.fromComponentString('1.3.14.3.2.26'))
-    ..add(ASN1Null());
-  final digestOctet = ASN1OctetString(digest);
-  final seq = ASN1Sequence()
-    ..add(algId)
-    ..add(digestOctet);
-  return seq.encodedBytes;
-}
-
-Uint8List _buildDigestInfoSha512(Uint8List digest) {
-  final algId = ASN1Sequence()
-    ..add(ASN1ObjectIdentifier.fromComponentString('2.16.840.1.101.3.4.2.3'))
-    ..add(ASN1Null());
-  final digestOctet = ASN1OctetString(digest);
-  final seq = ASN1Sequence()
-    ..add(algId)
-    ..add(digestOctet);
-  return seq.encodedBytes;
-}
-
-Uint8List _buildDigestInfoSha384(Uint8List digest) {
-  final algId = ASN1Sequence()
-    ..add(ASN1ObjectIdentifier.fromComponentString('2.16.840.1.101.3.4.2.2'))
-    ..add(ASN1Null());
-  final digestOctet = ASN1OctetString(digest);
-  final seq = ASN1Sequence()
-    ..add(algId)
-    ..add(digestOctet);
-  return seq.encodedBytes;
-}
-
-Uint8List? _buildDigestInfoForDigest(Uint8List digest, String? oid) {
-  switch (oid) {
-    case '1.3.14.3.2.26':
-      return _buildDigestInfoSha1(digest);
-    case '2.16.840.1.101.3.4.2.2':
-      return _buildDigestInfoSha384(digest);
-    case '2.16.840.1.101.3.4.2.3':
-      return _buildDigestInfoSha512(digest);
-    case '2.16.840.1.101.3.4.2.1':
-    default:
-      return _buildDigestInfoSha256(digest);
-  }
+  return _verifyRsaWithDigest(spki.rsaKey!, data, signature, digestOid);
 }
 
 class _SignerInfoParsed {
@@ -2785,11 +2869,13 @@ class _SignerInfoParsed {
     required this.signedAttrsTagged,
     required this.signature,
     required this.digestOid,
+    required this.signatureAlgorithmOid,
   });
 
   final ASN1Object? signedAttrsTagged;
   final Uint8List? signature;
   final String? digestOid;
+  final String? signatureAlgorithmOid;
 }
 
 class _SignerId {
@@ -2797,6 +2883,23 @@ class _SignerId {
   final Uint8List issuerDer;
   final BigInt serial;
 }
+
+class _SpkiInfo {
+  _SpkiInfo({
+    required this.spkiDer,
+    required this.algorithmOid,
+    this.curveOid,
+    this.rsaKey,
+  });
+
+  final Uint8List spkiDer;
+  final String algorithmOid;
+  final String? curveOid;
+  final RSAPublicKey? rsaKey;
+}
+
+const _oidEcPublicKey = '1.2.840.10045.2.1';
+const _oidEd25519 = '1.3.101.112';
 
 bool _looksLikeSignerInfos(ASN1Set set) {
   if (set.elements.isEmpty) return false;
@@ -2918,6 +3021,7 @@ _SignerInfoParsed _parseSignerInfo(ASN1Sequence signerInfo) {
   ASN1Object? signedAttrsTagged;
   Uint8List? signature;
   String? digestOid;
+  String? signatureAlgorithmOid;
 
   if (signerInfo.elements.length >= 6) {
     final sa = signerInfo.elements[3];
@@ -2927,6 +3031,14 @@ _SignerInfoParsed _parseSignerInfo(ASN1Sequence signerInfo) {
     final sigEl = signerInfo.elements[5];
     if (sigEl is ASN1OctetString) {
       signature = sigEl.valueBytes();
+    }
+    final sigAlg = signerInfo.elements[4];
+    final sigAlgSeq = sigAlg is ASN1Sequence ? sigAlg : _asAsn1Sequence(sigAlg);
+    if (sigAlgSeq != null && sigAlgSeq.elements.isNotEmpty) {
+      final first = sigAlgSeq.elements.first;
+      if (first is ASN1ObjectIdentifier) {
+        signatureAlgorithmOid = _oidToString(first);
+      }
     }
     final digestAlg = signerInfo.elements[2];
     final digestAlgSeq =
@@ -2947,14 +3059,26 @@ _SignerInfoParsed _parseSignerInfo(ASN1Sequence signerInfo) {
       if (signature == null && el is ASN1OctetString) {
         signature = el.valueBytes();
       }
+      final seq = el is ASN1Sequence ? el : _asAsn1Sequence(el);
       if (digestOid == null) {
-        final seq = el is ASN1Sequence ? el : _asAsn1Sequence(el);
         if (seq == null || seq.elements.isEmpty) {
           continue;
         }
         final first = seq.elements.first;
         if (first is ASN1ObjectIdentifier) {
           digestOid = _oidToString(first);
+        }
+      }
+      if (signatureAlgorithmOid == null) {
+        if (seq == null || seq.elements.isEmpty) {
+          continue;
+        }
+        final first = seq.elements.first;
+        if (first is ASN1ObjectIdentifier) {
+          final oid = _oidToString(first);
+          if (oid != null && _isKnownSignatureAlgorithmOid(oid)) {
+            signatureAlgorithmOid = oid;
+          }
         }
       }
     }
@@ -2964,10 +3088,15 @@ _SignerInfoParsed _parseSignerInfo(ASN1Sequence signerInfo) {
     signedAttrsTagged: signedAttrsTagged,
     signature: signature,
     digestOid: digestOid,
+    signatureAlgorithmOid: signatureAlgorithmOid,
   );
 }
 
 RSAPublicKey? _rsaPublicKeyFromCert(Uint8List certDer) {
+  return _spkiInfoFromCert(certDer)?.rsaKey;
+}
+
+_SpkiInfo? _spkiInfoFromCert(Uint8List certDer) {
   try {
     final certSeqObj = ASN1Parser(certDer).nextObject();
     final certSeq = certSeqObj is ASN1Sequence ? certSeqObj : null;
@@ -2979,29 +3108,98 @@ RSAPublicKey? _rsaPublicKeyFromCert(Uint8List certDer) {
       idx = 1;
     }
     final spki = tbs.elements[idx + 5] as ASN1Sequence;
+    final algSeq = _asAsn1Sequence(spki.elements[0]);
+    if (algSeq == null || algSeq.elements.isEmpty) return null;
+    final algOidObj = algSeq.elements.first;
+    if (algOidObj is! ASN1ObjectIdentifier) return null;
+    final algorithmOid = _oidToString(algOidObj);
+    if (algorithmOid == null) return null;
+    String? curveOid;
+    if (algSeq.elements.length > 1 && algSeq.elements[1] is ASN1ObjectIdentifier) {
+      curveOid = _oidToString(algSeq.elements[1] as ASN1ObjectIdentifier);
+    }
+
+    RSAPublicKey? rsaKey;
     final pubKeyBitString = spki.elements[1] as ASN1BitString;
     var pubBytes = pubKeyBitString.valueBytes();
     if (pubBytes.isNotEmpty && pubBytes.first == 0x00) {
       pubBytes = pubBytes.sublist(1);
     }
+    if (algorithmOid == '1.2.840.113549.1.1.1') {
+      final rsaSeq = ASN1Parser(pubBytes).nextObject() as ASN1Sequence;
+      final modulus = (rsaSeq.elements[0] as ASN1Integer).valueAsBigInteger;
+      final exponent = (rsaSeq.elements[1] as ASN1Integer).valueAsBigInteger;
+      rsaKey = RSAPublicKey(modulus, exponent);
+    }
 
-    final rsaSeq = ASN1Parser(pubBytes).nextObject() as ASN1Sequence;
-    final modulus = (rsaSeq.elements[0] as ASN1Integer).valueAsBigInteger;
-    final exponent = (rsaSeq.elements[1] as ASN1Integer).valueAsBigInteger;
-    return RSAPublicKey(modulus, exponent);
+    return _SpkiInfo(
+      spkiDer: spki.encodedBytes,
+      algorithmOid: algorithmOid,
+      curveOid: curveOid,
+      rsaKey: rsaKey,
+    );
   } catch (_) {
     return null;
   }
 }
 
-Uint8List _buildDigestInfoSha256(Uint8List digest) {
-  final algId = ASN1Sequence()
-    ..add(ASN1ObjectIdentifier.fromComponentString('2.16.840.1.101.3.4.2.1'))
-    ..add(ASN1Null());
-  final di = ASN1Sequence()
-    ..add(algId)
-    ..add(ASN1OctetString(digest));
-  return di.encodedBytes;
+bool _isKnownSignatureAlgorithmOid(String oid) {
+  return oid == '1.2.840.113549.1.1.1' ||
+      oid == '1.2.840.113549.1.1.5' ||
+      oid == '1.2.840.113549.1.1.11' ||
+      oid == '1.2.840.113549.1.1.12' ||
+      oid == '1.2.840.113549.1.1.13' ||
+      _isEcdsaSignature(oid) ||
+      _isEd25519Signature(oid);
+}
+
+bool _isEcdsaSignature(String? oid) {
+  return oid == '1.2.840.10045.4.3.2' ||
+      oid == '1.2.840.10045.4.3.3' ||
+      oid == '1.2.840.10045.4.3.4' ||
+      oid == '1.2.840.10045.4.1';
+}
+
+bool _isEd25519Signature(String? oid) => oid == _oidEd25519;
+
+String _hashAlgorithmForSignature(String? digestOid, String? signatureOid) {
+  switch (digestOid) {
+    case '1.3.14.3.2.26':
+      return 'SHA-1';
+    case '2.16.840.1.101.3.4.2.2':
+      return 'SHA-384';
+    case '2.16.840.1.101.3.4.2.3':
+      return 'SHA-512';
+    case '2.16.840.1.101.3.4.2.1':
+      return 'SHA-256';
+  }
+  switch (signatureOid) {
+    case '1.2.840.10045.4.3.3':
+      return 'SHA-384';
+    case '1.2.840.10045.4.3.4':
+      return 'SHA-512';
+    default:
+      return 'SHA-256';
+  }
+}
+
+String? _curveNameFromOid(String? curveOid) {
+  switch (curveOid) {
+    case '1.2.840.10045.3.1.7':
+      return 'P-256';
+    case '1.3.132.0.34':
+      return 'P-384';
+    case '1.3.132.0.35':
+      return 'P-521';
+    case '1.3.36.3.3.2.8.1.1.7':
+      return 'BRAINPOOLP256R1';
+    case '1.3.36.3.3.2.8.1.1.11':
+      return 'P-384';
+    case '1.3.36.3.3.2.8.1.1.13':
+      return 'BRAINPOOLP512R1';
+    default:
+      return null;
+  }
 }
 
 Uint8List _wrapSet(Uint8List content) {

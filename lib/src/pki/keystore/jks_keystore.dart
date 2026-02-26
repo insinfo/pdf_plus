@@ -6,6 +6,8 @@ import 'package:pdf_plus/src/crypto/export.dart';
 
 import 'keystore_base.dart';
 
+final PlatformCrypto _pkiCrypto = createPlatformCrypto();
+
 /// A class representing a Java KeyStore (JKS).
 class JksKeyStore extends AbstractKeystore {
   JksKeyStore._(Map<String, KeystoreEntry> entries) : super('jks', entries);
@@ -115,7 +117,6 @@ class JksKeyStore extends AbstractKeystore {
 
     // Integrity Check
     if (storePassword.isNotEmpty) {
-      final digest = SHA1Digest();
       final passwordBytes = utf16BeEncode(storePassword);
       final phrase = ascii.encode("Mighty Aphrodite");
 
@@ -138,7 +139,7 @@ class JksKeyStore extends AbstractKeystore {
         input.setAll(passwordBytes.length, phrase);
         input.setAll(passwordBytes.length + phrase.length, dataToHash);
 
-        final computedDigest = digest.process(input);
+        final computedDigest = _pkiCrypto.sha1Sync(input);
 
         if (!fixedTimeEqual(computedDigest, storedDigest)) {
           // Java: Keystore was tampered with, or password was incorrect
@@ -235,7 +236,6 @@ class JksKeyStore extends AbstractKeystore {
     final bodyBytes = body.toBytes();
 
     // Integrity Hash
-    final digest = SHA1Digest();
     final passwordBytes = utf16BeEncode(storePassword);
     final phrase = ascii.encode("Mighty Aphrodite");
 
@@ -258,7 +258,7 @@ class JksKeyStore extends AbstractKeystore {
     hashInput.add(phrase);
     hashInput.add(bodyBytes);
 
-    final computedDigest = digest.process(hashInput.toBytes());
+    final computedDigest = _pkiCrypto.sha1Sync(hashInput.toBytes());
 
     final finalKeystore = BytesBuilder();
     finalKeystore.add(bodyBytes);
@@ -342,7 +342,6 @@ class JksKeyStore extends AbstractKeystore {
     final bodyBytes = body.toBytes();
 
     // Integrity Hash (Same logic as JKS: SHA1 of password+whitener+body)
-    final digest = SHA1Digest();
     final passwordBytes = utf16BeEncode(storePassword);
     final phrase = ascii.encode("Mighty Aphrodite");
 
@@ -351,7 +350,7 @@ class JksKeyStore extends AbstractKeystore {
     hashInput.add(phrase);
     hashInput.add(bodyBytes);
 
-    final computedDigest = digest.process(hashInput.toBytes());
+    final computedDigest = _pkiCrypto.sha1Sync(hashInput.toBytes());
 
     final finalKeystore = BytesBuilder();
     finalKeystore.add(bodyBytes);
@@ -365,9 +364,7 @@ class JksKeyStore extends AbstractKeystore {
 Uint8List _jceksProtectPrivateKey(Uint8List plainPkcs8, String password) {
   // 1. Generate Salt (20 bytes? JCEKS usually 8 bytes)
   // The user snippet says "salt8". Standard JCEKS salt is 8 bytes.
-  final rnd = Random.secure();
-  final salt = Uint8List(8);
-  for (int i = 0; i < 8; i++) salt[i] = rnd.nextInt(256);
+  final salt = _pkiCrypto.randomBytes(8);
 
   final int iterationCount = 200000; // Standard for JCEKS
 
@@ -563,19 +560,16 @@ void _writeJavaUtf(BytesBuilder b, String s) {
 
 Uint8List _jksProtectPrivateKey(Uint8List plainKey, String password) {
   // Salt (20 bytes)
-  final rnd = Random.secure();
-  final salt = Uint8List(20);
-  for (int i = 0; i < 20; i++) salt[i] = rnd.nextInt(256);
+  final salt = _pkiCrypto.randomBytes(20);
 
   final passwordBE = utf16BeEncode(password);
 
   // Digest: SHA1(password || plaintext)
   // digest is calculated on the PLAIN key
-  final integDigest = SHA1Digest();
   final integInput = Uint8List(passwordBE.length + plainKey.length);
   integInput.setAll(0, passwordBE);
   integInput.setAll(passwordBE.length, plainKey);
-  final digestBytes = integDigest.process(integInput);
+  final digestBytes = _pkiCrypto.sha1Sync(integInput);
 
   // Create the blob to encrypt: Key || Digest
   final blobToEncrypt = Uint8List(plainKey.length + digestBytes.length);
@@ -584,7 +578,6 @@ Uint8List _jksProtectPrivateKey(Uint8List plainKey, String password) {
 
   // Encrypt (XOR)
   // Keystream gen
-  final digest = SHA1Digest();
 
   Uint8List currentDigest = salt;
   final keystream = Uint8List(blobToEncrypt.length);
@@ -595,7 +588,7 @@ Uint8List _jksProtectPrivateKey(Uint8List plainKey, String password) {
     input.setAll(0, passwordBE);
     input.setAll(passwordBE.length, currentDigest);
 
-    currentDigest = digest.process(input);
+    currentDigest = _pkiCrypto.sha1Sync(input);
 
     final len = min(currentDigest.length, blobToEncrypt.length - offset);
     keystream.setAll(offset, currentDigest.sublist(0, len));
@@ -687,13 +680,12 @@ class JksPrivateKeyEntry extends PrivateKeyEntry {
         final plaintext = _jksDecrypt(ciphertext, password, salt);
 
         // Verify integrity: SHA1(passwordBE || plaintext)
-        final digest = SHA1Digest();
         final passwordBE = utf16BeEncode(password);
         final input = Uint8List(passwordBE.length + plaintext.length);
         input.setAll(0, passwordBE);
         input.setAll(passwordBE.length, plaintext);
 
-        final computedDigest = digest.process(input);
+        final computedDigest = _pkiCrypto.sha1Sync(input);
 
         if (!fixedTimeEqual(computedDigest, storedDigest)) {
           throw DecryptionFailureException(
@@ -732,7 +724,6 @@ Uint8List _jksDecrypt(
   Uint8List salt,
 ) {
   final passwordBE = utf16BeEncode(password);
-  final digest = SHA1Digest();
 
   // Keystream generation (JKS compliant)
   // digest_0 = salt
@@ -748,7 +739,7 @@ Uint8List _jksDecrypt(
     input.setAll(0, passwordBE);
     input.setAll(passwordBE.length, currentDigest);
 
-    currentDigest = digest.process(input);
+    currentDigest = _pkiCrypto.sha1Sync(input);
 
     final len = min(currentDigest.length, ciphertext.length - offset);
     keystream.setAll(offset, currentDigest.sublist(0, len));
@@ -837,21 +828,20 @@ Uint8List _jceksDecrypt(Uint8List encryptedPrivateKeyInfo, String password) {
 
 Uint8List _jceksDerivePart(
     Uint8List password, Uint8List saltPart, int iterations) {
-  final digest = MD5Digest();
 
   // Initial: MD5(saltPart || password)
   Uint8List input = Uint8List(saltPart.length + password.length);
   input.setAll(0, saltPart);
   input.setAll(saltPart.length, password);
 
-  Uint8List current = digest.process(input);
+  Uint8List current = _pkiCrypto.md5Sync(input);
 
   // Rounds: MD5(current || password)
   for (int i = 1; i < iterations; i++) {
     Uint8List nextInput = Uint8List(current.length + password.length);
     nextInput.setAll(0, current);
     nextInput.setAll(current.length, password);
-    current = digest.process(nextInput);
+    current = _pkiCrypto.md5Sync(nextInput);
   }
   return current;
 }

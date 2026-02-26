@@ -2,12 +2,11 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:pdf_plus/src/crypto/asn1/asn1.dart';
-import 'package:pdf_plus/src/crypto/hash.dart';
-import 'package:pdf_plus/src/crypto/sha1.dart' as crypto_sha1;
-import 'package:pdf_plus/src/crypto/sha256.dart' as crypto_sha256;
+import 'package:pdf_plus/src/crypto/platform_crypto.dart';
 import 'pkcs12_types.dart';
 
 Pkcs12Decoder createDefaultPkcs12Decoder() => DefaultPkcs12Decoder();
+final PlatformCrypto _pkiCrypto = createPlatformCrypto();
 
 class DefaultPkcs12Decoder implements Pkcs12Decoder {
   @override
@@ -27,14 +26,14 @@ class DefaultPkcs12Decoder implements Pkcs12Decoder {
       _extractAuthSafeForMac(pfx.elements[1]),
     );
 
-    final authSafe = _readContentInfo(pfx.elements[1], password);
+    final authSafe = await _readContentInfo(pfx.elements[1], password);
     final authSafeSeq = ASN1Parser(authSafe).nextObject() as ASN1Sequence;
 
     final privateKeys = <Uint8List>[];
     final certificates = <Uint8List>[];
 
     for (final contentInfo in authSafeSeq.elements) {
-      final contentBytes = _readContentInfo(contentInfo, password);
+      final contentBytes = await _readContentInfo(contentInfo, password);
       if (contentBytes.isEmpty) continue;
       final bags = ASN1Parser(contentBytes).nextObject() as ASN1Sequence;
       for (final bag in bags.elements) {
@@ -45,7 +44,7 @@ class DefaultPkcs12Decoder implements Pkcs12Decoder {
           privateKeys.add(keyBytes);
         } else if (bagOid == _oidPkcs8ShroudedKeyBag) {
           final enc = _readExplicitOctet(bag.elements[1]);
-          final decrypted = _decryptEncryptedPrivateKeyInfo(
+          final decrypted = await _decryptEncryptedPrivateKeyInfo(
             enc,
             password,
           );
@@ -80,7 +79,7 @@ class DefaultPkcs12Decoder implements Pkcs12Decoder {
   }
 }
 
-Uint8List _readContentInfo(ASN1Object obj, String password) {
+Future<Uint8List> _readContentInfo(ASN1Object obj, String password) async {
   final seq = obj as ASN1Sequence;
   if (seq.elements.length < 2) return Uint8List(0);
   final contentType = _oidFromObject(seq.elements[0]);
@@ -136,18 +135,18 @@ void _verifyMacIfPresent(
 
   final alg = digestInfo.elements[0] as ASN1Sequence;
   final expected = (digestInfo.elements[1] as ASN1OctetString).valueBytes();
-  final hash = _hashForMac(alg);
+  final hashAlgorithm = _hashForMac(alg);
 
   final key = _pkcs12Kdf(
-    hash,
+    hashAlgorithm,
     _pkcs12PasswordBytes(password),
     macSalt,
     iterations,
     3,
-    hash.convert([]).bytes.length,
+    _digestLengthForAlgorithm(hashAlgorithm),
   );
 
-  final actual = _hmac(hash, key, authSafeContent);
+  final actual = _hmac(hashAlgorithm, key, authSafeContent);
   if (!_constantTimeEquals(expected, actual)) {
     throw StateError(
       'Invalid PKCS12 MAC (wrong password or corrupted file).',
@@ -155,10 +154,10 @@ void _verifyMacIfPresent(
   }
 }
 
-Uint8List _decryptEncryptedPrivateKeyInfo(
+Future<Uint8List> _decryptEncryptedPrivateKeyInfo(
   Uint8List bytes,
   String password,
-) {
+) async {
   final seq = ASN1Parser(bytes).nextObject() as ASN1Sequence;
   if (seq.elements.length < 2) {
     throw ArgumentError('Invalid EncryptedPrivateKeyInfo.');
@@ -168,11 +167,11 @@ Uint8List _decryptEncryptedPrivateKeyInfo(
   return _decryptWithAlgorithm(alg, encrypted.valueBytes(), password);
 }
 
-Uint8List _decryptWithAlgorithm(
+Future<Uint8List> _decryptWithAlgorithm(
   ASN1Sequence alg,
   Uint8List encrypted,
   String password,
-) {
+) async {
   final oid = _oidFromObject(alg.elements[0]);
   if (oid == _oidPbes2) {
     return _decryptPbes2(alg, encrypted, password);
@@ -186,11 +185,11 @@ Uint8List _decryptWithAlgorithm(
   throw UnsupportedError('Unsupported PBE algorithm: $oid');
 }
 
-Uint8List _decryptPbes2(
+Future<Uint8List> _decryptPbes2(
   ASN1Sequence alg,
   Uint8List encrypted,
   String password,
-) {
+) async {
   final params = alg.elements[1] as ASN1Sequence;
   final kdfSeq = params.elements[0] as ASN1Sequence;
   final encSeq = params.elements[1] as ASN1Sequence;
@@ -221,14 +220,26 @@ Uint8List _decryptPbes2(
   final spec = _cipherForOid(encOid);
   final keySize = keyLength ?? spec.keySize;
 
-  final prf = _hashForPrf(prfSeq);
-  final key = _pbkdf2(
-    utf8.encode(password),
-    salt,
-    iter,
-    keySize,
-    prf,
-  );
+  final hashAlgorithm = _hashForPrf(prfSeq);
+  final passwordBytes = Uint8List.fromList(utf8.encode(password));
+  Uint8List key;
+  try {
+    key = await _pkiCrypto.pbkdf2(
+      hashAlgorithm: hashAlgorithm,
+      password: passwordBytes,
+      salt: salt,
+      iterations: iter,
+      length: keySize,
+    );
+  } catch (_) {
+    key = _pbkdf2Fallback(
+      passwordBytes,
+      salt,
+      iter,
+      keySize,
+      hashAlgorithm,
+    );
+  }
 
   return _decryptCbc(spec.cipher, key, iv, encrypted);
 }
@@ -247,7 +258,7 @@ Uint8List _decryptPkcs12Pbe(
   if (oid == _oidPbeSha3Des || oid == _oidPbeSha2Des) {
     final keyLen = oid == _oidPbeSha2Des ? 16 : 24;
     final key = _pkcs12Kdf(
-      crypto_sha1.sha1,
+      'SHA-1',
       pwdBytes,
       salt,
       iter,
@@ -255,7 +266,7 @@ Uint8List _decryptPkcs12Pbe(
       keyLen,
     );
     final iv = _pkcs12Kdf(
-      crypto_sha1.sha1,
+      'SHA-1',
       pwdBytes,
       salt,
       iter,
@@ -270,7 +281,7 @@ Uint8List _decryptPkcs12Pbe(
     final effectiveBits = oid == _oidPbeShaRc2_40 ? 40 : 128;
     final keyLen = effectiveBits == 40 ? 5 : 16;
     final key = _pkcs12Kdf(
-      crypto_sha1.sha1,
+      'SHA-1',
       pwdBytes,
       salt,
       iter,
@@ -278,7 +289,7 @@ Uint8List _decryptPkcs12Pbe(
       keyLen,
     );
     final iv = _pkcs12Kdf(
-      crypto_sha1.sha1,
+      'SHA-1',
       pwdBytes,
       salt,
       iter,
@@ -333,23 +344,23 @@ String _wrapPem(String label, Uint8List der) {
       '-----END $label-----';
 }
 
-Hash _hashForPrf(ASN1Sequence? prfSeq) {
+String _hashForPrf(ASN1Sequence? prfSeq) {
   if (prfSeq == null) {
-    return crypto_sha1.sha1;
+    return 'SHA-1';
   }
   final oid = _oidFromObject(prfSeq.elements[0]);
   if (oid == _oidHmacSha256) {
-    return crypto_sha256.sha256;
+    return 'SHA-256';
   }
-  return crypto_sha1.sha1;
+  return 'SHA-1';
 }
 
-Hash _hashForMac(ASN1Sequence alg) {
+String _hashForMac(ASN1Sequence alg) {
   final oid = _oidFromObject(alg.elements[0]);
   if (oid == _oidSha256) {
-    return crypto_sha256.sha256;
+    return 'SHA-256';
   }
-  return crypto_sha1.sha1;
+  return 'SHA-1';
 }
 
 Uint8List _pkcs12PasswordBytes(String password) {
@@ -366,15 +377,15 @@ Uint8List _pkcs12PasswordBytes(String password) {
 }
 
 Uint8List _pkcs12Kdf(
-  Hash hash,
+  String hashAlgorithm,
   Uint8List password,
   Uint8List salt,
   int iterations,
   int id,
   int n,
 ) {
-  final u = hash.convert([]).bytes.length;
-  final v = hash.blockSize;
+  final u = _digestLengthForAlgorithm(hashAlgorithm);
+  final v = _hashBlockSizeForAlgorithm(hashAlgorithm);
 
   final d = Uint8List(v);
   for (var i = 0; i < v; i++) {
@@ -392,9 +403,9 @@ Uint8List _pkcs12Kdf(
   var offset = 0;
 
   for (var i = 0; i < c; i++) {
-    var a = hash.convert(Uint8List.fromList([...d, ...iBuf])).bytes;
+    var a = _hashBytes(hashAlgorithm, Uint8List.fromList([...d, ...iBuf]));
     for (var j = 1; j < iterations; j++) {
-      a = hash.convert(a).bytes;
+      a = _hashBytes(hashAlgorithm, a);
     }
 
     final b = Uint8List(v);
@@ -442,19 +453,19 @@ bool _constantTimeEquals(Uint8List a, Uint8List b) {
   return diff == 0;
 }
 
-Uint8List _pbkdf2(
-  List<int> password,
+Uint8List _pbkdf2Fallback(
+  Uint8List password,
   Uint8List salt,
   int iterations,
   int length,
-  Hash hash,
+  String hashAlgorithm,
 ) {
-  final hLen = hash.convert([]).bytes.length;
+  final hLen = _digestLengthForAlgorithm(hashAlgorithm);
   final blocks = (length / hLen).ceil();
   final out = Uint8List(length);
   var offset = 0;
   for (var i = 1; i <= blocks; i++) {
-    final t = _f(password, salt, iterations, i, hash);
+    final t = _f(password, salt, iterations, i, hashAlgorithm);
     final toCopy = (offset + t.length > length) ? length - offset : t.length;
     out.setRange(offset, offset + toCopy, t);
     offset += toCopy;
@@ -463,11 +474,11 @@ Uint8List _pbkdf2(
 }
 
 Uint8List _f(
-  List<int> password,
+  Uint8List password,
   Uint8List salt,
   int iterations,
   int blockIndex,
-  Hash hash,
+  String hashAlgorithm,
 ) {
   final intLen = 4;
   final block = Uint8List(salt.length + intLen)
@@ -475,10 +486,10 @@ Uint8List _f(
     ..setRange(
         salt.length, salt.length + intLen, _int32Be(blockIndex));
 
-  var u = _hmac(hash, password, block);
+  var u = _hmac(hashAlgorithm, password, block);
   final t = Uint8List.fromList(u);
   for (var i = 1; i < iterations; i++) {
-    u = _hmac(hash, password, u);
+    u = _hmac(hashAlgorithm, password, u);
     for (var j = 0; j < t.length; j++) {
       t[j] ^= u[j];
     }
@@ -486,29 +497,25 @@ Uint8List _f(
   return t;
 }
 
-Uint8List _hmac(Hash hash, List<int> key, List<int> data) {
-  final blockSize = hash.blockSize;
-  var k = Uint8List.fromList(key);
-  if (k.length > blockSize) {
-    k = Uint8List.fromList(hash.convert(k).bytes);
-  }
-  if (k.length < blockSize) {
-    final tmp = Uint8List(blockSize);
-    tmp.setRange(0, k.length, k);
-    k = tmp;
-  }
+Uint8List _hmac(String hashAlgorithm, List<int> key, List<int> data) {
+  return _pkiCrypto.hmacSync(
+    hashAlgorithm,
+    Uint8List.fromList(key),
+    Uint8List.fromList(data),
+  );
+}
 
-  final oKeyPad = Uint8List(blockSize);
-  final iKeyPad = Uint8List(blockSize);
-  for (var i = 0; i < blockSize; i++) {
-    oKeyPad[i] = k[i] ^ 0x5c;
-    iKeyPad[i] = k[i] ^ 0x36;
-  }
+int _digestLengthForAlgorithm(String hashAlgorithm) {
+  if (hashAlgorithm.toUpperCase() == 'SHA-256') return 32;
+  return 20;
+}
 
-  final inner = hash.convert(Uint8List.fromList([...iKeyPad, ...data])).bytes;
-  final outer =
-      hash.convert(Uint8List.fromList([...oKeyPad, ...inner])).bytes;
-  return Uint8List.fromList(outer);
+int _hashBlockSizeForAlgorithm(String hashAlgorithm) {
+  return 64;
+}
+
+Uint8List _hashBytes(String hashAlgorithm, Uint8List data) {
+  return _pkiCrypto.digestSync(hashAlgorithm, data);
 }
 
 Uint8List _decryptCbc(

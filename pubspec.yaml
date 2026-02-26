@@ -3,7 +3,7 @@ description: Pdf creation library for dart
 homepage: https://github.com/insinfo/pdf_plus
 repository: https://github.com/insinfo/pdf_plus
 
-version: 3.13.0
+version: 3.14.0
 
 environment:
   sdk: ^3.6.0

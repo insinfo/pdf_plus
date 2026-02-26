@@ -1,16 +1,15 @@
 import 'dart:typed_data';
 
-import 'package:pdf_plus/src/crypto/asn1/asn1.dart';
-import 'package:pdf_plus/src/crypto/base.dart';
-import 'package:pdf_plus/src/crypto/pkcs1.dart';
-import 'package:pdf_plus/src/crypto/rsa_engine.dart';
+import 'package:pdf_plus/src/crypto/signature_adapter.dart';
 import 'package:pdf_plus/src/crypto/rsa_keys.dart';
 
 import 'pem_utils.dart';
 import 'pdf_external_signer.dart';
 
 /// RSA private key signer for external signing APIs.
-class PdfRsaPrivateKeySigner implements PdfExternalSigner {
+class PdfRsaPrivateKeySigner extends PdfExternalSigner {
+  static final SignatureAdapter _signatureAdapter = SignatureAdapter();
+
   /// Creates a signer from an RSA private key and certificate chain.
   PdfRsaPrivateKeySigner({
     required RSAPrivateKey privateKey,
@@ -49,20 +48,10 @@ class PdfRsaPrivateKeySigner implements PdfExternalSigner {
   }
 
   Uint8List _rsaSignDigest(Uint8List digest, RSAPrivateKey key) {
-    final digestInfo = _buildDigestInfoSha256(digest);
-    final signer = PKCS1Encoding(RSAEngine())
-      ..init(true, PrivateKeyParameter<RSAPrivateKey>(key));
-    final sig = signer.process(digestInfo);
-    return Uint8List.fromList(sig);
-  }
-
-  Uint8List _buildDigestInfoSha256(Uint8List digest) {
-    final algId = ASN1Sequence()
-      ..add(ASN1ObjectIdentifier.fromComponentString('2.16.840.1.101.3.4.2.1'))
-      ..add(ASN1Null());
-    final di = ASN1Sequence()
-      ..add(algId)
-      ..add(ASN1OctetString(digest));
-    return di.encodedBytes;
+    return _signatureAdapter.rsaPkcs1v15SignDigest(
+      privateKey: key,
+      digest: digest,
+      digestOid: PdfSignatureAlgorithms.sha256,
+    );
   }
 }

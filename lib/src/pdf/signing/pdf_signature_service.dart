@@ -127,8 +127,13 @@ class PdfSignatureService {
           ? certs.sublist(1).map(Uint8List.fromList).toList(growable: false)
           : const <Uint8List>[],
       signingTime: signature?.signingTime,
+      digestAlgorithmOid: externalSigner.digestAlgorithmOid,
+      signatureAlgorithmOid: externalSigner.signatureAlgorithmOid,
       signCallback: (signedAttrsDer, signedAttrsDigest) async {
-        return externalSigner.signDigest(signedAttrsDigest);
+        return externalSigner.signSignedAttributes(
+          signedAttrsDer,
+          signedAttrsDigest,
+        );
       },
       timestampProvider: timestampProvider,
     );
@@ -210,7 +215,7 @@ Uint8List _extractByteRangeData(Uint8List bytes, List<int> byteRange) {
 }
 
 /// PEM signer adapter for internal signing workflows.
-class PdfPemSigner implements PdfExternalSigner {
+class PdfPemSigner extends PdfExternalSigner {
   /// Creates a PEM signer with private key and certificate chain.
   PdfPemSigner({
     required this.privateKeyPem,

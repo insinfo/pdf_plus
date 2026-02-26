@@ -123,8 +123,9 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     }
 
     final mediaBoxes = <PdfPageMediaBoxInfo>[];
+    // Deduplicate by image object id across pages, matching mutool info behavior.
     final images = <PdfImageInfo>[];
-    final useScanImages = _repairAttempted;
+    final seenImageRefs = <int>{};
     for (int i = 0; i < pageRefs.length; i++) {
       final pageRef = pageRefs[i];
       final pageObj =
@@ -141,45 +142,25 @@ class PdfDocumentParser extends PdfDocumentParserBase {
         ));
       }
 
-      if (!useScanImages) {
-        final resDict = _resolvePageResources(pageDict);
-        final xObject =
-            resDict != null ? resDict.values[PdfNameTokens.xObject] : null;
-        final xObjectDict = _resolveDictFromValueNoStream(xObject);
-        if (xObjectDict != null) {
-          final usedXObjects = _extractXObjectNamesFromContent(pageDict);
-          for (final entry in xObjectDict.values.entries) {
-            if (usedXObjects.isNotEmpty && !usedXObjects.contains(entry.key)) {
-              continue;
-            }
-            final ref = PdfParserObjects.asRef(entry.value);
-            if (ref == null) continue;
-            final obj = _getObjectNoStream(ref.obj) ?? _getObject(ref.obj);
-            if (obj == null || obj.value is! PdfDictToken) continue;
-            final dict = obj.value as PdfDictToken;
-            final subtype =
-                PdfParserObjects.asName(dict.values[PdfNameTokens.subtype]);
-            if (subtype != PdfNameTokens.image) continue;
-
-            final filter = _asFilterName(dict.values[PdfNameTokens.filter]);
-            final colorSpace =
-                _asColorSpaceName(dict.values[PdfNameTokens.colorSpace]);
-            images.add(PdfImageInfo(
-              pageIndex: i + 1,
-              pageRef: PdfIndirectRef(pageRef.obj, pageRef.gen),
-              imageRef: PdfIndirectRef(ref.obj, ref.gen),
-              width: PdfParserObjects.asInt(dict.values[PdfNameTokens.width]),
-              height: PdfParserObjects.asInt(dict.values[PdfNameTokens.height]),
-              bitsPerComponent: PdfParserObjects.asInt(
-                  dict.values[PdfNameTokens.bitsPerComponent]),
-              colorSpace: colorSpace,
-              filter: filter,
-            ));
-          }
-        }
-      }
+      final resDict = _resolvePageResources(pageDict);
+      final usedXObjects = _extractXObjectNamesFromContent(pageDict);
+      // Important: even in repair mode, try resource traversal first.
+      // Some real-world PDFs store page images behind Form XObjects. If we
+      // skip traversal and fallback to scan-only mapping, image/page pairing can
+      // become incorrect (content mismatch against mutool output).
+      _collectImagesFromResources(
+        resources: resDict,
+        pageIndex: i + 1,
+        pageRef: PdfIndirectRef(pageRef.obj, pageRef.gen),
+        out: images,
+        seenImageRefs: seenImageRefs,
+        allowedTopLevelXObjects:
+            usedXObjects.isNotEmpty ? usedXObjects.toSet() : null,
+      );
     }
 
+    // Last resort fallback: binary scan when page/resource traversal finds
+    // nothing. This should not be the primary path for repaired documents.
     if (images.isEmpty && _allowRepair && pageRefs.isNotEmpty) {
       images.addAll(extractImages(includeUnusedXObjects: true));
     }
@@ -233,7 +214,9 @@ class PdfDocumentParser extends PdfDocumentParserBase {
       pageRefs = _collectPageRefsByScan(maxPages: toPage);
     }
 
+    // Deduplicate by image object id across pages, matching mutool info behavior.
     final images = <PdfImageInfo>[];
+    final seenImageRefs = <int>{};
 
     for (int i = 0; i < pageRefs.length; i++) {
       final pageIndex = i + 1;
@@ -247,47 +230,22 @@ class PdfDocumentParser extends PdfDocumentParserBase {
       final pageDict = pageObj.value as PdfDictToken;
 
       final resDict = _resolvePageResources(pageDict);
-      final xObject =
-          resDict != null ? resDict.values[PdfNameTokens.xObject] : null;
-      final xObjectDict = _resolveDictFromValueNoStream(xObject);
-      if (xObjectDict == null) continue;
-
       final usedXObjects = includeUnusedXObjects
-          ? const <String>[]
-          : _extractXObjectNamesFromContent(pageDict);
-
-      for (final entry in xObjectDict.values.entries) {
-        if (!includeUnusedXObjects &&
-            usedXObjects.isNotEmpty &&
-            !usedXObjects.contains(entry.key)) {
-          continue;
-        }
-        final ref = PdfParserObjects.asRef(entry.value);
-        if (ref == null) continue;
-        final obj = _getObjectNoStream(ref.obj) ?? _getObject(ref.obj);
-        if (obj == null || obj.value is! PdfDictToken) continue;
-        final dict = obj.value as PdfDictToken;
-        final subtype =
-            PdfParserObjects.asName(dict.values[PdfNameTokens.subtype]);
-        if (subtype != PdfNameTokens.image) continue;
-
-        final filter = _asFilterName(dict.values[PdfNameTokens.filter]);
-        final colorSpace =
-            _asColorSpaceName(dict.values[PdfNameTokens.colorSpace]);
-        images.add(PdfImageInfo(
-          pageIndex: pageIndex,
-          pageRef: PdfIndirectRef(pageRef.obj, pageRef.gen),
-          imageRef: PdfIndirectRef(ref.obj, ref.gen),
-          width: PdfParserObjects.asInt(dict.values[PdfNameTokens.width]),
-          height: PdfParserObjects.asInt(dict.values[PdfNameTokens.height]),
-          bitsPerComponent: PdfParserObjects.asInt(
-              dict.values[PdfNameTokens.bitsPerComponent]),
-          colorSpace: colorSpace,
-          filter: filter,
-        ));
-      }
+          ? null
+          : _extractXObjectNamesFromContent(pageDict).toSet();
+      _collectImagesFromResources(
+        resources: resDict,
+        pageIndex: pageIndex,
+        pageRef: PdfIndirectRef(pageRef.obj, pageRef.gen),
+        out: images,
+        seenImageRefs: seenImageRefs,
+        allowedTopLevelXObjects: usedXObjects,
+      );
     }
 
+    // Last resort fallback for damaged structures where resources cannot be
+    // resolved. Mapping by index is best-effort and less reliable than
+    // resource traversal.
     if (images.isEmpty && _allowRepair && pageRefs.isNotEmpty) {
       final scanned = _collectImagesByScan();
       if (scanned.length == pageRefs.length) {
@@ -330,6 +288,103 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     }
 
     return images;
+  }
+
+  void _collectImagesFromResources({
+    required PdfDictToken? resources,
+    required int pageIndex,
+    required PdfIndirectRef pageRef,
+    required List<PdfImageInfo> out,
+    required Set<int> seenImageRefs,
+    Set<String>? allowedTopLevelXObjects,
+  }) {
+    // Matches mutool's strategy in pdfinfo.c:
+    // page -> Resources -> XObject, then recurse into Form XObjects.
+    if (resources == null) return;
+    final xObject = resources.values[PdfNameTokens.xObject];
+    final xObjectDict = _resolveDictFromValueNoStream(xObject);
+    if (xObjectDict == null) return;
+
+    final visitedForms = <int>{};
+    _collectImagesFromXObjectDict(
+      xObjectDict: xObjectDict,
+      pageIndex: pageIndex,
+      pageRef: pageRef,
+      out: out,
+      seenImageRefs: seenImageRefs,
+      visitedForms: visitedForms,
+      allowedNames: allowedTopLevelXObjects,
+    );
+  }
+
+  void _collectImagesFromXObjectDict({
+    required PdfDictToken xObjectDict,
+    required int pageIndex,
+    required PdfIndirectRef pageRef,
+    required List<PdfImageInfo> out,
+    required Set<int> seenImageRefs,
+    required Set<int> visitedForms,
+    Set<String>? allowedNames,
+  }) {
+    // Recursive walk over XObject dictionaries:
+    // - /Subtype /Image: collect image metadata.
+    // - /Subtype /Form: recurse into nested /Resources /XObject.
+    for (final entry in xObjectDict.values.entries) {
+      if (allowedNames != null && !allowedNames.contains(entry.key)) {
+        continue;
+      }
+      final ref = PdfParserObjects.asRef(entry.value);
+      if (ref == null) continue;
+      final obj = _getObjectNoStream(ref.obj) ?? _getObject(ref.obj);
+      if (obj == null || obj.value is! PdfDictToken) continue;
+      final dict = obj.value as PdfDictToken;
+      final subtype = PdfParserObjects.asName(dict.values[PdfNameTokens.subtype]);
+
+      if (subtype == PdfNameTokens.image) {
+        if (!seenImageRefs.add(ref.obj)) {
+          continue;
+        }
+        final filter = _asFilterName(dict.values[PdfNameTokens.filter]);
+        final colorSpace = _asColorSpaceName(dict.values[PdfNameTokens.colorSpace]);
+        out.add(PdfImageInfo(
+          pageIndex: pageIndex,
+          pageRef: pageRef,
+          imageRef: PdfIndirectRef(ref.obj, ref.gen),
+          width: PdfParserObjects.asInt(dict.values[PdfNameTokens.width]),
+          height: PdfParserObjects.asInt(dict.values[PdfNameTokens.height]),
+          bitsPerComponent:
+              PdfParserObjects.asInt(dict.values[PdfNameTokens.bitsPerComponent]),
+          colorSpace: colorSpace,
+          filter: filter,
+        ));
+        continue;
+      }
+
+      if (subtype == PdfNameTokens.form) {
+        if (!visitedForms.add(ref.obj)) {
+          continue;
+        }
+        final nestedResources =
+            _resolveDictFromValueNoStream(dict.values[PdfNameTokens.resources]);
+        if (nestedResources == null) {
+          continue;
+        }
+        final nestedXObj = _resolveDictFromValueNoStream(
+            nestedResources.values[PdfNameTokens.xObject]);
+        if (nestedXObj == null) {
+          continue;
+        }
+        _collectImagesFromXObjectDict(
+          xObjectDict: nestedXObj,
+          pageIndex: pageIndex,
+          pageRef: pageRef,
+          out: out,
+          seenImageRefs: seenImageRefs,
+          visitedForms: visitedForms,
+          allowedNames: null,
+        );
+      }
+    }
   }
 
   /// Lê os bytes brutos do stream de um objeto indireto.

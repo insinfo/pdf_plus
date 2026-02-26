@@ -1,10 +1,11 @@
 import 'dart:convert';
-import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:pdf_plus/src/crypto/export.dart';
 
 import 'keystore_base.dart';
+
+final PlatformCrypto _pkiCrypto = createPlatformCrypto();
 
 /// BKS entry type constants.
 const int bksEntryTypeCertificate = 1;
@@ -301,7 +302,7 @@ class BksKeyStore extends AbstractKeystore {
       }
 
       // Compute HMAC-SHA1
-      final computedHmac = hmacSha1(hmacKey, storeData);
+      final computedHmac = _pkiCrypto.hmacSha1Sync(hmacKey, storeData);
 
       bool hmacMatch = true;
       for (int i = 0; i < hmacDigestSize; i++) {
@@ -599,9 +600,9 @@ class BksKeyStore extends AbstractKeystore {
       input.setRange(0, v, D);
       input.setRange(v, v + I.length, I);
 
-      var A = sha1.convert(input).bytes;
+      var A = _pkiCrypto.sha1Sync(input);
       for (int j = 1; j < iterations; j++) {
-        A = sha1.convert(A).bytes;
+        A = _pkiCrypto.sha1Sync(Uint8List.fromList(A));
       }
 
       derivedKey.addAll(A);
@@ -663,185 +664,16 @@ class BksKeyStore extends AbstractKeystore {
   /// [storePassword] - The password to protect keystore integrity (HMAC).
   /// [keyPassword] - The password to seal private keys. If not provided, defaults to [storePassword].
   Uint8List save(String storePassword, {String? keyPassword}) {
-    final body = BytesBuilder();
-
-    // Version 2
-    body.add(_int32ToBytes(2));
-
-    // Salt (20 bytes generic)
-    final rnd = Random.secure();
-    final salt = Uint8List(20);
-    for (int i = 0; i < 20; i++) salt[i] = rnd.nextInt(256);
-
-    // Write Salt (BKS stores length + salt)
-    body.add(_int32ToBytes(salt.length));
-    body.add(salt);
-
-    // Iteration Count
+    final salt = _pkiCrypto.randomBytes(20);
     const iterationCount = 10000;
-    body.add(_int32ToBytes(iterationCount));
-
-    // Entries
-    for (final entry in entries.values) {
-      if (entry is BksTrustedCertEntry || entry is TrustedCertEntry) {
-        // Entry Type (1 byte)
-        body.addByte(bksEntryTypeCertificate);
-
-        // Alias
-        _writeUtf(body, entry.alias);
-
-        // Timestamp
-        body.add(_int64ToBytes(entry.timestamp));
-
-        // Chain Length (4 bytes) - usually 0 for trusted cert
-        body.add(_int32ToBytes(0));
-
-        // Cert
-        // Type (UTF)
-        final certEntry = entry as TrustedCertEntry;
-        _writeUtf(body, certEntry.certType);
-
-        // Data (Length + Bytes)
-        _writeData(body, certEntry.certData);
-      } else if (entry is PrivateKeyEntry) {
-        // Seal the Private Key (Type 4: Sealed)
-        // Inner: Key Type (1 byte) + Format + Algorithm + Encoded
-
-        final innerKeyBytes = BytesBuilder();
-        innerKeyBytes.addByte(bksKeyTypePrivate); // 0
-
-        // Format (UTF)
-        _writeUtf(innerKeyBytes, 'PKCS#8');
-
-        // Algorithm (UTF)
-        // Default to RSA if unknown
-        // Some implementations might strict check matching OID, but generic BKS usually just stores string.
-        _writeUtf(innerKeyBytes, "RSA");
-
-        // Encoded Key Data (Length + Bytes)
-        // Prefer PKCS8 if available
-        final pkcs8 = entry.pkcs8PrivateKey ?? entry.rawPrivateKey;
-        if (pkcs8 == null) {
-          throw KeystoreException(
-              "Missing private key bytes for ${entry.alias}");
-        }
-        _writeData(innerKeyBytes, pkcs8);
-
-        // Seal it
-        // Encrypted Data structure: Salt(20) + Iters(4) + Ciphertext
-        final kPwd = keyPassword ?? storePassword;
-        final sealedData = _seal(innerKeyBytes.toBytes(), kPwd);
-
-        // Write Entry (Type 4)
-        body.addByte(bksEntryTypeSealed);
-        _writeUtf(body, entry.alias);
-        body.add(_int64ToBytes(entry.timestamp));
-
-        // Certificate Chain
-        body.add(_int32ToBytes(entry.certChain.length));
-        for (final c in entry.certChain) {
-          _writeUtf(body, c.$1); // type
-          _writeData(body, c.$2); // data
-        }
-
-        // Sealed Data
-        _writeData(body, sealedData);
-      } else if (entry is BksSealedKeyEntry) {
-        // If explicitly BksSealedKeyEntry and NOT decrypted, we can't save safely without re-encryption
-        // unless we store raw encrypted blob? No, we don't expose raw blob easily here.
-        // BksSealedKeyEntry should be decrypted to BksKeyEntry usually.
-        // If it is NOT decrypted, we can't easily re-save unless we tracked raw bytes.
-        // For now, assume decrypted or skip.
-        if (!entry.isDecrypted()) {
-          throw KeystoreException(
-              "Cannot save undecrypted BksSealedKeyEntry ${entry.alias}");
-        }
-        final nested = entry.nestedEntry;
-        // Recursively handle nested? Or just handle as BksKeyEntry logic above but re-seal.
-
-        final innerKeyBytes = BytesBuilder();
-        innerKeyBytes.addByte(nested.keyType);
-        _writeUtf(innerKeyBytes, nested.format);
-        _writeUtf(innerKeyBytes, nested.algorithm);
-        _writeData(innerKeyBytes, nested.encoded);
-
-        final kPwd = keyPassword ?? storePassword;
-        final sealedData = _seal(innerKeyBytes.toBytes(), kPwd);
-
-        body.addByte(bksEntryTypeSealed);
-        _writeUtf(body, entry.alias);
-        body.add(_int64ToBytes(entry.timestamp));
-
-        body.add(_int32ToBytes(nested.certChain.length));
-        for (final c in nested.certChain) {
-          _writeUtf(body, c.certType);
-          _writeData(body, c.certData);
-        }
-
-        _writeData(body, sealedData);
-      } else {
-        // Skip unsupported
-      }
-    }
-
-    // Null Terminator (Type 0)
-    body.addByte(0);
-
-    // The previous body logic (single pass) is discarded in favor of two-pass (header + entries)
-    // to correctly structure the HMAC input if we strictly follow load()'s structure
-    // where HMAC is only on entries.
-
-    // However, if we look at the code lines 820-830 roughly:
-    // We completely rebuilt it below using 'header' and 'entriesData'.
-    // So the 'body' builder and 'hmacKey' derivation above are redundant/unused.
-    // Let's remove them to fix lints.
-
-    // Wait, hmacKey IS used below?
-    // "final hmacKey = BksKeyStore._derivePkcs12Key..." was defined around line 887?
-    // No, it was defined at 806.
-
-    // Let's just remove the unused block or utilize it.
-    // We are proceeding with the 'header + entriesData' approach.
-
-    // V2 stores: Version(4) + SaltLen(4) + Salt + Iter(4) + Entries + HMAC(20)
-    // Wait, bodyBytes includes from Version down to Null Terminator?
-    // Let's check load():
-    /*
-    read version
-    read salt
-    read iter
-    read entries
-    verify hmac on (entries start .. end) ? No.
-    hmac covers (entriesStartPos .. pos) = everything from entries start?
-    
-    Let's re-read load():
-    // ... read version, salt, iter ...
-    // storeData = data.sublist(entriesStartPos, pos);
-    // entriesStartPos was AFTER iter.
-    // So HMAC covers ONLY the entries block (including type 0 terminator).
-    
-    BUT write logic above put Version, Salt, Iter INTO bodyBytes?
-    Yes.
-    So bodyBytes currently = Version + Salt + Iter + Entries.
-    
-    We need to split for HMAC calculation if we want to follow load logic exactly.
-    load() calculates HMAC on 'storeData' which is just the entries part.
-    */
-
-    // Let's reconstruct to be precise.
-
     final header = BytesBuilder();
-    header.add(_int32ToBytes(2)); // Version
+    header.add(_int32ToBytes(2));
     header.add(_int32ToBytes(salt.length));
     header.add(salt);
-    header.add(_int32ToBytes(iterationCount)); // Iter
+    header.add(_int32ToBytes(iterationCount));
 
     final entriesData = BytesBuilder();
-    // ... write entries to entriesData ...
-    // Rewriting loop logic into entriesData
-
-    // (Refactoring previous logic to use entriesData builder)
-    void writeEntries(BytesBuilder b) {
+    void writeEntriesV2(BytesBuilder b) {
       for (final entry in entries.values) {
         if (entry is BksTrustedCertEntry || entry is TrustedCertEntry) {
           b.addByte(bksEntryTypeCertificate);
@@ -852,14 +684,14 @@ class BksKeyStore extends AbstractKeystore {
           _writeUtf(b, c.certType);
           _writeData(b, c.certData);
         } else if (entry is PrivateKeyEntry) {
-          // Seal Private Key
           final inner = BytesBuilder();
           inner.addByte(bksKeyTypePrivate);
           _writeUtf(inner, 'PKCS#8');
           _writeUtf(inner, "RSA");
           final pkcs8 = entry.pkcs8PrivateKey ?? entry.rawPrivateKey;
-          if (pkcs8 == null)
+          if (pkcs8 == null) {
             throw KeystoreException("No private key for ${entry.alias}");
+          }
           _writeData(inner, pkcs8);
 
           final kPwd = keyPassword ?? storePassword;
@@ -875,27 +707,48 @@ class BksKeyStore extends AbstractKeystore {
             _writeData(b, c.$2);
           }
           _writeData(b, sealed);
+        } else if (entry is BksSealedKeyEntry) {
+          if (!entry.isDecrypted()) {
+            throw KeystoreException(
+              "Cannot save undecrypted BksSealedKeyEntry ${entry.alias}",
+            );
+          }
+          final nested = entry.nestedEntry;
+          final inner = BytesBuilder();
+          inner.addByte(nested.keyType);
+          _writeUtf(inner, nested.format);
+          _writeUtf(inner, nested.algorithm);
+          _writeData(inner, nested.encoded);
+
+          final kPwd = keyPassword ?? storePassword;
+          final sealed = _seal(inner.toBytes(), kPwd);
+
+          b.addByte(bksEntryTypeSealed);
+          _writeUtf(b, entry.alias);
+          b.add(_int64ToBytes(entry.timestamp));
+          b.add(_int32ToBytes(nested.certChain.length));
+          for (final c in nested.certChain) {
+            _writeUtf(b, c.certType);
+            _writeData(b, c.certData);
+          }
+          _writeData(b, sealed);
         }
       }
-      b.addByte(0); // Terminator
+      b.addByte(0);
     }
 
-    writeEntries(entriesData);
+    writeEntriesV2(entriesData);
     final entriesBytes = entriesData.toBytes();
 
-    // Key-Derivation: PKCS12(storePassword, salt, iter, 20, 3(MAC))
     final hmacKey = BksKeyStore._derivePkcs12Key(
         storePassword, salt, iterationCount, 20, 3);
+    final signatureBytes = _pkiCrypto.hmacSha1Sync(hmacKey, entriesBytes);
 
-    // Calculate HMAC
-    final signatureBytes = hmacSha1(hmacKey, entriesBytes);
-
-    final finalStore2 = BytesBuilder();
-    finalStore2.add(header.toBytes());
-    finalStore2.add(entriesBytes);
-    finalStore2.add(Uint8List.fromList(signatureBytes));
-
-    return finalStore2.toBytes();
+    final out = BytesBuilder();
+    out.add(header.toBytes());
+    out.add(entriesBytes);
+    out.add(signatureBytes);
+    return out.toBytes();
   }
 
   // Helpers
@@ -929,9 +782,7 @@ class BksKeyStore extends AbstractKeystore {
   }
 
   Uint8List _seal(Uint8List data, String password) {
-    final rnd = Random.secure();
-    final salt = Uint8List(20);
-    for (int i = 0; i < 20; i++) salt[i] = rnd.nextInt(256);
+    final salt = _pkiCrypto.randomBytes(20);
 
     const iterationCount = 10000;
 

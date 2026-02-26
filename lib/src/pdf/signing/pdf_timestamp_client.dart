@@ -3,9 +3,7 @@ import 'dart:typed_data';
 
 import 'package:pdf_plus/signing.dart';
 import 'package:pdf_plus/src/crypto/asn1/asn1.dart';
-import 'package:pdf_plus/src/crypto/sha1.dart';
-import 'package:pdf_plus/src/crypto/sha256.dart';
-import 'package:pdf_plus/src/crypto/sha512.dart';
+import '../crypto/pdf_crypto.dart';
 
 /// Provider that returns a timestamp token for a given signature.
 typedef PdfTimestampProvider = Future<Uint8List> Function(Uint8List signature);
@@ -172,11 +170,11 @@ class PdfTimestampClient {
   ) {
     switch (algorithm) {
       case PdfTimestampHashAlgorithm.sha1:
-        return Uint8List.fromList(sha1.convert(data).bytes);
+        return PdfCrypto.sha1(data);
       case PdfTimestampHashAlgorithm.sha512:
-        return Uint8List.fromList(sha512.convert(data).bytes);
+        return PdfCrypto.sha512(data);
       case PdfTimestampHashAlgorithm.sha256:
-        return Uint8List.fromList(sha256.convert(data).bytes);
+        return PdfCrypto.sha256(data);
     }
   }
 

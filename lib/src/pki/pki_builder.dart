@@ -3,22 +3,24 @@ import 'dart:typed_data';
 
 import 'package:pdf_plus/src/crypto/asn1/asn1.dart';
 import 'package:pdf_plus/src/crypto/base.dart';
+import 'package:pdf_plus/src/crypto/platform_crypto.dart';
 import 'package:pdf_plus/src/crypto/rsa_keys.dart';
 import 'package:pdf_plus/src/crypto/fortuna_random.dart';
 import 'package:pdf_plus/src/crypto/key_generator.dart';
-import 'package:pdf_plus/src/crypto/digests.dart';
-import 'package:pdf_plus/src/crypto/signers.dart';
+import 'package:pdf_plus/src/crypto/signature_adapter.dart';
 import 'package:pdf_plus/src/pki/x509_certificate.dart';
 
 /// Utilities for cryptographic operations and random data.
 class PkiUtils {
   static final SecureRandom _secureRandom = _initSecureRandom();
+  static final PlatformCrypto _platformCrypto = createPlatformCrypto();
 
   static SecureRandom _initSecureRandom() {
     return FortunaRandom();
   }
 
   static SecureRandom getSecureRandom() => _secureRandom;
+  static PlatformCrypto getPlatformCrypto() => _platformCrypto;
 
   static AsymmetricKeyPair<PublicKey, PrivateKey> generateRsaKeyPair(
       {int bitStrength = 2048, int certainty = 64}) {
@@ -47,7 +49,29 @@ class PkiUtils {
     }
     return serial == BigInt.zero ? BigInt.one : serial;
   }
+
+  /// Gera serial com RNG da plataforma (Web Crypto no navegador).
+  static BigInt generateSerialNumberBigIntPlatform({int bytes = 16}) {
+    if (bytes < 4 || bytes > 20) {
+      throw RangeError.range(bytes, 4, 20, 'bytes');
+    }
+    final Uint8List serialBytes = _platformCrypto.randomBytes(bytes);
+    serialBytes[0] = serialBytes[0] & 0x7F;
+    serialBytes[serialBytes.length - 1] |= 0x01;
+    BigInt serial = BigInt.zero;
+    for (final int b in serialBytes) {
+      serial = (serial << 8) | BigInt.from(b);
+    }
+    return serial == BigInt.zero ? BigInt.one : serial;
+  }
+
+  /// Hash via backend de crypto da plataforma.
+  static Future<Uint8List> digest(String algorithm, Uint8List data) {
+    return _platformCrypto.digest(algorithm, data);
+  }
 }
+
+final SignatureAdapter _pkiSignatureAdapter = SignatureAdapter();
 
 /// A builder for creating X.509 certificates and PKI chains (Root, Intermediate, Leaf).
 class PkiBuilder {
@@ -295,8 +319,7 @@ class PkiBuilder {
   }
 
   static Uint8List _calculateSha1(Uint8List data) {
-    final digest = SHA1Digest();
-    return digest.process(data);
+    return PkiUtils.getPlatformCrypto().sha1Sync(data);
   }
 
   static ASN1Sequence createAlgorithmIdentifier(String oid) {
@@ -659,10 +682,11 @@ class PkiBuilder {
   }
 
   static Uint8List signData(Uint8List data, RSAPrivateKey key) {
-    final signer = RSASigner(SHA256Digest(), 'SHA-256/RSA');
-    signer.init(true, PrivateKeyParameter<RSAPrivateKey>(key));
-    final sig = signer.generateSignature(data);
-    return (sig as RSASignature).bytes;
+    return _pkiSignatureAdapter.rsaPkcs1v15SignData(
+      privateKey: key,
+      data: data,
+      digestOid: '2.16.840.1.101.3.4.2.1',
+    );
   }
 }
 

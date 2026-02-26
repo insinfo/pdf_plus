@@ -19,31 +19,67 @@ class PdfParserXref {
 
     // Procura do fim para o começo, limitando a janela para robustez/perf.
     final int windowStart =
-        bytes.length > 4 * 1024 ? bytes.length - 4 * 1024 : 0;
-    final int pos = PdfParserTokens.lastIndexOfSequence(
-        bytes, token, windowStart, bytes.length);
-    if (pos == -1) return 0;
+        bytes.length > 64 * 1024 ? bytes.length - 64 * 1024 : 0;
+    var searchEnd = bytes.length;
 
-    int i = pos + token.length;
-    i = PdfParserTokens.skipPdfWsAndComments(bytes, i, bytes.length);
-    final parsed = PdfParserTokens.readInt(bytes, i, bytes.length);
-    return parsed.value;
+    for (int attempts = 0; attempts < 32; attempts++) {
+      final int pos = PdfParserTokens.lastIndexOfSequence(
+        bytes,
+        token,
+        windowStart,
+        searchEnd,
+      );
+      if (pos == -1) return 0;
+
+      try {
+        int i = pos + token.length;
+        i = PdfParserTokens.skipPdfWsAndComments(bytes, i, bytes.length);
+        final parsed = PdfParserTokens.readInt(bytes, i, bytes.length);
+        if (parsed.value > 0 && parsed.value < bytes.length) {
+          return parsed.value;
+        }
+      } catch (_) {
+        // Continua procurando ocorrência anterior.
+      }
+
+      searchEnd = pos;
+      if (searchEnd <= windowStart) break;
+    }
+    return 0;
   }
 
   static int findStartXrefFromReader(PdfRandomAccessReader reader) {
     const token = <int>[0x73, 0x74, 0x61, 0x72, 0x74, 0x78, 0x72, 0x65, 0x66];
     final len = reader.length;
-    final windowSize = len > 4 * 1024 ? 4 * 1024 : len;
+    final windowSize = len > 64 * 1024 ? 64 * 1024 : len;
     final windowStart = len - windowSize;
     final window = reader.readRange(windowStart, windowSize);
-    final pos =
-        PdfParserTokens.lastIndexOfSequence(window, token, 0, window.length);
-    if (pos == -1) return 0;
+    var searchEnd = window.length;
 
-    int i = pos + token.length;
-    i = PdfParserTokens.skipPdfWsAndComments(window, i, window.length);
-    final parsed = PdfParserTokens.readInt(window, i, window.length);
-    return parsed.value;
+    for (int attempts = 0; attempts < 32; attempts++) {
+      final pos = PdfParserTokens.lastIndexOfSequence(
+        window,
+        token,
+        0,
+        searchEnd,
+      );
+      if (pos == -1) return 0;
+
+      try {
+        int i = pos + token.length;
+        i = PdfParserTokens.skipPdfWsAndComments(window, i, window.length);
+        final parsed = PdfParserTokens.readInt(window, i, window.length);
+        if (parsed.value > 0 && parsed.value < len) {
+          return parsed.value;
+        }
+      } catch (_) {
+        // Continua procurando ocorrência anterior.
+      }
+
+      searchEnd = pos;
+      if (searchEnd <= 0) break;
+    }
+    return 0;
   }
 
   static int _computeXrefOffset(Uint8List bytes) {

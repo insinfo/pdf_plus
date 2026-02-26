@@ -5,6 +5,12 @@ import 'parser_misc.dart';
 import 'parser_tokens.dart';
 
 class PdfParserFields {
+  static bool hasPdfHeader(Uint8List bytes) {
+    const token = <int>[0x25, 0x50, 0x44, 0x46, 0x2D]; // %PDF-
+    final limit = bytes.length > 1024 ? 1024 : bytes.length;
+    return PdfParserTokens.indexOfSequence(bytes, token, 0, limit) != -1;
+  }
+
   static double readPdfVersion(Uint8List bytes) {
     const token = <int>[0x25, 0x50, 0x44, 0x46, 0x2D]; // %PDF-
     final limit = bytes.length > 1024 ? 1024 : bytes.length;
@@ -22,12 +28,111 @@ class PdfParserFields {
     return majorVal + (minorVal / 10.0);
   }
 
+  static bool hasEofMarker(Uint8List bytes) {
+    const token = <int>[0x25, 0x25, 0x45, 0x4F, 0x46]; // %%EOF
+    final windowStart = bytes.length > 8 * 1024 ? bytes.length - 8 * 1024 : 0;
+    return PdfParserTokens.lastIndexOfSequence(
+          bytes,
+          token,
+          windowStart,
+          bytes.length,
+        ) !=
+        -1;
+  }
+
   static int findByteRangeToken(Uint8List bytes) {
     const token = <int>[
       0x2F, // /
       0x42, 0x79, 0x74, 0x65, 0x52, 0x61, 0x6E, 0x67, 0x65, // ByteRange
     ];
     return PdfParserTokens.indexOfSequence(bytes, token, 0, bytes.length);
+  }
+
+  static int findEncryptToken(Uint8List bytes) {
+    const token = <int>[
+      0x2F, // /
+      0x45, 0x6E, 0x63, 0x72, 0x79, 0x70, 0x74, // Encrypt
+    ];
+    const trailerToken = <int>[
+      0x74, 0x72, 0x61, 0x69, 0x6C, 0x65, 0x72, // trailer
+    ];
+    const xrefToken = <int>[
+      0x78, 0x72, 0x65, 0x66, // xref
+    ];
+    const xrefTypeToken = <int>[
+      0x2F, 0x54, 0x79, 0x70, 0x65, // /Type
+      0x20,
+      0x2F, 0x58, 0x52, 0x65, 0x66, // /XRef
+    ];
+
+    final windowStart =
+        bytes.length > 2 * 1024 * 1024 ? bytes.length - 2 * 1024 * 1024 : 0;
+    var offset = windowStart;
+    while (offset < bytes.length) {
+      final pos = PdfParserTokens.indexOfSequence(bytes, token, offset, bytes.length);
+      if (pos == -1) break;
+
+      final before = pos > 0 ? bytes[pos - 1] : 0x20;
+      final afterIndex = pos + token.length;
+      final after = afterIndex < bytes.length ? bytes[afterIndex] : 0x20;
+      if (!_isNameBoundary(before) || !_isNameBoundary(after)) {
+        offset = pos + token.length;
+        continue;
+      }
+
+      final contextStart = pos > 4096 ? pos - 4096 : 0;
+      final contextEnd = pos + 4096 < bytes.length ? pos + 4096 : bytes.length;
+      final hasTrailer = PdfParserTokens.indexOfSequence(
+            bytes,
+            trailerToken,
+            contextStart,
+            contextEnd,
+          ) !=
+          -1;
+      final hasXref = PdfParserTokens.indexOfSequence(
+            bytes,
+            xrefToken,
+            contextStart,
+            contextEnd,
+          ) !=
+          -1;
+      final hasXrefType = PdfParserTokens.indexOfSequence(
+            bytes,
+            xrefTypeToken,
+            contextStart,
+            contextEnd,
+          ) !=
+          -1;
+      if (hasTrailer || hasXref || hasXrefType) {
+        return pos;
+      }
+
+      offset = pos + token.length;
+    }
+    return -1;
+  }
+
+  static bool hasEncryptDictionary(Uint8List bytes) =>
+      findEncryptToken(bytes) != -1;
+
+  static bool _isNameBoundary(int b) {
+    if (PdfParserTokens.isWhitespace(b)) return true;
+    switch (b) {
+      case 0x00:
+      case 0x2F: // /
+      case 0x3C: // <
+      case 0x3E: // >
+      case 0x28: // (
+      case 0x29: // )
+      case 0x5B: // [
+      case 0x5D: // ]
+      case 0x7B: // {
+      case 0x7D: // }
+      case 0x25: // %
+        return true;
+      default:
+        return false;
+    }
   }
 
   static int? extractDocMdpPermissionFromBytes(Uint8List bytes) {

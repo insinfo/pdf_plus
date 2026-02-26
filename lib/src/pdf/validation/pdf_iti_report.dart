@@ -1,5 +1,5 @@
 import 'dart:typed_data';
-import 'package:pdf_plus/src/crypto/sha256.dart';
+import '../crypto/pdf_crypto.dart';
 import 'pdf_signature_validator.dart';
 import 'pdf_lpa.dart';
 
@@ -105,7 +105,7 @@ class PdfItiComplianceReport {
     bool? lpaOnline,
     bool? paOnline,
   }) {
-    final hash = sha256.convert(pdfBytes).toString();
+    final hash = _bytesToHex(PdfCrypto.sha256(pdfBytes));
     final signatures = _buildSignatureReports(validationReport.signatures, lpa);
     final anchored = signatures.where((s) => s.chainTrusted == true).length;
 
@@ -568,4 +568,12 @@ String? _maskCpf(String? cpf) {
   final part1 = middle.substring(0, 3);
   final part2 = middle.substring(3, 6);
   return '***.$part1.$part2-**';
+}
+
+String _bytesToHex(Uint8List bytes) {
+  final b = StringBuffer();
+  for (final v in bytes) {
+    b.write(v.toRadixString(16).padLeft(2, '0'));
+  }
+  return b.toString();
 }

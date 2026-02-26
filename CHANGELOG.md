@@ -1,5 +1,43 @@
 # Changelog
 
+## 3.14.0
+
+- **Unified platform crypto (VM/Web)**:
+  - Added a new `PlatformCrypto` abstraction with pure Dart implementation (`platform_crypto_impl.dart`) and a Web implementation (`platform_crypto_web.dart`) using Web Crypto API when available, with local fallback.
+  - Added new utilities and exports in `lib/src/crypto`: `signature_adapter.dart`, `rsa_pkcs1v15.dart`, `pure_ecdsa.dart`, `pure_ed25519.dart`, `openssh_ed25519.dart`.
+  - Expanded algorithm coverage: digest/HMAC/PBKDF2/HKDF, RSA PKCS#1 v1.5, RSA-PSS, ECDSA, and Ed25519.
+
+- **Modernized PDF/CMS signing**:
+  - `PdfExternalSigner` now supports `signSignedAttributes()` and configurable OIDs (`digestAlgorithmOid` / `signatureAlgorithmOid`), reducing RSA-specific coupling.
+  - `PdfCmsSigner`, `PdfRsaPrivateKeySigner`, and signing flows now use `SignatureAdapter`.
+  - Added `pdf_modern_signers.dart` with PKCS#8 signers for ECDSA and Ed25519.
+  - Expanded `PdfSignatureValidator` to validate modern flows (including ECDSA/Ed25519) while keeping legacy support.
+
+- **PDF parsing and robustness**:
+  - `PdfQuickInfo` was expanded with fast detection for `%PDF-` header, `%%EOF`, and `/Encrypt`.
+  - `parser_fields.dart` and `parser_xref.dart` were hardened for corrupted/legacy scenarios (robust `startxref` lookup, larger scan windows, tolerance to invalid values).
+  - Added `PdfSecurityInspector` for fast/asynchronous security inspection (encryption, signatures, corruption, ByteRange, SubFilter, optional hash).
+
+- **Tooling for large/corrupted PDF diagnostics**:
+  - Added `tool/pdf_security_info.dart` with a fast path optimized for large files via range reads (`RandomAccessReader`), xref repair fallback, and options `--sha256`, `--deep-signatures`, `--validate-signatures`.
+  - Improved alignment with repair behavior seen in tools like `mutool` for invalid `startxref` cases.
+
+- **Cross-platform PKI/Keystore**:
+  - Added a new `pki/io/pki_bytes_source*` layer for byte loading on VM, Web, and memory (`InMemoryPkiBytesSource`).
+  - `IcpBrasilCertificateLoader` now accepts file paths/URLs **or in-memory bytes**, enabling browser-friendly usage.
+  - Refactored JKS/BKS/PKCS#12/PKI builder paths to use unified crypto abstractions (HMAC, SHA, MD5, RNG, signing), removing direct dependence on engine-specific calls in these flows.
+  - `keystore.dart` and `pki.dart` now export the new IO/loader APIs.
+
+- **Security and internal consistency improvements**:
+  - `documentID` generation now uses centralized `PdfCrypto` with secure random source.
+  - Hashing in signature/report modules (`pdf_external_signing`, `pdf_timestamp_client`, `pdf_iti_report`) was unified via `PdfCrypto`.
+
+- **Tests and coverage**:
+  - Added new suites for `crypto`, `pki`, `pdf_security_inspector`, and modern signers (`ECDSA/Ed25519`), including CMS integration with OpenSSL.
+  - Added extra ASN.1/DER robustness tests and error-path scenarios in parsing/keystore.
+  - Full test run reported as successful (`dart test`: 681 tests passed).
+
+
 ## 3.13.0
 
 - **Dependency Reduction**: Removed dependency on `pointycastle` by implementing necessary cryptographic primitives locally.

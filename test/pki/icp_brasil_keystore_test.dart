@@ -176,5 +176,24 @@ void main() {
         print('No certificates loaded.');
       }
     });
+
+    test('loads certificates from in-memory bytes (web-friendly)', () async {
+      final jksPath =
+          'test/assets/truststore/keystore_icp_brasil/keystore_ICP_Brasil.jks';
+      final jksFile = File(jksPath);
+      if (!jksFile.existsSync()) {
+        print('Skipping in-memory loader test: JKS file not found.');
+        return;
+      }
+
+      final loader = IcpBrasilCertificateLoader(
+        jksBytes: jksFile.readAsBytesSync(),
+        jksPassword: '12345678',
+      );
+
+      final certs = await loader.loadFromJks();
+      expect(certs, isNotEmpty);
+      expect(certs.first.length, greaterThan(100));
+    });
   });
 }

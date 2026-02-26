@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:pdf_plus/src/crypto/sha256.dart';
+import '../crypto/pdf_crypto.dart';
 import '../format/base.dart';
 import '../format/dict.dart';
 import '../format/name.dart';
@@ -253,8 +253,7 @@ Uint8List _computeByteRangeDigest(Uint8List bytes, List<int> range) {
 
   final part1 = bytes.sublist(start1, start1 + len1);
   final part2 = bytes.sublist(start2, start2 + len2);
-  final digest = sha256.convert(<int>[...part1, ...part2]);
-  return Uint8List.fromList(digest.bytes);
+  return PdfCrypto.digestConcatSha256(part1, part2);
 }
 
 void _embedSignature(

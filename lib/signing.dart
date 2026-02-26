@@ -3,8 +3,10 @@ export 'src/pdf/signing/pdf_external_signing.dart';
 export 'src/pdf/signing/pdf_signature_config.dart';
 export 'src/pdf/signing/pdf_cms_signer.dart';
 export 'src/pdf/signing/pdf_rsa_signer.dart';
+export 'src/pdf/signing/pdf_modern_signers.dart';
 export 'src/pdf/signing/pem_utils.dart';
 export 'src/pdf/validation/pdf_signature_validator.dart';
+export 'src/pdf/validation/pdf_smart_trusted_roots.dart';
 export 'src/pdf/validation/pdf_signature_inspector.dart';
 export 'src/pdf/validation/pdf_iti_report.dart';
 export 'src/pdf/validation/pdf_lpa.dart';
@@ -18,6 +20,7 @@ export 'src/pdf/validation/pdf_revocation_provider_stub.dart'
 export 'src/pdf/visual/visual.dart';
 export 'src/pdf/parsing/pdf_document_parser.dart';
 export 'src/pdf/parsing/pdf_document_info.dart';
+export 'src/pdf/pdf_security_inspector.dart';
 
 export 'src/pdf/signing/pdf_pades_signer.dart';
 export 'src/pdf/signing/pdf_loaded_document.dart';

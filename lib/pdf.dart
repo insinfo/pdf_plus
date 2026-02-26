@@ -51,5 +51,6 @@ export 'src/pdf/obj/ttffont.dart';
 export 'src/pdf/signing/pdf_signature_tools.dart';
 export 'src/pdf/page_format.dart';
 export 'src/pdf/point.dart';
+export 'src/pdf/pdf_security_inspector.dart';
 export 'src/pdf/raster.dart';
 export 'src/pdf/rect.dart';
