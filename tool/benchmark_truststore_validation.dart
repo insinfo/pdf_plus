@@ -32,6 +32,15 @@ Future<void> main(List<String> args) async {
   final jksPaths = <String>[_defaultJksIcpBrasil, _defaultJksGovBr];
   final bksPaths = <String>[_defaultBksIcpBrasil, _defaultBksGovBr];
   final pdfs = <String>[_defaultPdf1, _defaultPdf2];
+  var hasCustomPdfInput = false;
+
+  void addCustomPdf(String path) {
+    if (!hasCustomPdfInput) {
+      pdfs.clear();
+      hasCustomPdfInput = true;
+    }
+    pdfs.add(path);
+  }
 
   for (var i = 0; i < args.length; i++) {
     switch (args[i]) {
@@ -67,17 +76,22 @@ Future<void> main(List<String> args) async {
         bksPassword = args[++i];
         break;
       case '--pdf':
-        pdfs.add(args[++i]);
+        addCustomPdf(args[++i]);
         break;
       case '--help':
       case '-h':
         _printHelp();
         return;
       default:
-        stderr.writeln('Argumento invalido: ${args[i]}');
-        _printHelp();
-        exitCode = 2;
-        return;
+        final token = args[i];
+        if (token.startsWith('-')) {
+          stderr.writeln('Argumento invalido: $token');
+          _printHelp();
+          exitCode = 2;
+          return;
+        }
+        addCustomPdf(token);
+        break;
     }
   }
 
@@ -633,6 +647,7 @@ Future<void> _printFunctionalReport(
 
 void _printHelp() {
   stdout.writeln('Uso: dart run tool/benchmark_truststore_validation.dart [opcoes]');
+  stdout.writeln('     dart run tool/benchmark_truststore_validation.dart <pdf1> [pdf2 ...]');
   stdout.writeln('  --runs <n>         Numero de repeticoes (padrao: 3)');
   stdout.writeln('  --smart-roots      Seleciona truststore por PDF (padrao)');
   stdout.writeln('  --no-smart-roots   Usa roots mescladas por formato');
@@ -642,7 +657,7 @@ void _printHelp() {
   stdout.writeln('  --bks-add <path>   Acrescenta BKS para merge/selecao');
   stdout.writeln('  --jks-pass <pass>  Senha JKS');
   stdout.writeln('  --bks-pass <pass>  Senha BKS');
-  stdout.writeln('  --pdf <path>       Adiciona PDF para teste (pode repetir)');
+  stdout.writeln('  --pdf <path>       Adiciona PDF para teste (pode repetir; substitui defaults)');
 }
 
 String _sanitizeMessage(String input) {

@@ -48,7 +48,7 @@ class JksKeyStore extends AbstractKeystore {
       offset += aliasLen;
 
       // Timestamp
-      final timestamp = data.getUint64(offset);
+      final timestamp = _readUint64BigEndian(data, offset);
       offset += 8;
 
       if (tag == 1) {
@@ -543,8 +543,17 @@ Uint8List _int32ToBytes(int value) {
 
 Uint8List _int64ToBytes(int value) {
   final b = ByteData(8);
-  b.setUint64(0, value);
+  final hi = ((value >> 32) & 0xFFFFFFFF);
+  final lo = (value & 0xFFFFFFFF);
+  b.setUint32(0, hi, Endian.big);
+  b.setUint32(4, lo, Endian.big);
   return b.buffer.asUint8List();
+}
+
+int _readUint64BigEndian(ByteData data, int offset) {
+  final hi = data.getUint32(offset, Endian.big);
+  final lo = data.getUint32(offset + 4, Endian.big);
+  return (hi * 0x100000000) + lo;
 }
 
 void _writeJavaUtf(BytesBuilder b, String s) {

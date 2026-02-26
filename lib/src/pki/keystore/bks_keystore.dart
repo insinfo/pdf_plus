@@ -345,7 +345,7 @@ class BksKeyStore extends AbstractKeystore {
       pos = newPos1;
 
       // Read timestamp
-      final timestamp = view.getInt64(pos);
+      final timestamp = _readInt64BigEndian(view, pos);
       pos += 8;
 
       // Read certificate chain
@@ -759,9 +759,7 @@ class BksKeyStore extends AbstractKeystore {
   }
 
   Uint8List _int64ToBytes(int value) {
-    final b = ByteData(8);
-    b.setUint64(0, value);
-    return b.buffer.asUint8List();
+    return _int64ToBytesBigEndian(value);
   }
 
   Uint8List _int16ToBytes(int value) {
@@ -803,4 +801,26 @@ class BksKeyStore extends AbstractKeystore {
     res.add(ciphertext);
     return res.toBytes();
   }
+}
+
+int _readInt64BigEndian(ByteData view, int offset) {
+  final hi = view.getUint32(offset, Endian.big);
+  final lo = view.getUint32(offset + 4, Endian.big);
+  if ((hi & 0x80000000) == 0) {
+    return (hi * 0x100000000) + lo;
+  }
+
+  final invHi = (~hi) & 0xFFFFFFFF;
+  final invLo = (~lo) & 0xFFFFFFFF;
+  final magnitude = (invHi * 0x100000000) + invLo + 1;
+  return -magnitude;
+}
+
+Uint8List _int64ToBytesBigEndian(int value) {
+  final bd = ByteData(8);
+  final hi = ((value >> 32) & 0xFFFFFFFF);
+  final lo = (value & 0xFFFFFFFF);
+  bd.setUint32(0, hi, Endian.big);
+  bd.setUint32(4, lo, Endian.big);
+  return bd.buffer.asUint8List();
 }
