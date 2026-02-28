@@ -1,5 +1,34 @@
 # Changelog
 
+## 3.15.0
+
+- **Refactored PDF signing internals**:
+  - Extracted shared signature internals (`ByteRange`, `/Contents` handling, digest preparation, and CMS embedding) into dedicated utilities.
+  - Reduced duplication across external signing and PAdES signing flows.
+
+- **Refactored PDF validation modules**:
+  - Introduced shared validation helpers for ASN.1 parsing, PDF date handling, normalization/hash helpers, and formatting.
+  - Updated validator/inspector/LPA/ITI reporting and trusted-roots logic to use the new common layer.
+
+- **New high-level validation API**:
+  - Added a dedicated validation API module with helpers for preflight checks, trust-profile-based validation, batch execution, and report-friendly outputs.
+  - Exported this API through signing public exports.
+
+- **Crypto and hex utility improvements**:
+  - Added centralized hex casing utilities and unified encoder/decoder behavior.
+  - Added web-native hex fast-path support with compatible fallback implementation.
+  - Added a public `crypto.dart` export entrypoint.
+
+- **Keystore/PKI consistency updates**:
+  - Extracted reusable binary helpers for keystore integer serialization.
+  - Unified certificate serial-to-hex conversion paths in X.509 handling.
+
+- **Tests, fixtures, and benchmarking**:
+  - Added tests for new signing/validation internals and hex/crypto exports.
+  - Added a robustness PDF fixture for invalid-signature scenarios.
+  - Added VM vs Web validation benchmark tooling.
+
+
 ## 3.14.0
 
 - **Unified platform crypto (VM/Web)**:
