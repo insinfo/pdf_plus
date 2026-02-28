@@ -13,6 +13,8 @@ import '../parsing/pdf_document_info.dart';
 import '../format/indirect.dart';
 import '../format/null_value.dart';
 import 'package:pdf_plus/src/pdf/pdf_names.dart';
+import 'pdf_validation_asn1_utils.dart';
+import 'pdf_validation_format_utils.dart';
 
 final SignatureAdapter _signatureAdapter = SignatureAdapter();
 
@@ -790,7 +792,8 @@ _TemporalEvaluationResult _evaluateTemporalStatus({
   if (notBefore == null || notAfter == null) {
     return const _TemporalEvaluationResult(
       statusOverride: PdfSignatureValidationStatus.indeterminate,
-      messageOverride: 'Validação temporal indeterminada: período do certificado ausente.',
+      messageOverride:
+          'Validação temporal indeterminada: período do certificado ausente.',
     );
   }
 
@@ -799,14 +802,16 @@ _TemporalEvaluationResult _evaluateTemporalStatus({
     if (st == null) {
       return const _TemporalEvaluationResult(
         statusOverride: PdfSignatureValidationStatus.indeterminate,
-        messageOverride: 'Validação temporal indeterminada: signingTime ausente.',
+        messageOverride:
+            'Validação temporal indeterminada: signingTime ausente.',
       );
     }
     if (st.isBefore(notBefore) || st.isAfter(notAfter)) {
       return const _TemporalEvaluationResult(
         statusOverride: PdfSignatureValidationStatus.rejected,
         certValidOverride: false,
-        messageOverride: 'Assinatura fora do período de validade do certificado.',
+        messageOverride:
+            'Assinatura fora do período de validade do certificado.',
       );
     }
     return const _TemporalEvaluationResult();
@@ -817,14 +822,16 @@ _TemporalEvaluationResult _evaluateTemporalStatus({
     return const _TemporalEvaluationResult(
       statusOverride: PdfSignatureValidationStatus.rejected,
       certValidOverride: false,
-      messageOverride: 'Certificado ainda não era válido no instante de validação.',
+      messageOverride:
+          'Certificado ainda não era válido no instante de validação.',
     );
   }
   if (vt.isAfter(notAfter)) {
     if (temporalExpiredNeedsLtv) {
       return const _TemporalEvaluationResult(
         statusOverride: PdfSignatureValidationStatus.indeterminate,
-        messageOverride: 'Certificado expirado no instante de validação (LTV exigido).',
+        messageOverride:
+            'Certificado expirado no instante de validação (LTV exigido).',
       );
     }
     return const _TemporalEvaluationResult(
@@ -2059,81 +2066,7 @@ PdfSignatureCertificateInfo? _parseCertificateInfo(Uint8List certDer) {
 }
 
 DateTime? _parseAsn1Time(ASN1Object obj) {
-  Uint8List? bytes;
-  if (obj is ASN1UtcTime || obj is ASN1GeneralizedTime) {
-    bytes = obj.valueBytes();
-  } else {
-    try {
-      final dynamic dyn = obj;
-      final b = dyn.valueBytes;
-      if (b is Uint8List) bytes = b;
-      if (b is List<int>) bytes = Uint8List.fromList(b);
-    } catch (_) {}
-  }
-  if (bytes == null || bytes.isEmpty) return null;
-  final text = String.fromCharCodes(bytes).trim();
-  if (text.isEmpty) return null;
-
-  // Formats: YYMMDDHHMMSSZ or YYYYMMDDHHMMSSZ (optionally with timezone offset)
-  try {
-    if (text.endsWith('Z')) {
-      final t = text.substring(0, text.length - 1);
-      if (t.length == 12) {
-        final year = int.parse(t.substring(0, 2));
-        final fullYear = year >= 50 ? 1900 + year : 2000 + year;
-        return DateTime.utc(
-          fullYear,
-          int.parse(t.substring(2, 4)),
-          int.parse(t.substring(4, 6)),
-          int.parse(t.substring(6, 8)),
-          int.parse(t.substring(8, 10)),
-          int.parse(t.substring(10, 12)),
-        );
-      }
-      if (t.length == 14) {
-        return DateTime.utc(
-          int.parse(t.substring(0, 4)),
-          int.parse(t.substring(4, 6)),
-          int.parse(t.substring(6, 8)),
-          int.parse(t.substring(8, 10)),
-          int.parse(t.substring(10, 12)),
-          int.parse(t.substring(12, 14)),
-        );
-      }
-    }
-    final plus = text.lastIndexOf('+');
-    final minus = text.lastIndexOf('-');
-    final signIndex = plus > -1 ? plus : minus;
-    if (signIndex > 0) {
-      final base = text.substring(0, signIndex);
-      if (base.length == 12) {
-        final year = int.parse(base.substring(0, 2));
-        final fullYear = year >= 50 ? 1900 + year : 2000 + year;
-        return DateTime(
-          fullYear,
-          int.parse(base.substring(2, 4)),
-          int.parse(base.substring(4, 6)),
-          int.parse(base.substring(6, 8)),
-          int.parse(base.substring(8, 10)),
-          int.parse(base.substring(10, 12)),
-        );
-      }
-      if (base.length == 14) {
-        return DateTime(
-          int.parse(base.substring(0, 4)),
-          int.parse(base.substring(4, 6)),
-          int.parse(base.substring(6, 8)),
-          int.parse(base.substring(8, 10)),
-          int.parse(base.substring(10, 12)),
-          int.parse(base.substring(12, 14)),
-        );
-      }
-    }
-    // Fallback: try parse with DateTime.parse if looks like ISO.
-    return DateTime.tryParse(text);
-  } catch (_) {
-    return null;
-  }
+  return parseAsn1TimeLoose(obj);
 }
 
 String _formatX509Name(ASN1Sequence nameSeq) {
@@ -3115,7 +3048,8 @@ _SpkiInfo? _spkiInfoFromCert(Uint8List certDer) {
     final algorithmOid = _oidToString(algOidObj);
     if (algorithmOid == null) return null;
     String? curveOid;
-    if (algSeq.elements.length > 1 && algSeq.elements[1] is ASN1ObjectIdentifier) {
+    if (algSeq.elements.length > 1 &&
+        algSeq.elements[1] is ASN1ObjectIdentifier) {
       curveOid = _oidToString(algSeq.elements[1] as ASN1ObjectIdentifier);
     }
 
@@ -3227,49 +3161,7 @@ Uint8List _encodeLength(int length) {
 String _byteRangeKey(List<int> range) => range.join(',');
 
 DateTime? _parsePdfDate(String raw) {
-  var text = raw.trim();
-  if (text.isEmpty) return null;
-  if (text.startsWith('D:')) {
-    text = text.substring(2);
-  }
-  final digits = RegExp(r'^\d{4,14}').firstMatch(text)?.group(0) ?? '';
-  if (digits.length < 4) return null;
-  final year = int.parse(digits.substring(0, 4));
-  final month = digits.length >= 6 ? int.parse(digits.substring(4, 6)) : 1;
-  final day = digits.length >= 8 ? int.parse(digits.substring(6, 8)) : 1;
-  final hour = digits.length >= 10 ? int.parse(digits.substring(8, 10)) : 0;
-  final minute = digits.length >= 12 ? int.parse(digits.substring(10, 12)) : 0;
-  final second = digits.length >= 14 ? int.parse(digits.substring(12, 14)) : 0;
-
-  var offsetSign = 0;
-  var offsetHours = 0;
-  var offsetMinutes = 0;
-  final tzMatch = RegExp(r'([+\-Z])').firstMatch(text.substring(digits.length));
-  if (tzMatch != null) {
-    final tz = tzMatch.group(1);
-    if (tz == 'Z') {
-      offsetSign = 0;
-    } else if (tz == '+' || tz == '-') {
-      offsetSign = tz == '+' ? 1 : -1;
-      final rest = text.substring(digits.length + 1);
-      final hh = RegExp(r'\d{2}').firstMatch(rest)?.group(0);
-      if (hh != null) offsetHours = int.parse(hh);
-      final mm = RegExp(r"'?(\d{2})'?")
-          .allMatches(rest)
-          .map((m) => m.group(1))
-          .toList();
-      if (mm.length > 1 && mm[1] != null) {
-        offsetMinutes = int.parse(mm[1]!);
-      } else if (mm.isNotEmpty && mm.first != null) {
-        offsetMinutes = int.parse(mm.first!);
-      }
-    }
-  }
-
-  final utc = DateTime.utc(year, month, day, hour, minute, second);
-  if (offsetSign == 0) return utc;
-  final offset = Duration(hours: offsetHours, minutes: offsetMinutes);
-  return utc.subtract(offsetSign > 0 ? offset : -offset);
+  return parsePdfDateToUtc(raw);
 }
 
 String? _scanSigningTimeNearByteRange(Uint8List pdfBytes, List<int> range) {
@@ -3346,24 +3238,7 @@ int? _readTagNumber(ASN1Object obj) {
 }
 
 String? _oidToString(ASN1ObjectIdentifier oid) {
-  final dynamic dyn = oid;
-  try {
-    final v = dyn.objectIdentifierAsString;
-    return v?.toString();
-  } catch (_) {}
-  try {
-    final v = dyn.oidName;
-    return v?.toString();
-  } catch (_) {}
-  try {
-    final v = oid.toString();
-    const prefix = 'ObjectIdentifier(';
-    if (v.startsWith(prefix) && v.endsWith(')')) {
-      return v.substring(prefix.length, v.length - 1);
-    }
-    return v;
-  } catch (_) {}
-  return null;
+  return asn1ObjectIdentifierToString(oid);
 }
 
 Uint8List? _extractMessageDigest(Uint8List cmsBytes) {
@@ -3704,7 +3579,3 @@ bool _listEquals(List<int> a, List<int> b) {
   }
   return true;
 }
-
-
-
-

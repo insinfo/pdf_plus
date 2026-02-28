@@ -9,6 +9,7 @@ export 'src/pdf/validation/pdf_signature_validator.dart';
 export 'src/pdf/validation/pdf_smart_trusted_roots.dart';
 export 'src/pdf/validation/pdf_signature_inspector.dart';
 export 'src/pdf/validation/pdf_iti_report.dart';
+export 'src/pdf/validation/pdf_validation_api.dart';
 export 'src/pdf/validation/pdf_lpa.dart';
 export 'src/pdf/validation/pdf_ltv_service.dart';
 export 'src/pdf/validation/pdf_dss.dart';

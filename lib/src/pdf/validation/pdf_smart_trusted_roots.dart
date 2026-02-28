@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:pdf_plus/src/pdf/crypto/pdf_crypto.dart';
 import 'package:pdf_plus/src/pki/x509_certificate.dart';
 
 import 'pdf_signature_validator.dart';
+import 'pdf_validation_common.dart';
 
 /// Named trusted-roots source used by the smart selector.
 class PdfTrustedRootsSource {
@@ -44,7 +44,7 @@ class PdfTrustedRootsIndex {
       for (final der in dedupedRoots) {
         try {
           final cert = X509Certificate.fromDer(der);
-          final normalized = _normalizeName(cert.subject.toString());
+          final normalized = normalizeValidationName(cert.subject.toString());
           if (normalized != null) subjects.add(normalized);
         } catch (_) {
           // Ignore malformed roots in index and keep remaining valid ones.
@@ -76,8 +76,8 @@ class PdfTrustedRootsIndex {
     return merged;
   }
 
-  Set<String> subjectsForSource(String sourceId) =>
-      Set<String>.from(_entries[sourceId]?.normalizedSubjects ?? const <String>{});
+  Set<String> subjectsForSource(String sourceId) => Set<String>.from(
+      _entries[sourceId]?.normalizedSubjects ?? const <String>{});
 }
 
 /// Selection result containing the chosen roots and diagnostics.
@@ -112,7 +112,7 @@ class PdfSmartTrustedRootsSelector {
   final Map<String, PdfTrustedRootsSelection> _selectionCache = {};
 
   Future<PdfTrustedRootsSelection> selectForPdf(Uint8List pdfBytes) async {
-    final cacheKey = _sha256Hex(pdfBytes);
+    final cacheKey = validationSha256Hex(pdfBytes);
     final cached = _selectionCache[cacheKey];
     if (cached != null) return cached;
 
@@ -129,13 +129,16 @@ class PdfSmartTrustedRootsSelector {
       final subjects = index.subjectsForSource(sourceId);
       if (_matchesAnyIssuer(unresolved, subjects)) {
         selectedIds.add(sourceId);
-        unresolved.removeWhere((issuer) => _subjectMatchesIssuer(issuer, subjects));
+        unresolved.removeWhere(
+          (issuer) => subjectMatchesValidationIssuer(issuer, subjects),
+        );
       }
       if (unresolved.isEmpty) break;
     }
 
     if (selectedIds.isEmpty) {
-      final result = _selectAll('No trusted-root source matched signer issuer.');
+      final result =
+          _selectAll('No trusted-root source matched signer issuer.');
       _selectionCache[cacheKey] = result;
       return result;
     }
@@ -171,7 +174,7 @@ class PdfSmartTrustedRootsSelector {
     );
     final issuers = <String>{};
     for (final sig in extraction.signatures) {
-      final normalized = _normalizeName(sig.signerCertificate?.issuer);
+      final normalized = normalizeValidationName(sig.signerCertificate?.issuer);
       if (normalized != null) issuers.add(normalized);
     }
     return issuers.toList(growable: false);
@@ -298,31 +301,7 @@ List<Uint8List> _dedupeRoots(List<Uint8List> roots) {
 
 bool _matchesAnyIssuer(Set<String> issuers, Set<String> subjects) {
   for (final issuer in issuers) {
-    if (_subjectMatchesIssuer(issuer, subjects)) return true;
+    if (subjectMatchesValidationIssuer(issuer, subjects)) return true;
   }
   return false;
-}
-
-bool _subjectMatchesIssuer(String issuer, Set<String> subjects) {
-  for (final subject in subjects) {
-    if (subject == issuer || subject.contains(issuer) || issuer.contains(subject)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-String? _normalizeName(String? value) {
-  if (value == null) return null;
-  final normalized = value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
-  return normalized.isEmpty ? null : normalized;
-}
-
-String _sha256Hex(Uint8List bytes) {
-  final digest = PdfCrypto.sha256(bytes);
-  final sb = StringBuffer();
-  for (final b in digest) {
-    sb.write(b.toRadixString(16).padLeft(2, '0'));
-  }
-  return sb.toString();
 }

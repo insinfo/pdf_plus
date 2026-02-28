@@ -7,7 +7,8 @@ import 'package:test/test.dart';
 void main() {
   group('X509Certificate', () {
     test('fromDer extrai campos básicos e toPem roundtrip', () {
-      final file = File('test/assets/truststore/iti/ACFinaldoGovernoFederaldoBrasilv1.crt');
+      final file = File(
+          'test/assets/truststore/iti/ACFinaldoGovernoFederaldoBrasilv1.crt');
       if (!file.existsSync()) {
         return;
       }
@@ -21,6 +22,8 @@ void main() {
       expect(cert.tbsSignatureAlgorithmOid, isNotEmpty);
       expect(cert.subject.attributes, isNotEmpty);
       expect(cert.issuer.attributes, isNotEmpty);
+      expect(cert.serialNumberHex,
+          cert.serialNumber.toRadixString(16).toUpperCase());
       expect(cert.subjectPublicKeyInfoDer, isNotEmpty);
       expect(cert.signatureValue, isNotEmpty);
 
@@ -33,7 +36,8 @@ void main() {
     });
 
     test('isValidAt respeita janela de validade', () {
-      final file = File('test/assets/truststore/iti/ACFinaldoGovernoFederaldoBrasilv1.crt');
+      final file = File(
+          'test/assets/truststore/iti/ACFinaldoGovernoFederaldoBrasilv1.crt');
       if (!file.existsSync()) {
         return;
       }
@@ -43,8 +47,11 @@ void main() {
         cert.notAfter.difference(cert.notBefore) ~/ 2,
       );
       expect(cert.isValidAt(middle), isTrue);
-      expect(cert.isValidAt(cert.notBefore.subtract(const Duration(seconds: 1))), isFalse);
-      expect(cert.isValidAt(cert.notAfter.add(const Duration(seconds: 1))), isFalse);
+      expect(
+          cert.isValidAt(cert.notBefore.subtract(const Duration(seconds: 1))),
+          isFalse);
+      expect(cert.isValidAt(cert.notAfter.add(const Duration(seconds: 1))),
+          isFalse);
     });
 
     test('fromDer falha com DER inválido', () {

@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import '../crypto/pdf_crypto.dart';
 import 'pdf_signature_validator.dart';
 import 'pdf_lpa.dart';
+import 'pdf_validation_format_utils.dart';
 
 class PdfItiComplianceMetadata {
   PdfItiComplianceMetadata({
@@ -561,19 +562,9 @@ String? _formatDateTimeBrt(DateTime? dt) {
 String _twoDigits(int value) => value < 10 ? '0$value' : value.toString();
 
 String? _maskCpf(String? cpf) {
-  if (cpf == null) return null;
-  final digits = cpf.replaceAll(RegExp(r'\D'), '');
-  if (digits.length != 11) return cpf;
-  final middle = digits.substring(3, 9);
-  final part1 = middle.substring(0, 3);
-  final part2 = middle.substring(3, 6);
-  return '***.$part1.$part2-**';
+  return maskCpfPreserveInvalid(cpf);
 }
 
 String _bytesToHex(Uint8List bytes) {
-  final b = StringBuffer();
-  for (final v in bytes) {
-    b.write(v.toRadixString(16).padLeft(2, '0'));
-  }
-  return b.toString();
+  return bytesToHexLowerUint8(bytes);
 }

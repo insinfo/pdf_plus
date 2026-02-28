@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'pdf_signature_validator.dart';
+import 'pdf_validation_format_utils.dart';
 import 'package:pdf_plus/src/pdf/io/pdf_http_fetcher_base.dart';
 
 class PdfSignatureInspectionReport {
@@ -98,8 +99,8 @@ class PdfSignatureInspector {
       final policyPresent = sig.signaturePolicyOid != null;
       final rawSigningTime = sig.signatureField?.signingTimeRaw;
       final signingTime = policyPresent && rawSigningTime != null
-          ? _parsePdfDate(rawSigningTime)
-          : sig.signingTime ?? _parsePdfDate(rawSigningTime);
+          ? parsePdfDateLocal(rawSigningTime)
+          : sig.signingTime ?? parsePdfDateLocal(rawSigningTime);
 
       return PdfSignatureSummary(
         signatureIndex: sig.signatureIndex,
@@ -123,8 +124,7 @@ class PdfSignatureInspector {
 PdfSignatureSignerInfo? _buildSignerInfo(PdfSignatureCertificateInfo? cert) {
   if (cert == null) return null;
   final serial = cert.serial;
-  final serialHex =
-      serial != null ? serial.toRadixString(16).toUpperCase() : null;
+  final serialHex = serial != null ? bigIntToHexUpper(serial) : null;
   final serialDec = serial?.toString();
   final subject = cert.subject;
   return PdfSignatureSignerInfo(
@@ -150,27 +150,4 @@ String? _extractCommonName(String? subject) {
     }
   }
   return null;
-}
-
-DateTime? _parsePdfDate(String? raw) {
-  if (raw == null || raw.isEmpty) return null;
-  var value = raw.trim();
-  if (value.startsWith('D:')) {
-    value = value.substring(2);
-  }
-  if (value.length < 8) return null;
-  int parseInt(String s, int start, int len, int fallback) {
-    if (start + len > s.length) return fallback;
-    final chunk = s.substring(start, start + len);
-    return int.tryParse(chunk) ?? fallback;
-  }
-
-  final year = parseInt(value, 0, 4, 0);
-  final month = parseInt(value, 4, 2, 1);
-  final day = parseInt(value, 6, 2, 1);
-  final hour = parseInt(value, 8, 2, 0);
-  final minute = parseInt(value, 10, 2, 0);
-  final second = parseInt(value, 12, 2, 0);
-  if (year <= 0) return null;
-  return DateTime(year, month, day, hour, minute, second);
 }

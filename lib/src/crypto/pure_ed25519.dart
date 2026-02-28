@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'asn1/asn1.dart';
 import 'platform_crypto_common.dart';
+import 'utils.dart';
 
 class PureEd25519 {
   static Uint8List extractSeedFromPkcs8(Uint8List pkcs8PrivateKey) {
@@ -132,7 +133,7 @@ class PureEd25519 {
 
     final left = _Ed25519Math.scalarMul(_Ed25519Math.basePoint, s);
     final right = _Ed25519Math.add(rPoint, _Ed25519Math.scalarMul(aPoint, k));
-    return _bytesEqual(
+    return constantTimeAreEqual(
       _Ed25519Math.encodePoint(left),
       _Ed25519Math.encodePoint(right),
     );
@@ -308,13 +309,4 @@ BigInt _modInverse(BigInt a, BigInt m) {
     throw ArgumentError('Elemento nao invertivel');
   }
   return _mod(t, m);
-}
-
-bool _bytesEqual(Uint8List a, Uint8List b) {
-  if (a.length != b.length) return false;
-  var r = 0;
-  for (var i = 0; i < a.length; i++) {
-    r |= a[i] ^ b[i];
-  }
-  return r == 0;
 }

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'pure_ed25519.dart';
+import 'utils.dart';
 
 class OpenSshEd25519KeyPair {
   const OpenSshEd25519KeyPair({
@@ -169,7 +170,10 @@ class OpenSshEd25519Converter {
       decodeOpenSshPrivate(Uint8List bytes) {
     final magic = utf8.encode('openssh-key-v1\u0000');
     if (bytes.length < magic.length ||
-        !_bytesEqual(bytes.sublist(0, magic.length), magic)) {
+        !constantTimeAreEqual(
+          Uint8List.fromList(bytes.sublist(0, magic.length)),
+          Uint8List.fromList(magic),
+        )) {
       throw ArgumentError('Formato OpenSSH private key invalido');
     }
     var off = magic.length;
@@ -224,7 +228,7 @@ class OpenSshEd25519Converter {
     }
     final seed = Uint8List.fromList(priv.value.sublist(0, 32));
     final pubFromPriv = Uint8List.fromList(priv.value.sublist(32, 64));
-    if (!_bytesEqual(pub.value, pubFromPriv)) {
+    if (!constantTimeAreEqual(pub.value, pubFromPriv)) {
       throw ArgumentError('Chave publica inconsistente no OpenSSH private key');
     }
 
@@ -236,7 +240,7 @@ class OpenSshEd25519Converter {
     }
 
     final pubFromHeader = _parsePublicBlob(publicBlob.value);
-    if (!_bytesEqual(pub.value, pubFromHeader)) {
+    if (!constantTimeAreEqual(pub.value, pubFromHeader)) {
       throw ArgumentError('Chave publica header/private mismatch');
     }
 
@@ -328,13 +332,4 @@ Uint8List _decodePem(String pem, String label) {
     throw ArgumentError('PEM $label vazio');
   }
   return Uint8List.fromList(base64.decode(b64));
-}
-
-bool _bytesEqual(List<int> a, List<int> b) {
-  if (a.length != b.length) return false;
-  var r = 0;
-  for (var i = 0; i < a.length; i++) {
-    r |= a[i] ^ b[i];
-  }
-  return r == 0;
 }

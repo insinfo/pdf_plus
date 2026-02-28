@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'platform_crypto_impl.dart'
     if (dart.library.html) 'platform_crypto_web.dart';
+import '../utils/convert/hex/hex_case.dart';
 
 abstract class PlatformCrypto {
   const PlatformCrypto();
@@ -215,9 +216,5 @@ Future<Uint8List> digestBytes(String algorithm, Uint8List data) {
 }
 
 String bytesToHex(Uint8List bytes) {
-  final b = StringBuffer();
-  for (final v in bytes) {
-    b.write(v.toRadixString(16).padLeft(2, '0'));
-  }
-  return b.toString();
+  return hexLower(bytes);
 }

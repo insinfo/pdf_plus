@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:pdf_plus/src/crypto/asn1/asn1.dart';
 import 'package:pdf_plus/src/pdf/signing/pem_utils.dart';
+import 'package:pdf_plus/src/utils/convert/hex/hex_case.dart';
 
 class X509Certificate {
   X509Certificate._({
@@ -92,7 +93,7 @@ class X509Certificate {
   final Uint8List signatureValue;
   final List<X509Extension> extensions;
 
-  String get serialNumberHex => serialNumber.toRadixString(16).toUpperCase();
+  String get serialNumberHex => bigIntHexUpper(serialNumber);
 
   bool isValidAt(DateTime instant) {
     final utc = instant.toUtc();

@@ -15,6 +15,7 @@
  */
 
 import '../document.dart';
+import '../../utils/convert/hex/hex_case.dart';
 import 'object_stream.dart';
 
 /// Unicode character map object
@@ -52,7 +53,7 @@ class PdfUnicodeCmap extends PdfObjectStream {
     for (var key = 0; key < cmap.length; key++) {
       final value = cmap[key];
       buf.putString(
-          '<${key.toRadixString(16).toUpperCase().padLeft(4, '0')}> <${value.toRadixString(16).toUpperCase().padLeft(4, '0')}>\n');
+          '<${intHexUpper(key).padLeft(4, '0')}> <${intHexUpper(value).padLeft(4, '0')}>\n');
     }
 
     buf.putString('endbfchar\n'

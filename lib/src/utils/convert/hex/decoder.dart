@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import '../utils/utils.dart';
+import 'native_hex_stub.dart' if (dart.library.html) 'native_hex_web.dart'
+    as native_hex;
 
 /// The canonical instance of [HexDecoder].
 const hexDecoder = HexDecoder._();
@@ -22,6 +24,11 @@ class HexDecoder extends Converter<String, List<int>> {
         input,
         input.length,
       );
+    }
+
+    final native = native_hex.tryNativeHexDecode(input);
+    if (native != null) {
+      return native;
     }
 
     var bytes = Uint8List(input.length ~/ 2);

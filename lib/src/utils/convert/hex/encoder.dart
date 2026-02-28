@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import '../utils/charcodes.dart';
+import 'native_hex_stub.dart' if (dart.library.html) 'native_hex_web.dart'
+    as native_hex;
 
 /// The canonical instance of [HexEncoder].
 const hexEncoder = HexEncoder._();
@@ -47,6 +49,9 @@ class _HexEncoderSink extends ByteConversionSinkBase {
 }
 
 String _convert(List<int> bytes, int start, int end) {
+  final native = native_hex.tryNativeHexEncode(bytes, start, end);
+  if (native != null) return native;
+
   // A Uint8List is more efficient than a StringBuffer given that we know that
   // we're only emitting ASCII-compatible characters, and that we know the
   // length ahead of time.

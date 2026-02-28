@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:pdf_plus/src/crypto/export.dart';
 
 import 'keystore_base.dart';
+import 'keystore_binary_utils.dart';
 
 final PlatformCrypto _pkiCrypto = createPlatformCrypto();
 
@@ -542,12 +543,7 @@ Uint8List _int32ToBytes(int value) {
 }
 
 Uint8List _int64ToBytes(int value) {
-  final b = ByteData(8);
-  final hi = ((value >> 32) & 0xFFFFFFFF);
-  final lo = (value & 0xFFFFFFFF);
-  b.setUint32(0, hi, Endian.big);
-  b.setUint32(4, lo, Endian.big);
-  return b.buffer.asUint8List();
+  return keystoreInt64ToBytesBigEndian(value);
 }
 
 int _readUint64BigEndian(ByteData data, int offset) {
@@ -837,7 +833,6 @@ Uint8List _jceksDecrypt(Uint8List encryptedPrivateKeyInfo, String password) {
 
 Uint8List _jceksDerivePart(
     Uint8List password, Uint8List saltPart, int iterations) {
-
   // Initial: MD5(saltPart || password)
   Uint8List input = Uint8List(saltPart.length + password.length);
   input.setAll(0, saltPart);

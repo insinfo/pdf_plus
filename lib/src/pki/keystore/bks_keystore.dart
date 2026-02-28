@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:pdf_plus/src/crypto/export.dart';
 
 import 'keystore_base.dart';
+import 'keystore_binary_utils.dart';
 
 final PlatformCrypto _pkiCrypto = createPlatformCrypto();
 
@@ -817,10 +818,5 @@ int _readInt64BigEndian(ByteData view, int offset) {
 }
 
 Uint8List _int64ToBytesBigEndian(int value) {
-  final bd = ByteData(8);
-  final hi = ((value >> 32) & 0xFFFFFFFF);
-  final lo = (value & 0xFFFFFFFF);
-  bd.setUint32(0, hi, Endian.big);
-  bd.setUint32(4, lo, Endian.big);
-  return bd.buffer.asUint8List();
+  return keystoreInt64ToBytesBigEndian(value);
 }

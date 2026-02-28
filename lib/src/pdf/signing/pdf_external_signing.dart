@@ -2,15 +2,12 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import '../crypto/pdf_crypto.dart';
-
 import '../document.dart';
 import '../format/array.dart';
 import '../format/base.dart';
 import '../format/dict.dart';
 import '../format/name.dart';
 import '../format/num.dart';
-import '../format/object_base.dart';
 import '../format/stream.dart';
 import '../format/string.dart';
 import '../graphics.dart';
@@ -21,6 +18,7 @@ import '../obj/object.dart';
 import '../obj/signature.dart';
 import '../rect.dart';
 import 'pdf_signature_config.dart';
+import 'pdf_signature_internal_utils.dart';
 import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 /// Result of preparing a PDF for external signing.
@@ -33,8 +31,10 @@ class PdfExternalSigningPrepared {
 
   /// PDF bytes with signature placeholder.
   final Uint8List preparedPdfBytes;
+
   /// ByteRange array used for hashing.
   final List<int> byteRange;
+
   /// Base64-encoded hash of the ByteRange content.
   final String hashBase64;
 }
@@ -43,10 +43,13 @@ class PdfExternalSigningPrepared {
 class PdfExternalSigning {
   /// Use internal ByteRange parser implementation.
   static bool useInternalByteRangeParser = false;
+
   /// Use fast ByteRange parser when possible.
   static bool useFastByteRangeParser = true;
+
   /// Use internal /Contents parser implementation.
   static bool useInternalContentsParser = false;
+
   /// Use fast /Contents parser when possible.
   static bool useFastContentsParser = true;
 
@@ -224,7 +227,8 @@ class PdfExternalSigning {
         );
         final g = PdfGraphics(appearance, appearance.buf);
         drawAppearance(g, PdfRect(0, 0, fieldBounds.width, fieldBounds.height));
-        updated[PdfNameTokens.ap] = PdfDict.values({PdfNameTokens.n: appearance.ref()});
+        updated[PdfNameTokens.ap] =
+            PdfDict.values({PdfNameTokens.n: appearance.ref()});
       }
 
       document.signatures.updateFieldDict(existingField, updated);
@@ -278,15 +282,18 @@ class _PdfExternalSignaturePlaceholder extends PdfSignatureBase {
     params[PdfNameTokens.filter] = const PdfName(PdfNameTokens.adobePpkLite);
     if (signature?.isDocTimeStamp == true) {
       params[PdfNameTokens.type] = const PdfName(PdfNameTokens.docTimeStamp);
-      params[PdfNameTokens.subFilter] = const PdfName(PdfNameTokens.etsiRfc3161);
+      params[PdfNameTokens.subFilter] =
+          const PdfName(PdfNameTokens.etsiRfc3161);
     } else if (signature?.subFilter != null) {
       final raw = signature!.subFilter!;
       final name = raw.startsWith('/') ? raw : '/$raw';
       params[PdfNameTokens.subFilter] = PdfName(name);
     } else {
-      params[PdfNameTokens.subFilter] = const PdfName(PdfNameTokens.adbePkcs7Detached);
+      params[PdfNameTokens.subFilter] =
+          const PdfName(PdfNameTokens.adbePkcs7Detached);
     }
-    params[PdfNameTokens.byteRange] = _PdfByteRangePlaceholder(digits: byteRangeDigits);
+    params[PdfNameTokens.byteRange] =
+        PdfByteRangePlaceholder(digits: byteRangeDigits);
     params[PdfNameTokens.contents] = PdfString(
       Uint8List(contentsReserveSize),
       format: PdfStringFormat.binary,
@@ -299,10 +306,12 @@ class _PdfExternalSignaturePlaceholder extends PdfSignatureBase {
       params[PdfNameTokens.reason] = PdfString.fromString(signature!.reason!);
     }
     if (signature?.location != null) {
-      params[PdfNameTokens.location] = PdfString.fromString(signature!.location!);
+      params[PdfNameTokens.location] =
+          PdfString.fromString(signature!.location!);
     }
     if (signature?.contactInfo != null) {
-      params[PdfNameTokens.contactinfo] = PdfString.fromString(signature!.contactInfo!);
+      params[PdfNameTokens.contactinfo] =
+          PdfString.fromString(signature!.contactInfo!);
     }
     if (signature?.name != null) {
       params[PdfNameTokens.name] = PdfString.fromString(signature!.name!);
@@ -353,67 +362,14 @@ class _PdfExternalSignaturePlaceholder extends PdfSignatureBase {
   }
 }
 
-class _PdfByteRangePlaceholder extends PdfDataType {
-  const _PdfByteRangePlaceholder({required this.digits});
-
-  final int digits;
-
-  @override
-  void output(PdfObjectBase o, PdfStream s, [int? indent]) {
-    final zero = '0'.padLeft(digits, '0');
-    s.putByte(0x5B); // [
-    s.putString('$zero $zero $zero $zero');
-    s.putByte(0x5D); // ]
-  }
-}
-
-class _ContentsRange {
-  _ContentsRange(this.lt, this.gt);
-  final int lt;
-  final int gt;
-
-  int get start => lt + 1;
-  int get end => gt;
-}
+typedef _ContentsRange = PdfContentsRange;
 
 _ContentsRange _findContentsRange(
   Uint8List bytes,
   int start,
   int end,
 ) {
-  const contentsToken = <int>[
-    0x2F, // /
-    0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x73, // Contents
-  ];
-
-  final contentsPos = _indexOfSequence(bytes, contentsToken, start, end);
-  if (contentsPos == -1) {
-    throw StateError('Não foi possível localizar /Contents na assinatura.');
-  }
-
-  int lt = -1;
-  for (int i = contentsPos + contentsToken.length; i < end; i++) {
-    if (bytes[i] == 0x3C /* < */) {
-      lt = i;
-      break;
-    }
-  }
-  if (lt == -1) {
-    throw StateError('Delimitador < de /Contents não encontrado.');
-  }
-
-  int gt = -1;
-  for (int i = lt + 1; i < end; i++) {
-    if (bytes[i] == 0x3E /* > */) {
-      gt = i;
-      break;
-    }
-  }
-  if (gt == -1 || gt <= lt) {
-    throw StateError('Delimitador > de /Contents não encontrado.');
-  }
-
-  return _ContentsRange(lt, gt);
+  return findContentsRangeInWindow(bytes, start, end);
 }
 
 void _writeByteRange(
@@ -422,68 +378,11 @@ void _writeByteRange(
   int end,
   List<int> range,
 ) {
-  const byteRangeToken = <int>[
-    0x2F, // /
-    0x42, 0x79, 0x74, 0x65, 0x52, 0x61, 0x6E, 0x67, 0x65, // ByteRange
-  ];
-
-  final pos = _indexOfSequence(bytes, byteRangeToken, start, end);
-  if (pos == -1) {
-    throw StateError('Não foi possível localizar /ByteRange na assinatura.');
-  }
-
-  int i = pos + byteRangeToken.length;
-  while (i < end && bytes[i] != 0x5B /* [ */) {
-    i++;
-  }
-  if (i >= end) {
-    throw StateError('Abertura [ do /ByteRange não encontrada.');
-  }
-  final bracketStart = i;
-  int bracketEnd = -1;
-  for (int j = bracketStart + 1; j < end; j++) {
-    if (bytes[j] == 0x5D /* ] */) {
-      bracketEnd = j;
-      break;
-    }
-  }
-  if (bracketEnd == -1) {
-    throw StateError('Fechamento ] do /ByteRange não encontrado.');
-  }
-
-  final width = ((bracketEnd - bracketStart - 1) - 3) ~/ 4;
-  if (width <= 0) {
-    throw StateError('Placeholder de ByteRange inválido.');
-  }
-
-  final parts = range
-      .map((v) => v.toString().padLeft(width, '0'))
-      .toList(growable: false);
-  final replacement = parts.join(' ');
-  final repBytes = ascii.encode(replacement);
-  if (repBytes.length > bracketEnd - bracketStart - 1) {
-    throw StateError('ByteRange excede espaço reservado.');
-  }
-
-  bytes.setRange(
-      bracketStart + 1, bracketStart + 1 + repBytes.length, repBytes);
-  for (int k = bracketStart + 1 + repBytes.length; k < bracketEnd; k++) {
-    bytes[k] = 0x20; // espaço
-  }
+  writeByteRangeInWindow(bytes, start, end, range);
 }
 
 Uint8List _computeByteRangeDigest(Uint8List bytes, List<int> range) {
-  if (range.length != 4) {
-    throw ArgumentError('ByteRange inválido.');
-  }
-  final start1 = range[0];
-  final len1 = range[1];
-  final start2 = range[2];
-  final len2 = range[3];
-
-  final part1 = bytes.sublist(start1, start1 + len1);
-  final part2 = bytes.sublist(start2, start2 + len2);
-  return PdfCrypto.digestConcatSha256(part1, part2);
+  return computeByteRangeDigest(bytes, range);
 }
 
 void _embedSignature(
@@ -492,27 +391,7 @@ void _embedSignature(
   int end,
   Uint8List cms,
 ) {
-  final available = end - start;
-  var hex = _bytesToHex(cms).toUpperCase();
-  if (hex.length.isOdd) {
-    hex = '0$hex';
-  }
-  if (hex.length > available) {
-    throw StateError('CMS maior que o espaço reservado em /Contents.');
-  }
-  final sigBytes = ascii.encode(hex);
-  bytes.setRange(start, start + sigBytes.length, sigBytes);
-  for (int i = start + sigBytes.length; i < end; i++) {
-    bytes[i] = 0x30; // '0'
-  }
-}
-
-String _bytesToHex(List<int> bytes) {
-  final buffer = StringBuffer();
-  for (final b in bytes) {
-    buffer.write(b.toRadixString(16).padLeft(2, '0'));
-  }
-  return buffer.toString();
+  embedSignatureHex(bytes, start, end, cms);
 }
 
 int _indexOfSequence(Uint8List bytes, List<int> pattern, int start, int end) {
@@ -868,8 +747,3 @@ int _skipPdfWsAndComments(Uint8List bytes, int i, int end) {
   if (digits == 0) throw StateError('Inteiro inválido');
   return (value: neg ? -value : value, nextIndex: i);
 }
-
-
-
-
-
