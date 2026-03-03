@@ -10,6 +10,8 @@ import 'package:pdf_plus/src/pdf/io/pdf_http_fetcher_base.dart';
 
 import '../parsing/pdf_document_parser.dart';
 import '../parsing/pdf_document_info.dart';
+import '../parsing/parser_fields.dart';
+import '../parsing/parser_misc.dart';
 import '../format/indirect.dart';
 import '../format/null_value.dart';
 import 'package:pdf_plus/src/pdf/pdf_names.dart';
@@ -34,27 +36,7 @@ class PdfSignatureValidationResult {
   final String? message;
 }
 
-List<List<int>> findAllSignatureByteRanges(Uint8List bytes) {
-  return _findAllByteRanges(bytes);
-}
-
-List<Uint8List> extractAllSignatureContents(Uint8List bytes) {
-  final ranges = _findAllByteRanges(bytes);
-  final out = <Uint8List>[];
-  for (final range in ranges) {
-    final contents = _extractContentsFromByteRange(bytes, range);
-    out.add(contents ?? Uint8List(0));
-  }
-  return out;
-}
-
-Uint8List? extractSignatureContentsAt(Uint8List bytes, int index) {
-  final ranges = _findAllByteRanges(bytes);
-  if (index < 0 || index >= ranges.length) return null;
-  return _extractContentsFromByteRange(bytes, ranges[index]);
-}
-
-Map<String, String> findSignatureValueRefs(Uint8List bytes) {
+Map<String, String> _findSignatureValueRefs(Uint8List bytes) {
   final parser = PdfDocumentParser(bytes);
   final context = parser.extractSignatureFieldEditContext();
   final out = <String, String>{};
@@ -79,6 +61,88 @@ Map<String, String> findSignatureValueRefs(Uint8List bytes) {
     if (value != null) {
       final key = out.containsKey(name) ? '$name#$i' : name;
       out[key] = value;
+    }
+  }
+  return out;
+}
+
+Map<String, PdfSignatureFieldInfo> _signatureFieldsByRange(
+  Iterable<PdfSignatureFieldInfo> fields,
+) {
+  final out = <String, PdfSignatureFieldInfo>{};
+  for (final field in fields) {
+    final range = field.byteRange;
+    if (range == null || range.length != 4) continue;
+    out[_byteRangeKey(range)] = field;
+  }
+  return out;
+}
+
+PdfSignatureFieldInfo _mergeSignatureFieldInfo(
+  PdfSignatureFieldInfo base,
+  PdfSignatureFieldInfo fallback,
+) {
+  return PdfSignatureFieldInfo(
+    fieldName: base.fieldName ?? fallback.fieldName,
+    reason: base.reason ?? fallback.reason,
+    location: base.location ?? fallback.location,
+    name: base.name ?? fallback.name,
+    signingTimeRaw: base.signingTimeRaw ?? fallback.signingTimeRaw,
+    filter: base.filter ?? fallback.filter,
+    subFilter: base.subFilter ?? fallback.subFilter,
+    byteRange: base.byteRange ?? fallback.byteRange,
+    pageRef: base.pageRef ?? fallback.pageRef,
+    pageIndex: base.pageIndex ?? fallback.pageIndex,
+    rect: base.rect ?? fallback.rect,
+    signatureDictionaryPresent:
+        base.signatureDictionaryPresent ?? fallback.signatureDictionaryPresent,
+  );
+}
+
+PdfSignatureFieldInfo _mergeScannedSignatureFieldInfo(
+  PdfSignatureFieldInfo base,
+  PdfSignatureFieldInfo scanned,
+) {
+  final baseName = (base.fieldName ?? '').trim();
+  final scannedName = (scanned.fieldName ?? '').trim();
+  final canUseScannedTextual = baseName.isEmpty ||
+      scannedName.isEmpty ||
+      baseName.toLowerCase() == scannedName.toLowerCase();
+
+  return PdfSignatureFieldInfo(
+    fieldName: base.fieldName ?? scanned.fieldName,
+    reason: base.reason ?? (canUseScannedTextual ? scanned.reason : null),
+    location: base.location ?? (canUseScannedTextual ? scanned.location : null),
+    name: base.name ?? (canUseScannedTextual ? scanned.name : null),
+    signingTimeRaw: base.signingTimeRaw ??
+        (canUseScannedTextual ? scanned.signingTimeRaw : null),
+    filter: base.filter ?? scanned.filter,
+    subFilter: base.subFilter ?? scanned.subFilter,
+    byteRange: base.byteRange ?? scanned.byteRange,
+    pageRef: base.pageRef,
+    pageIndex: base.pageIndex,
+    rect: base.rect,
+    signatureDictionaryPresent:
+        base.signatureDictionaryPresent ?? scanned.signatureDictionaryPresent,
+  );
+}
+
+Map<String, PdfSignatureFieldInfo> _extractSignatureFieldsByRevision(
+  Uint8List pdfBytes,
+) {
+  final out = <String, PdfSignatureFieldInfo>{};
+  final ranges = PdfParserMisc.findAllByteRangesFromBytes(pdfBytes);
+  for (final range in ranges) {
+    if (range.length != 4) continue;
+    final end = range[2] + range[3];
+    if (end <= 0 || end > pdfBytes.length) continue;
+    final revision = Uint8List.sublistView(pdfBytes, 0, end);
+    final fields = PdfDocumentParser(revision).extractSignatureFields();
+    final byRange = _signatureFieldsByRange(fields);
+    final key = _byteRangeKey(range);
+    final field = byRange[key];
+    if (field != null) {
+      out[key] = field;
     }
   }
   return out;
@@ -271,6 +335,33 @@ class PdfSignatureExtractionReport {
   final List<PdfSignatureExtractionInfo> signatures;
 }
 
+class PdfSignaturePreparedContext {
+  const PdfSignaturePreparedContext._({
+    required this.pdfBytes,
+    required this.quickInfo,
+    required this.ranges,
+    required this.fieldByRange,
+    required this.hasSignatureFields,
+    required this.signatureContents,
+    required this.hasSignatureContents,
+  });
+
+  final Uint8List pdfBytes;
+  final PdfQuickInfo quickInfo;
+  final List<List<int>> ranges;
+  final Map<String, PdfSignatureFieldInfo> fieldByRange;
+  final bool hasSignatureFields;
+  final List<Uint8List?>? signatureContents;
+  final bool hasSignatureContents;
+
+  Uint8List? signatureContentsAt(int index) {
+    final values = signatureContents;
+    if (values == null) return null;
+    if (index < 0 || index >= values.length) return null;
+    return values[index];
+  }
+}
+
 class PdfSignatureOtherName {
   const PdfSignatureOtherName(this.oid, this.value);
 
@@ -417,6 +508,71 @@ abstract class PdfRevocationDataProvider {
 
 /// Validador básico de assinaturas (PAdES).
 class PdfSignatureValidator {
+  PdfSignatureValidator({
+    this.enableInMemoryParseCache = false,
+  });
+
+  /// Habilita cache de parse por identidade do [Uint8List] em memória.
+  ///
+  /// Padrão: `false`.
+  final bool enableInMemoryParseCache;
+  Expando<_PdfSignatureParseCache>? _parseCacheByBytes;
+
+  static List<List<int>> findAllSignatureByteRanges(Uint8List bytes) {
+    return _findAllByteRanges(bytes);
+  }
+
+  static List<Uint8List> extractAllSignatureContents(
+    Uint8List bytes, {
+    PdfSignaturePreparedContext? preparedContext,
+  }) {
+    final ranges = preparedContext?.ranges ?? _findAllByteRanges(bytes);
+    final out = <Uint8List>[];
+    for (var i = 0; i < ranges.length; i++) {
+      final fromContext = preparedContext?.signatureContentsAt(i);
+      final contents =
+          fromContext ?? _extractContentsFromByteRange(bytes, ranges[i]);
+      out.add(contents ?? Uint8List(0));
+    }
+    return out;
+  }
+
+  static Uint8List? extractSignatureContentsAt(
+    Uint8List bytes,
+    int index, {
+    PdfSignaturePreparedContext? preparedContext,
+  }) {
+    final fromContext = preparedContext?.signatureContentsAt(index);
+    if (fromContext != null) return fromContext;
+
+    final ranges = preparedContext?.ranges ?? _findAllByteRanges(bytes);
+    if (index < 0 || index >= ranges.length) return null;
+    return _extractContentsFromByteRange(bytes, ranges[index]);
+  }
+
+  static Map<String, String> findSignatureValueRefs(Uint8List bytes) {
+    return _findSignatureValueRefs(bytes);
+  }
+
+  PdfSignaturePreparedContext prepareContext(
+    Uint8List pdfBytes, {
+    bool includeSignatureFields = true,
+    bool includeSignatureContents = false,
+    PdfSignaturePreparedContext? baseContext,
+  }) {
+    final parseCache = _resolveParseCache(
+      pdfBytes,
+      includeSignatureFields: includeSignatureFields,
+      includeSignatureContents: includeSignatureContents,
+      baseContext: baseContext,
+    );
+    return parseCache.toPreparedContext(
+      pdfBytes,
+      includeSignatureFields: includeSignatureFields,
+      includeSignatureContents: includeSignatureContents,
+    );
+  }
+
   /// Valida todas as assinaturas do PDF.
   Future<PdfSignatureValidationReport> validateAllSignatures(
     Uint8List pdfBytes, {
@@ -434,31 +590,24 @@ class PdfSignatureValidator {
     PdfHttpFetcherBase? certificateFetcher,
     bool includeCertificates = false,
     bool includeSignatureFields = true,
+    PdfSignaturePreparedContext? preparedContext,
   }) async {
     final roots = await _collectTrustedRoots(
       trustedRootsPem: trustedRootsPem,
       trustedRootsProvider: trustedRootsProvider,
       trustedRootsProviders: trustedRootsProviders,
     );
-    strictRevocation = strictRevocation;
-    fetchCrls = fetchCrls;
-    fetchOcsp = fetchOcsp;
 
-    final quickInfo = PdfQuickInfo.fromBytes(pdfBytes);
+    final parseCache = _resolveParseCache(
+      pdfBytes,
+      includeSignatureFields: includeSignatureFields,
+      includeSignatureContents: false,
+      baseContext: preparedContext,
+    );
+    final quickInfo = parseCache.quickInfo;
     final permissionP = quickInfo.docMdpPermissionP;
-
-    final signatureFields = includeSignatureFields
-        ? PdfDocumentParser(pdfBytes).extractSignatureFields()
-        : const <PdfSignatureFieldInfo>[];
-    final fieldByRange = <String, PdfSignatureFieldInfo>{};
-    for (final field in signatureFields) {
-      final range = field.byteRange;
-      if (range != null && range.length == 4) {
-        fieldByRange[_byteRangeKey(range)] = field;
-      }
-    }
-
-    final ranges = _findAllByteRanges(pdfBytes);
+    final fieldByRange = parseCache.fieldByRange;
+    final ranges = parseCache.ranges;
     final results = <PdfSignatureInfoReport>[];
 
     for (var i = 0; i < ranges.length; i++) {
@@ -501,7 +650,8 @@ class PdfSignatureValidator {
         continue;
       }
 
-      final contents = _extractContentsFromByteRange(pdfBytes, range);
+      final contents = parseCache.signatureContentsAt(i) ??
+          _extractContentsFromByteRange(pdfBytes, range);
       if (contents == null || contents.isEmpty) {
         results.add(PdfSignatureInfoReport(
           signatureIndex: i,
@@ -652,9 +802,13 @@ class PdfSignatureValidator {
 
   /// API legada: retorna apenas resultados básicos.
   Future<List<PdfSignatureValidationResult>> validateAllSignaturesLegacy(
-    Uint8List pdfBytes,
-  ) async {
-    final report = await validateAllSignatures(pdfBytes);
+    Uint8List pdfBytes, {
+    PdfSignaturePreparedContext? preparedContext,
+  }) async {
+    final report = await validateAllSignatures(
+      pdfBytes,
+      preparedContext: preparedContext,
+    );
     return report.signatures
         .map((sig) => PdfSignatureValidationResult(
               signatureIndex: sig.signatureIndex,
@@ -665,27 +819,87 @@ class PdfSignatureValidator {
             ))
         .toList();
   }
+
+  _PdfSignatureParseCache _resolveParseCache(
+    Uint8List pdfBytes, {
+    required bool includeSignatureFields,
+    required bool includeSignatureContents,
+    PdfSignaturePreparedContext? baseContext,
+  }) {
+    if (baseContext != null && !identical(baseContext.pdfBytes, pdfBytes)) {
+      throw ArgumentError(
+        'preparedContext não pertence ao mesmo Uint8List informado.',
+      );
+    }
+
+    _PdfSignatureParseCache? cached;
+    if (enableInMemoryParseCache) {
+      cached = _parseCacheStore[pdfBytes];
+      if (cached != null &&
+          (!includeSignatureFields || cached.hasSignatureFields) &&
+          (!includeSignatureContents || cached.hasSignatureContents)) {
+        return cached;
+      }
+    }
+
+    var next = cached;
+    if (next == null) {
+      if (baseContext != null) {
+        next = _PdfSignatureParseCache.fromPrepared(baseContext);
+      } else {
+        next = _PdfSignatureParseCache(
+          quickInfo: PdfQuickInfo.fromBytes(pdfBytes),
+          ranges: List<List<int>>.unmodifiable(
+            _findAllByteRanges(pdfBytes)
+                .map((range) => List<int>.unmodifiable(range))
+                .toList(growable: false),
+          ),
+        );
+      }
+    } else if (baseContext != null) {
+      next.absorb(_PdfSignatureParseCache.fromPrepared(baseContext));
+    }
+
+    if (includeSignatureFields) {
+      next.ensureSignatureFields(pdfBytes);
+    }
+    if (includeSignatureContents) {
+      next.ensureSignatureContents(pdfBytes);
+    }
+
+    if (enableInMemoryParseCache) {
+      _parseCacheStore[pdfBytes] = next;
+    }
+    return next;
+  }
+
+  Expando<_PdfSignatureParseCache> get _parseCacheStore =>
+      _parseCacheByBytes ??=
+          Expando<_PdfSignatureParseCache>('pdf_signature_parse_cache');
 }
 
 /// Extrator de informações de assinatura sem validação criptográfica.
 class PdfSignatureExtractor {
+  PdfSignatureExtractor({
+    PdfSignatureValidator? validator,
+  }) : _validator = validator ?? PdfSignatureValidator();
+
+  final PdfSignatureValidator _validator;
+
   Future<PdfSignatureExtractionReport> extractSignatures(
     Uint8List pdfBytes, {
     bool includeCertificates = true,
     bool includeSignatureFields = true,
+    PdfSignaturePreparedContext? preparedContext,
   }) async {
-    final signatureFields = includeSignatureFields
-        ? PdfDocumentParser(pdfBytes).extractSignatureFields()
-        : const <PdfSignatureFieldInfo>[];
-    final fieldByRange = <String, PdfSignatureFieldInfo>{};
-    for (final field in signatureFields) {
-      final range = field.byteRange;
-      if (range != null && range.length == 4) {
-        fieldByRange[_byteRangeKey(range)] = field;
-      }
-    }
-
-    final ranges = _findAllByteRanges(pdfBytes);
+    final context = _validator.prepareContext(
+      pdfBytes,
+      includeSignatureFields: includeSignatureFields,
+      includeSignatureContents: true,
+      baseContext: preparedContext,
+    );
+    final fieldByRange = context.fieldByRange;
+    final ranges = context.ranges;
     final results = <PdfSignatureExtractionInfo>[];
 
     for (var i = 0; i < ranges.length; i++) {
@@ -693,7 +907,8 @@ class PdfSignatureExtractor {
       final fieldInfo =
           includeSignatureFields ? fieldByRange[_byteRangeKey(range)] : null;
 
-      final contents = _extractContentsFromByteRange(pdfBytes, range);
+      final contents = context.signatureContentsAt(i) ??
+          _extractContentsFromByteRange(pdfBytes, range);
       if (contents == null || contents.isEmpty) {
         results.add(PdfSignatureExtractionInfo(
           signatureIndex: i,
@@ -737,6 +952,148 @@ class PdfSignatureExtractor {
     }
 
     return PdfSignatureExtractionReport(signatures: results);
+  }
+}
+
+final class _PdfSignatureParseCache {
+  _PdfSignatureParseCache({
+    required this.quickInfo,
+    required this.ranges,
+  });
+
+  factory _PdfSignatureParseCache.fromPrepared(
+    PdfSignaturePreparedContext context,
+  ) {
+    final cache = _PdfSignatureParseCache(
+      quickInfo: context.quickInfo,
+      ranges: List<List<int>>.unmodifiable(
+        context.ranges
+            .map((range) => List<int>.unmodifiable(range))
+            .toList(growable: false),
+      ),
+    );
+    if (context.hasSignatureFields) {
+      cache._fieldByRange = Map<String, PdfSignatureFieldInfo>.unmodifiable(
+        Map<String, PdfSignatureFieldInfo>.from(context.fieldByRange),
+      );
+    }
+    if (context.hasSignatureContents) {
+      final contents = context.signatureContents ?? const <Uint8List?>[];
+      cache._signatureContents = List<Uint8List?>.unmodifiable(
+        contents
+            .map(
+              (item) => item == null ? null : Uint8List.fromList(item),
+            )
+            .toList(growable: false),
+      );
+    }
+    return cache;
+  }
+
+  final PdfQuickInfo quickInfo;
+  final List<List<int>> ranges;
+  Map<String, PdfSignatureFieldInfo>? _fieldByRange;
+  List<Uint8List?>? _signatureContents;
+
+  bool get hasSignatureFields => _fieldByRange != null;
+  bool get hasSignatureContents => _signatureContents != null;
+
+  Map<String, PdfSignatureFieldInfo> get fieldByRange =>
+      _fieldByRange ?? const <String, PdfSignatureFieldInfo>{};
+
+  Uint8List? signatureContentsAt(int index) {
+    final values = _signatureContents;
+    if (values == null) return null;
+    if (index < 0 || index >= values.length) return null;
+    return values[index];
+  }
+
+  void ensureSignatureContents(Uint8List pdfBytes) {
+    if (_signatureContents != null) {
+      return;
+    }
+    final values = ranges
+        .map((range) => _extractContentsFromByteRange(pdfBytes, range))
+        .toList(growable: false);
+    _signatureContents = List<Uint8List?>.unmodifiable(values);
+  }
+
+  void ensureSignatureFields(Uint8List pdfBytes) {
+    if (_fieldByRange != null) {
+      return;
+    }
+    final signatureFields =
+        PdfDocumentParser(pdfBytes).extractSignatureFields();
+    final repairedFields =
+        PdfDocumentParser(pdfBytes, allowRepair: true).extractSignatureFields();
+    final scannedFields =
+        PdfParserFields.extractSignatureFieldsFromBytes(pdfBytes);
+    final revisionFields = _extractSignatureFieldsByRevision(pdfBytes);
+
+    final parsedByRange = _signatureFieldsByRange(signatureFields);
+    final repairedByRange = _signatureFieldsByRange(repairedFields);
+    final scannedByRange = _signatureFieldsByRange(scannedFields);
+
+    final mergedByRange = <String, PdfSignatureFieldInfo>{};
+    final orderedRangeKeys = ranges.map(_byteRangeKey).toList(growable: false);
+
+    for (final key in orderedRangeKeys) {
+      final range = ranges.firstWhere((r) => _byteRangeKey(r) == key);
+      PdfSignatureFieldInfo merged =
+          PdfSignatureFieldInfo(fieldName: null, byteRange: range);
+
+      final parsed = parsedByRange[key];
+      if (parsed != null) {
+        merged = _mergeSignatureFieldInfo(merged, parsed);
+      }
+
+      final revision = revisionFields[key];
+      if (revision != null) {
+        merged = _mergeSignatureFieldInfo(merged, revision);
+      }
+
+      final repaired = repairedByRange[key];
+      if (repaired != null) {
+        merged = _mergeSignatureFieldInfo(merged, repaired);
+      }
+
+      final scanned = scannedByRange[key];
+      if (scanned != null) {
+        merged = _mergeScannedSignatureFieldInfo(merged, scanned);
+      }
+
+      mergedByRange[key] = merged;
+    }
+
+    _fieldByRange =
+        Map<String, PdfSignatureFieldInfo>.unmodifiable(mergedByRange);
+  }
+
+  PdfSignaturePreparedContext toPreparedContext(
+    Uint8List pdfBytes, {
+    required bool includeSignatureFields,
+    required bool includeSignatureContents,
+  }) {
+    return PdfSignaturePreparedContext._(
+      pdfBytes: pdfBytes,
+      quickInfo: quickInfo,
+      ranges: ranges,
+      fieldByRange: includeSignatureFields
+          ? fieldByRange
+          : const <String, PdfSignatureFieldInfo>{},
+      hasSignatureFields: includeSignatureFields && hasSignatureFields,
+      signatureContents: includeSignatureContents ? _signatureContents : null,
+      hasSignatureContents: includeSignatureContents && hasSignatureContents,
+    );
+  }
+
+  void absorb(_PdfSignatureParseCache other) {
+    if (_fieldByRange == null && other._fieldByRange != null) {
+      _fieldByRange = other._fieldByRange;
+    }
+    if (_signatureContents == null && other._signatureContents != null) {
+      _signatureContents = other._signatureContents;
+    }
   }
 }
 
@@ -936,7 +1293,6 @@ Future<_ChainResult> _buildCertificateChainFromCms({
   }
 
   final pool = <Uint8List>[...parsed.certs, ...roots];
-  final fetched = <Uint8List>[];
   final chain = <Uint8List>[signerCert];
 
   Uint8List current = signerCert;
@@ -1015,7 +1371,6 @@ Future<_ChainResult> _buildCertificateChainFromCms({
           for (final cert in _extractCertificatesFromBytes(bytes)) {
             if (_containsCert(pool, cert)) continue;
             pool.add(cert);
-            fetched.add(cert);
             added = true;
           }
         } catch (_) {}
@@ -1748,11 +2103,9 @@ Uint8List _computeByteRangeDigestForOid(
   final len1 = range[1];
   final start2 = range[2];
   final len2 = range[3];
-  final part1 = bytes.sublist(start1, start1 + len1);
-  final part2 = bytes.sublist(start2, start2 + len2);
-  final data = Uint8List(part1.length + part2.length);
-  data.setRange(0, part1.length, part1);
-  data.setRange(part1.length, data.length, part2);
+  final data = Uint8List(len1 + len2);
+  data.setRange(0, len1, bytes, start1);
+  data.setRange(len1, len1 + len2, bytes, start2);
   return PdfCrypto.digestForOid(data, digestOid);
 }
 
@@ -1783,14 +2136,32 @@ Uint8List? _extractContentsFromByteRange(
   }
   if (gt == -1 || gt <= lt) return null;
 
-  final hex = bytes.sublist(lt + 1, gt);
-  final cleaned = <int>[];
-  for (final b in hex) {
+  var hexCount = 0;
+  for (int i = lt + 1; i < gt; i++) {
+    final b = bytes[i];
     if (b == 0x20 || b == 0x0A || b == 0x0D || b == 0x09) continue;
-    cleaned.add(b);
+    hexCount++;
   }
-  if (cleaned.length.isOdd) return null;
-  final decoded = _hexToBytes(cleaned);
+  if (hexCount.isOdd) return null;
+
+  final decoded = Uint8List(hexCount ~/ 2);
+  var outIndex = 0;
+  var hiNibble = -1;
+  for (int i = lt + 1; i < gt; i++) {
+    final b = bytes[i];
+    if (b == 0x20 || b == 0x0A || b == 0x0D || b == 0x09) continue;
+    final nibble = _hexValue(b);
+    if (nibble < 0) {
+      throw FormatException('Hex inválido em /Contents.');
+    }
+    if (hiNibble < 0) {
+      hiNibble = nibble;
+    } else {
+      decoded[outIndex++] = (hiNibble << 4) | nibble;
+      hiNibble = -1;
+    }
+  }
+
   final trimmed = _trimCmsPadding(decoded);
   return _normalizeBerToDer(trimmed);
 }
@@ -3488,19 +3859,6 @@ Uint8List? _extractSignedAttrsDer(ASN1Object signedAttrsTagged) {
   } catch (_) {
     return null;
   }
-}
-
-Uint8List _hexToBytes(List<int> hexBytes) {
-  final out = Uint8List(hexBytes.length ~/ 2);
-  for (int i = 0; i < hexBytes.length; i += 2) {
-    final hi = _hexValue(hexBytes[i]);
-    final lo = _hexValue(hexBytes[i + 1]);
-    if (hi < 0 || lo < 0) {
-      throw FormatException('Hex inválido em /Contents.');
-    }
-    out[i ~/ 2] = (hi << 4) | lo;
-  }
-  return out;
 }
 
 int _hexValue(int b) {

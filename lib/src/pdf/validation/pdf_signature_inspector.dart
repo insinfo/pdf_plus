@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'pdf_signature_validator.dart';
+import 'pdf_signature_text_utils.dart';
 import 'pdf_validation_format_utils.dart';
 import 'package:pdf_plus/src/pdf/io/pdf_http_fetcher_base.dart';
 
@@ -134,20 +135,8 @@ PdfSignatureSignerInfo? _buildSignerInfo(PdfSignatureCertificateInfo? cert) {
     serialNumberDecimal: serialDec,
     certNotBefore: cert.notBefore,
     certNotAfter: cert.notAfter,
-    commonName: _extractCommonName(subject),
+    commonName: PdfSignatureTextUtils.extractCommonName(subject),
     cpf: cert.icpBrasilIds?.cpf,
     dateOfBirth: cert.icpBrasilIds?.dateOfBirth,
   );
-}
-
-String? _extractCommonName(String? subject) {
-  if (subject == null) return null;
-  final parts = subject.split(',');
-  for (final part in parts) {
-    final trimmed = part.trim();
-    if (trimmed.toUpperCase().startsWith('CN=')) {
-      return trimmed.substring(3).trim();
-    }
-  }
-  return null;
 }

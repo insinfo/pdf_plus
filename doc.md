@@ -302,6 +302,95 @@ await document.addSignature(
 );
 ```
 
+### 3.8 Novidades da versão 3.16.0 (validação e performance)
+
+#### Contexto preparado e cache de parse (evita retrabalho)
+Use `prepareContext` para reaproveitar parse entre preflight, extração e validação.
+
+```dart
+import 'dart:io';
+import 'package:pdf_plus/signing.dart';
+
+final bytes = File('documento.pdf').readAsBytesSync();
+
+final validator = PdfSignatureValidator(enableInMemoryParseCache: true);
+final prepared = validator.prepareContext(
+	bytes,
+	includeSignatureFields: true,
+	includeSignatureContents: true,
+);
+
+final report = await validator.validateAllSignatures(
+	bytes,
+	includeSignatureFields: true,
+	includeCertificates: true,
+	preparedContext: prepared,
+);
+
+final api = PdfValidationApi();
+final preflight = await api.preflightSignaturesFast(
+	bytes,
+	preparedContext: prepared,
+);
+```
+
+#### Métodos estáticos para inspeção rápida de assinatura
+```dart
+final ranges = PdfSignatureValidator.findAllSignatureByteRanges(bytes);
+final cmsList = PdfSignatureValidator.extractAllSignatureContents(
+	bytes,
+	preparedContext: prepared,
+);
+final refs = PdfSignatureValidator.findSignatureValueRefs(bytes);
+```
+
+#### Extração de metadados de assinatura mais robusta
+A extração de `fieldName`, `pageIndex`, `reason`, `location` e `name` foi reforçada
+para PDFs com revisões incrementais e assinaturas em objeto indireto.
+
+```dart
+final report = await PdfSignatureValidator().validateAllSignatures(
+	bytes,
+	includeSignatureFields: true,
+);
+
+for (final sig in report.signatures) {
+	print('campo=${sig.signatureField?.fieldName} '
+			'pagina=${sig.signatureField?.pageIndex} '
+			'motivo=${sig.signatureField?.reason}');
+}
+```
+
+#### Utilitários de texto para assinaturas
+```dart
+final cn = PdfSignatureTextUtils.extractCommonName(certSubject);
+final nomeLimpo = PdfSignatureTextUtils.sanitizeSignerName(cn);
+final dataBr = PdfSignatureTextUtils.formatPdfDateBr('D:20260227214208-03\'00');
+```
+
+#### Novo módulo público Base64 (crypto)
+```dart
+import 'dart:typed_data';
+import 'package:pdf_plus/crypto.dart';
+
+final encoded = base64EncodeUtf8('pdf_plus');
+final decoded = base64DecodeUtf8(encoded);
+
+final bytesB64 = base64EncodeBytes(Uint8List.fromList([1, 2, 3]));
+final bytesRaw = base64DecodeToBytes(bytesB64);
+```
+
+#### Decodificação PEM em modo tolerante
+Quando necessário, ignore blocos inválidos sem interromper o processamento inteiro.
+
+```dart
+final certs = PdfPemUtils.decodePemBlocks(
+	pemBundle,
+	'CERTIFICATE',
+	lenient: true,
+);
+```
+
 ### 4. Gerando Certificados X.509 (PKI)
 ```dart
 import 'package:pdf_plus/pki.dart';
@@ -354,6 +443,33 @@ final cms = PdfCmsSigner.signDetachedSha256RsaFromPem(
 );
 ```
 
+### PdfSignatureValidator (3.16+)
+Validação de assinaturas com suporte a contexto preparado e cache opcional.
+
+- `prepareContext(...)`: pré-parse para reuso entre chamadas.
+- `validateAllSignatures(..., preparedContext: ...)`: validação reutilizando parse.
+- `findAllSignatureByteRanges(...)`, `extractAllSignatureContents(...)`,
+  `findSignatureValueRefs(...)`: helpers estáticos de inspeção.
+
+### PdfValidationApi (3.16+)
+As principais rotas aceitam `preparedContext` para reduzir custo total de validação.
+
+- `preflightSignaturesFast(..., preparedContext: ...)`
+- `validateWithTrustProfiles(..., preparedContext: ...)`
+
+### PdfSignatureTextUtils (3.16+)
+Utilitários para normalização de texto/metadados de assinatura.
+
+- `extractCommonName(subject)`
+- `sanitizeSignerName(raw)`
+- `formatDateTimeBr(dt)` e `formatPdfDateBr(raw)`
+
+### Crypto Base64 (3.16+)
+Novo conjunto público em `package:pdf_plus/crypto.dart`:
+
+- `base64EncodeBytes` / `base64DecodeToBytes`
+- `base64EncodeUtf8` / `base64DecodeUtf8`
+
 ### PkiBuilder e PkiUtils
 Utilitários para geração de chaves, números seriais e certificados X.509.
 
@@ -394,4 +510,4 @@ Consulte a pasta `lib/src/widgets/` para mais widgets e exemplos.
 
 ---
 
-*Documentação detalhada gerada automaticamente por GitHub Copilot em 30/01/2026.*
+

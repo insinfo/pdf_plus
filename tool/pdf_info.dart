@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:pdf_plus/signing.dart';
 import 'package:pdf_plus/src/pdf/io/pdf_random_access_reader_io.dart';
 // dart tool/pdf_info.dart "test\assets\pdfs\sample_token_icpbrasil_assinado.pdf"
+// .\tool\pdf_info.exe "Z:\desenvolvimento\DIGITALIZADOS_SEMFAZ\14_34074_Vol. 4_Fls. 2649 à 2891.pdf"
+// .\tool\pdf_info.exe  "Z:\desenvolvimento\DIGITALIZADOS_SEMFAZ\14_34074_Vol 5.pdf" 
 void main(List<String> args) {
   if (args.isEmpty) {
     stderr.writeln('Uso: dart tool/pdf_info.dart <arquivo.pdf>');

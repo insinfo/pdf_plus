@@ -1,5 +1,30 @@
 # Changelog
 
+## 3.16.0
+
+- **Signature parsing and metadata reliability improvements**:
+  - Hardened signature field parsing for incremental-update PDFs, including safer token boundary matching and better field inheritance/page resolution.
+  - Improved extraction of signature metadata (`fieldName`, `pageIndex`, `reason`, `location`, `name`) when values are stored in indirect signature objects.
+  - Refined metadata merge strategy across parser/scanner/revision paths to avoid cross-signature contamination.
+
+- **Prepared-context and parse-cache support for validation workflows**:
+  - Added `PdfSignaturePreparedContext` and `prepareContext(...)` to reuse parsed signature data across preflight/extraction/validation calls.
+  - Added optional in-memory parse cache in `PdfSignatureValidator` and propagated `preparedContext` through validation APIs, including smart trusted-roots flows.
+
+- **Public Base64 API (VM/Web) and crypto exports**:
+  - Added new public Base64 helpers (`base64EncodeBytes`, `base64DecodeToBytes`, `base64EncodeUtf8`, `base64DecodeUtf8`).
+  - Introduced dedicated VM and Web implementations with browser-native fast paths and compatible fallbacks.
+
+- **Validation/signing utility updates**:
+  - Added `PdfSignatureTextUtils` and reused it in inspector flows for normalized signer-text handling (e.g., CN extraction).
+  - Enhanced PEM block decoding with optional lenient mode.
+  - Reduced allocations in signature `/Contents` hex decoding and byte-range digest preparation.
+
+- **Tests, fixtures, and tooling**:
+  - Added regression tests for signature field/page mapping and per-signature `reason` isolation.
+  - Added Base64 functional tests and VM/Browser benchmark suites.
+  - Added signature-check utility script and updated related test/tool calls to the new validator static APIs.
+
 ## 3.15.0
 
 - **Refactored PDF signing internals**:

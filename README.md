@@ -25,7 +25,7 @@ In your project's `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  pdf_plus: ^3.14.0
+  pdf_plus: ^3.16.0
 ```
 
 Then run:
@@ -75,6 +75,7 @@ Future<void> main() async {
 
 ```dart
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:pdf_plus/signing.dart';
 
 Future<void> main() async {
@@ -131,6 +132,198 @@ Future<void> main() async {
       'cms=${sig.cmsValid} digest=${sig.digestValid} intact=${sig.intact}',
     );
   }
+}
+```
+
+## Example: external signing flow (HSM/token friendly)
+
+Use this flow when the private key must stay outside your Dart process.
+
+```dart
+import 'dart:io';
+import 'package:pdf_plus/signing.dart';
+
+Future<void> main() async {
+  final inputBytes = await File('input.pdf').readAsBytes();
+
+  final prepared = await PdfSignatureTools.prepareExternalSignature(
+    inputBytes: inputBytes,
+    pageNumber: 1,
+    fieldName: 'Signature1',
+    bounds: PdfRect(40, 80, 220, 70),
+  );
+
+  // Send prepared.hashBase64 to your external signer (token/HSM/service)
+  // and receive detached CMS (PKCS#7 DER bytes).
+  final pkcs7Bytes = await signExternally(prepared.hashBase64);
+
+  final signedBytes = PdfSignatureTools.embedExternalSignature(
+    preparedPdfBytes: prepared.preparedPdfBytes,
+    pkcs7Bytes: pkcs7Bytes,
+  );
+
+  await File('signed_external.pdf').writeAsBytes(signedBytes);
+}
+
+Future<Uint8List> signExternally(String hashBase64) async {
+  throw UnimplementedError('Integrate with your external signer.');
+}
+```
+
+## Example: prepared context for faster repeated validation
+
+When you need multiple validation/report operations for the same PDF,
+reuse parsing work with `PdfSignaturePreparedContext`.
+
+```dart
+import 'dart:io';
+import 'package:pdf_plus/signing.dart';
+
+Future<void> main() async {
+  final bytes = await File('signed.pdf').readAsBytes();
+
+  final validator = PdfSignatureValidator(enableInMemoryParseCache: true);
+  final prepared = validator.prepareContext(
+    bytes,
+    includeSignatureFields: true,
+    includeSignatureContents: true,
+  );
+
+  final report = await validator.validateAllSignatures(
+    bytes,
+    includeSignatureFields: true,
+    includeCertificates: true,
+    preparedContext: prepared,
+  );
+
+  final api = PdfValidationApi();
+  final preflight = await api.preflightSignaturesFast(
+    bytes,
+    preparedContext: prepared,
+  );
+
+  print('signatures=${report.signatures.length} quick=${preflight.signatures.length}');
+}
+```
+
+## Example: trust profiles (multiple trust stores)
+
+```dart
+import 'dart:io';
+import 'package:pdf_plus/signing.dart';
+
+Future<void> main() async {
+  final bytes = await File('signed.pdf').readAsBytes();
+
+  final rootsA = PdfPemUtils.decodePemBlocks(
+    await File('roots_a.pem').readAsString(),
+    'CERTIFICATE',
+    lenient: true,
+  );
+  final rootsB = PdfPemUtils.decodePemBlocks(
+    await File('roots_b.pem').readAsString(),
+    'CERTIFICATE',
+    lenient: true,
+  );
+
+  final result = await PdfValidationApi().validateWithTrustProfiles(
+    bytes,
+    trustProfiles: [
+      PdfTrustProfile(
+        id: 'profile-a',
+        provider: PdfInMemoryTrustedRootsProvider(rootsA),
+      ),
+      PdfTrustProfile(
+        id: 'profile-b',
+        provider: PdfInMemoryTrustedRootsProvider(rootsB),
+      ),
+    ],
+    includeCertificates: true,
+    includeSignatureFields: true,
+  );
+
+  for (final trust in result.trustResolutionBySignature) {
+    print('signature=${trust.signatureIndex} profile=${trust.winningProfile} trusted=${trust.trusted}');
+  }
+}
+```
+
+## Example: inspect signature fields and contents quickly
+
+```dart
+import 'dart:io';
+import 'package:pdf_plus/signing.dart';
+
+Future<void> main() async {
+  final bytes = await File('signed.pdf').readAsBytes();
+
+  final ranges = PdfSignatureValidator.findAllSignatureByteRanges(bytes);
+  final contents = PdfSignatureValidator.extractAllSignatureContents(bytes);
+  final refs = PdfSignatureValidator.findSignatureValueRefs(bytes);
+
+  print('byteRanges=${ranges.length} cmsContents=${contents.length} refs=${refs.length}');
+}
+```
+
+## Example: Base64 helpers (`package:pdf_plus/crypto.dart`)
+
+```dart
+import 'dart:typed_data';
+import 'package:pdf_plus/crypto.dart';
+
+void main() {
+  final encodedText = base64EncodeUtf8('pdf_plus');
+  final decodedText = base64DecodeUtf8(encodedText);
+
+  final raw = Uint8List.fromList([1, 2, 3, 4]);
+  final encodedBytes = base64EncodeBytes(raw);
+  final decodedBytes = base64DecodeToBytes(encodedBytes);
+
+  print(decodedText);
+  print(decodedBytes);
+}
+```
+
+## Example: text utilities for signature metadata
+
+```dart
+import 'package:pdf_plus/signing.dart';
+
+void main() {
+  final cn = PdfSignatureTextUtils.extractCommonName('CN=John Doe, O=Example');
+  final normalized = PdfSignatureTextUtils.sanitizeSignerName('John Doe - 123.456.789-10');
+  final localBr = PdfSignatureTextUtils.formatPdfDateBr("D:20260227214208-03'00");
+
+  print(cn);         // John Doe
+  print(normalized); // John Doe
+  print(localBr);    // 27/02/2026 21:42:08 (example)
+}
+```
+
+## Example: lenient PEM block decoding
+
+Use lenient mode when you want to skip malformed blocks instead of failing fast.
+
+```dart
+import 'package:pdf_plus/signing.dart';
+
+void main() {
+  const pemBundle = '''
+-----BEGIN CERTIFICATE-----
+...
+-----END CERTIFICATE-----
+-----BEGIN CERTIFICATE-----
+INVALID
+-----END CERTIFICATE-----
+''';
+
+  final certs = PdfPemUtils.decodePemBlocks(
+    pemBundle,
+    'CERTIFICATE',
+    lenient: true,
+  );
+
+  print('decoded cert blocks: ${certs.length}');
 }
 ```
 

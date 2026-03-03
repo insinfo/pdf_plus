@@ -654,7 +654,9 @@ Future<void> _validateSignatures(Uint8List pdfBytes) async {
 }
 
 void _printSignatureInternals(Uint8List pdfBytes) {
-  final ranges = sigval.findAllSignatureByteRanges(pdfBytes);
+  final ranges = sigval.PdfSignatureValidator.findAllSignatureByteRanges(
+    pdfBytes,
+  );
   print('ByteRange details: ${ranges.length} assinatura(s)');
   for (var i = 0; i < ranges.length; i++) {
     final range = ranges[i];
@@ -663,7 +665,7 @@ void _printSignatureInternals(Uint8List pdfBytes) {
     );
   }
 
-  final values = sigval.findSignatureValueRefs(pdfBytes);
+  final values = sigval.PdfSignatureValidator.findSignatureValueRefs(pdfBytes);
   if (values.isNotEmpty) {
     print('Field /V references:');
     for (final entry in values.entries) {

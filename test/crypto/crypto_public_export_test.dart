@@ -7,8 +7,11 @@ void main() {
   test('public crypto entrypoint exposes platform crypto facade', () async {
     final crypto = createPlatformCrypto();
     final digest = await crypto.sha256(Uint8List.fromList('abc'.codeUnits));
+    final encoded = base64EncodeUtf8('abc');
+    final decoded = base64DecodeUtf8(encoded);
 
     expect(crypto, isA<PlatformCrypto>());
     expect(digest.length, 32);
+    expect(decoded, 'abc');
   });
 }

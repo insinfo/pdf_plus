@@ -213,7 +213,8 @@ void main() {
         }
         expect(report.signatures.first.docMdp.permissionP, 2);
 
-        final contents = pdf.extractAllSignatureContents(signedBytes);
+        final contents =
+            pdf.PdfSignatureValidator.extractAllSignatureContents(signedBytes);
         expect(contents.length, 3);
 
         final expectedCns = <String>['User 1', 'User 2', 'User 3'];
@@ -382,7 +383,8 @@ void main() {
           pkcs7Bytes: token,
         );
 
-        final contents = pdf.extractAllSignatureContents(finalBytes);
+        final contents =
+            pdf.PdfSignatureValidator.extractAllSignatureContents(finalBytes);
         expect(contents.length, 2);
         final tokenPath = '${tempDir.path}/doc_ts_token.der';
         File(tokenPath).writeAsBytesSync(contents.last);

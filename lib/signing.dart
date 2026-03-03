@@ -8,6 +8,7 @@ export 'src/pdf/signing/pem_utils.dart';
 export 'src/pdf/validation/pdf_signature_validator.dart';
 export 'src/pdf/validation/pdf_smart_trusted_roots.dart';
 export 'src/pdf/validation/pdf_signature_inspector.dart';
+export 'src/pdf/validation/pdf_signature_text_utils.dart';
 export 'src/pdf/validation/pdf_iti_report.dart';
 export 'src/pdf/validation/pdf_validation_api.dart';
 export 'src/pdf/validation/pdf_lpa.dart';

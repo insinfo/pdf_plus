@@ -240,6 +240,7 @@ class PdfSmartSignatureValidator {
   Future<PdfSmartSignatureValidationResult> validateAllSignatures(
     Uint8List pdfBytes, {
     required PdfSmartTrustedRootsSelector rootsSelector,
+    PdfSignaturePreparedContext? preparedContext,
     List<String>? trustedRootsPem,
     List<TrustedRootsProvider>? additionalTrustedRootsProviders,
     bool strictRevocation = false,
@@ -269,6 +270,7 @@ class PdfSmartSignatureValidator {
       revocationDataProvider: revocationDataProvider,
       includeCertificates: includeCertificates,
       includeSignatureFields: includeSignatureFields,
+      preparedContext: preparedContext,
     );
     return PdfSmartSignatureValidationResult(
       report: report,

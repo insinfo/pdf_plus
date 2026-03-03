@@ -6,12 +6,22 @@ import 'parser_tokens.dart';
 class PdfParserMisc {
   static List<List<int>> findAllByteRangesFromBytes(Uint8List bytes) {
     const token = <int>[
-      0x2F, 0x42, 0x79, 0x74, 0x65, 0x52, 0x61, 0x6E, 0x67, 0x65
+      0x2F,
+      0x42,
+      0x79,
+      0x74,
+      0x65,
+      0x52,
+      0x61,
+      0x6E,
+      0x67,
+      0x65
     ];
     final out = <List<int>>[];
     var offset = 0;
     while (offset < bytes.length) {
-      final pos = PdfParserTokens.indexOfSequence(bytes, token, offset, bytes.length);
+      final pos =
+          PdfParserTokens.indexOfSequence(bytes, token, offset, bytes.length);
       if (pos == -1) break;
       var i = PdfParserTokens.skipPdfWsAndComments(
         bytes,
@@ -48,7 +58,7 @@ class PdfParserMisc {
   }
 
   static String? scanPdfStringValue(Uint8List bytes, List<int> key) {
-    final pos = PdfParserTokens.indexOfSequence(bytes, key, 0, bytes.length);
+    final pos = _findNameKeyPosition(bytes, key, 0, bytes.length);
     if (pos == -1) return null;
     var i = PdfParserTokens.skipPdfWsAndComments(
       bytes,
@@ -88,7 +98,7 @@ class PdfParserMisc {
   }
 
   static String? scanPdfNameValue(Uint8List bytes, List<int> key) {
-    final pos = PdfParserTokens.indexOfSequence(bytes, key, 0, bytes.length);
+    final pos = _findNameKeyPosition(bytes, key, 0, bytes.length);
     if (pos == -1) return null;
     var i = PdfParserTokens.skipPdfWsAndComments(
       bytes,
@@ -111,6 +121,52 @@ class PdfParserMisc {
     }
     if (i <= start) return null;
     return '/' + String.fromCharCodes(bytes.sublist(start, i));
+  }
+
+  static int _findNameKeyPosition(
+    Uint8List bytes,
+    List<int> key,
+    int start,
+    int end,
+  ) {
+    var offset = start;
+    while (offset < end) {
+      final pos = PdfParserTokens.indexOfSequence(bytes, key, offset, end);
+      if (pos == -1) return -1;
+
+      final before = pos > start ? bytes[pos - 1] : 0x20;
+      final afterIndex = pos + key.length;
+      final after = afterIndex < end ? bytes[afterIndex] : 0x20;
+
+      final beforeOk = !_isPdfNameChar(before);
+      final afterOk = !_isPdfNameChar(after);
+      if (beforeOk && afterOk) {
+        return pos;
+      }
+
+      offset = pos + 1;
+    }
+    return -1;
+  }
+
+  static bool _isPdfNameChar(int b) {
+    if (PdfParserTokens.isWhitespace(b)) return false;
+    switch (b) {
+      case 0x00:
+      case 0x28: // (
+      case 0x29: // )
+      case 0x3C: // <
+      case 0x3E: // >
+      case 0x5B: // [
+      case 0x5D: // ]
+      case 0x7B: // {
+      case 0x7D: // }
+      case 0x2F: // /
+      case 0x25: // %
+        return false;
+      default:
+        return true;
+    }
   }
 
   static int maxObjectId(Uint8List bytes) {
@@ -178,7 +234,8 @@ class PdfParserMisc {
           final objNum = PdfParserTokens.readInt(window, i, window.length);
           i = objNum.nextIndex;
           i = PdfParserTokens.skipPdfWsAndComments(window, i, window.length);
-          if (i >= window.length || !PdfParserTokens.isDigit(window[i])) continue;
+          if (i >= window.length || !PdfParserTokens.isDigit(window[i]))
+            continue;
           final genNum = PdfParserTokens.readInt(window, i, window.length);
           i = genNum.nextIndex;
           i = PdfParserTokens.skipPdfWsAndComments(window, i, window.length);

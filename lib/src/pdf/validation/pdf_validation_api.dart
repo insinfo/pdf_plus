@@ -460,6 +460,7 @@ class PdfValidationApi {
 
   Future<PdfPreflightSignaturesFastReport> preflightSignaturesFast(
     Uint8List pdfBytes, {
+    PdfSignaturePreparedContext? preparedContext,
     PdfValidationCacheHooks? cacheHooks,
     Duration cacheTtl = const Duration(minutes: 2),
     bool incremental = true,
@@ -475,7 +476,10 @@ class PdfValidationApi {
     }
 
     if (incremental) {
-      final quick = _preflightIncremental(pdfBytes);
+      final quick = _preflightIncremental(
+        pdfBytes,
+        preparedContext: preparedContext,
+      );
       await _cachePut(
         cacheHooks,
         cacheKey,
@@ -490,8 +494,12 @@ class PdfValidationApi {
       pdfBytes,
       includeCertificates: true,
       includeSignatureFields: true,
+      preparedContext: preparedContext,
     );
-    final akiBySignature = _extractAuthorityKeyIdentifiersFromCms(pdfBytes);
+    final akiBySignature = _extractAuthorityKeyIdentifiersFromCms(
+      pdfBytes,
+      preparedContext: preparedContext,
+    );
 
     final signatures = extraction.signatures.map((sig) {
       final signer = sig.signerCertificate;
@@ -525,6 +533,7 @@ class PdfValidationApi {
 
   Future<PdfValidationWithProfilesResult> validateWithTrustProfiles(
     Uint8List pdfBytes, {
+    PdfSignaturePreparedContext? preparedContext,
     required List<PdfTrustProfile> trustProfiles,
     bool strictRevocation = false,
     bool fetchCrls = false,
@@ -565,6 +574,7 @@ class PdfValidationApi {
       policyDisplayMap: policyDisplayMap,
       cacheHooks: cacheHooks,
       cacheTtl: cacheTtl,
+      preparedContext: preparedContext,
     );
   }
 
@@ -628,6 +638,7 @@ class PdfValidationApi {
 
   Future<PdfValidationWithProfilesResult> _validateWithPreparedTrustIndex(
     Uint8List pdfBytes, {
+    PdfSignaturePreparedContext? preparedContext,
     required List<PdfTrustProfile> trustProfiles,
     required PdfTrustedRootsIndex trustIndex,
     required bool strictRevocation,
@@ -658,7 +669,10 @@ class PdfValidationApi {
     }
 
     final checkedAt = DateTime.now().toUtc();
-    final cmsDerived = _extractCmsDerivedDataBySignature(pdfBytes);
+    final cmsDerived = _extractCmsDerivedDataBySignature(
+      pdfBytes,
+      preparedContext: preparedContext,
+    );
     final signedAttrsBySignature = cmsDerived.signedAttrsBySignature;
     final revocationHints = cmsDerived.revocationHintsBySignature;
 
@@ -676,6 +690,7 @@ class PdfValidationApi {
       revocationDataProvider: revocationDataProvider,
       includeCertificates: includeCertificates,
       includeSignatureFields: includeSignatureFields,
+      preparedContext: preparedContext,
     );
 
     final trustResolution = _resolveTrustBySignature(
@@ -898,10 +913,20 @@ class PdfValidationApi {
     }
   }
 
-  PdfPreflightSignaturesFastReport _preflightIncremental(Uint8List pdfBytes) {
-    final fieldByRange = _signatureFieldNamesByRange(pdfBytes);
-    final ranges = findAllSignatureByteRanges(pdfBytes);
-    final contents = extractAllSignatureContents(pdfBytes);
+  PdfPreflightSignaturesFastReport _preflightIncremental(
+    Uint8List pdfBytes, {
+    PdfSignaturePreparedContext? preparedContext,
+  }) {
+    final fieldByRange = _signatureFieldNamesByRange(
+      pdfBytes,
+      preparedContext: preparedContext,
+    );
+    final ranges = preparedContext?.ranges ??
+        PdfSignatureValidator.findAllSignatureByteRanges(pdfBytes);
+    final contents = PdfSignatureValidator.extractAllSignatureContents(
+      pdfBytes,
+      preparedContext: preparedContext,
+    );
     final signatures = <PdfPreflightSignatureFastInfo>[];
 
     for (var i = 0; i < contents.length; i++) {
@@ -1040,11 +1065,15 @@ class PdfValidationApi {
   }
 
   _CmsDerivedDataBySignature _extractCmsDerivedDataBySignature(
-    Uint8List pdfBytes,
-  ) {
+    Uint8List pdfBytes, {
+    PdfSignaturePreparedContext? preparedContext,
+  }) {
     final signedAttrs = <int, _SignedAttrsData>{};
     final revocationHints = <int, _RevocationCmsHints>{};
-    final contents = extractAllSignatureContents(pdfBytes);
+    final contents = PdfSignatureValidator.extractAllSignatureContents(
+      pdfBytes,
+      preparedContext: preparedContext,
+    );
     for (var i = 0; i < contents.length; i++) {
       final cms = contents[i];
       signedAttrs[i] = _extractSignedAttrsFromCms(cms);
@@ -1696,8 +1725,21 @@ PdfSignatureCertificateInfo _decodeCertificateInfo(Map<String, dynamic> raw) {
   );
 }
 
-Map<String, String> _signatureFieldNamesByRange(Uint8List pdfBytes) {
+Map<String, String> _signatureFieldNamesByRange(
+  Uint8List pdfBytes, {
+  PdfSignaturePreparedContext? preparedContext,
+}) {
   final out = <String, String>{};
+  if (preparedContext != null && preparedContext.hasSignatureFields) {
+    for (final r in preparedContext.ranges) {
+      if (r.length != 4) continue;
+      final field = preparedContext.fieldByRange[r.join(',')];
+      out['${r[0]}:${r[1]}:${r[2]}:${r[3]}'] =
+          field?.fieldName ?? field?.name ?? 'Signature';
+    }
+    return out;
+  }
+
   final fields = PdfDocumentParser(pdfBytes).extractSignatureFields();
   for (final f in fields) {
     final r = f.byteRange;
@@ -1925,9 +1967,15 @@ ASN1Sequence? _asAsn1SequenceLoose(ASN1Object obj) {
   return null;
 }
 
-Map<int, String?> _extractAuthorityKeyIdentifiersFromCms(Uint8List pdfBytes) {
+Map<int, String?> _extractAuthorityKeyIdentifiersFromCms(
+  Uint8List pdfBytes, {
+  PdfSignaturePreparedContext? preparedContext,
+}) {
   final out = <int, String?>{};
-  final contents = extractAllSignatureContents(pdfBytes);
+  final contents = PdfSignatureValidator.extractAllSignatureContents(
+    pdfBytes,
+    preparedContext: preparedContext,
+  );
   for (var i = 0; i < contents.length; i++) {
     out[i] = _extractAkiHexFromCms(contents[i]);
   }

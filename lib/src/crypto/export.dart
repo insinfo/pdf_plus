@@ -1,4 +1,5 @@
 export 'base.dart';
+export 'base64.dart';
 export 'platform_crypto.dart';
 export 'digests.dart';
 export 'md5.dart';

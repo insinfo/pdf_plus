@@ -17,6 +17,7 @@ import 'pdf_document_info.dart';
 import 'pdf_parser_types.dart';
 import 'parser_xref.dart';
 import 'parser_fields.dart';
+import 'parser_misc.dart';
 import 'parser_objects.dart';
 import 'parser_pages.dart';
 import 'parser_scan.dart';
@@ -338,22 +339,24 @@ class PdfDocumentParser extends PdfDocumentParserBase {
       final obj = _getObjectNoStream(ref.obj) ?? _getObject(ref.obj);
       if (obj == null || obj.value is! PdfDictToken) continue;
       final dict = obj.value as PdfDictToken;
-      final subtype = PdfParserObjects.asName(dict.values[PdfNameTokens.subtype]);
+      final subtype =
+          PdfParserObjects.asName(dict.values[PdfNameTokens.subtype]);
 
       if (subtype == PdfNameTokens.image) {
         if (!seenImageRefs.add(ref.obj)) {
           continue;
         }
         final filter = _asFilterName(dict.values[PdfNameTokens.filter]);
-        final colorSpace = _asColorSpaceName(dict.values[PdfNameTokens.colorSpace]);
+        final colorSpace =
+            _asColorSpaceName(dict.values[PdfNameTokens.colorSpace]);
         out.add(PdfImageInfo(
           pageIndex: pageIndex,
           pageRef: pageRef,
           imageRef: PdfIndirectRef(ref.obj, ref.gen),
           width: PdfParserObjects.asInt(dict.values[PdfNameTokens.width]),
           height: PdfParserObjects.asInt(dict.values[PdfNameTokens.height]),
-          bitsPerComponent:
-              PdfParserObjects.asInt(dict.values[PdfNameTokens.bitsPerComponent]),
+          bitsPerComponent: PdfParserObjects.asInt(
+              dict.values[PdfNameTokens.bitsPerComponent]),
           colorSpace: colorSpace,
           filter: filter,
         ));
@@ -553,8 +556,8 @@ class PdfDocumentParser extends PdfDocumentParserBase {
           dict.values.containsKey(PdfNameTokens.kids)) {
         final kids = dict.values[PdfNameTokens.kids];
         if (kids is PdfArrayToken) {
-          for (final item in kids.values) {
-            final kidRef = PdfParserObjects.asRef(item);
+          for (var i = kids.values.length - 1; i >= 0; i--) {
+            final kidRef = PdfParserObjects.asRef(kids.values[i]);
             if (kidRef != null) stack.add(kidRef);
           }
         }
@@ -725,9 +728,12 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     String? inheritedName,
     String? inheritedFieldType,
     Map<int, int>? pageIndexByObj,
+    PdfRefToken? fieldRefToken,
   }) {
+    PdfRefToken? currentFieldRef = fieldRefToken;
     if (value is PdfRefToken) {
       if (!visited.add(value.obj)) return;
+      currentFieldRef = value;
       final obj = _getObjectNoStream(value.obj) ?? _getObject(value.obj);
       if (obj == null || obj.value is! PdfDictToken) return;
       _collectSignatureFields(
@@ -737,6 +743,7 @@ class PdfDocumentParser extends PdfDocumentParserBase {
         inheritedName: inheritedName,
         inheritedFieldType: inheritedFieldType,
         pageIndexByObj: pageIndexByObj,
+        fieldRefToken: currentFieldRef,
       );
       return;
     }
@@ -744,28 +751,32 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     if (value is! PdfDictToken) return;
     final dict = value;
 
-    final ownName = _asString(dict.values[PdfNameTokens.t]);
-    final resolvedName = ownName ?? inheritedName;
+    final inherited = _resolveFieldInheritance(
+      dict,
+      inheritedName: inheritedName,
+      inheritedFieldType: inheritedFieldType,
+    );
+    final resolvedName = inherited.name;
+    final resolvedFieldType = inherited.fieldType;
 
     final kidsVal = dict.values[PdfNameTokens.kids];
     final kids = _resolveArrayFromValue(kidsVal);
     if (kids != null) {
       for (final kid in kids.values) {
+        final kidRefToken = kid is PdfRefToken ? kid : currentFieldRef;
         _collectSignatureFields(
           kid,
           out,
           visited,
           inheritedName: resolvedName,
-          inheritedFieldType:
-              PdfParserObjects.asName(dict.values[PdfNameTokens.ft]) ??
-                  inheritedFieldType,
+          inheritedFieldType: resolvedFieldType,
           pageIndexByObj: pageIndexByObj,
+          fieldRefToken: kidRefToken,
         );
       }
     }
 
-    final fieldType = PdfParserObjects.asName(dict.values[PdfNameTokens.ft]) ??
-        inheritedFieldType;
+    final fieldType = resolvedFieldType;
     final fieldName = resolvedName;
 
     dynamic sigVal = dict.values[PdfNameTokens.v];
@@ -776,10 +787,19 @@ class PdfDocumentParser extends PdfDocumentParserBase {
 
     if (sigVal is! PdfDictToken) {
       if (fieldType != PdfNameTokens.sig) return;
-      final pageRef = _findPageRefFromField(dict);
-      final pageIndex = (pageRef != null && pageIndexByObj != null)
+      final pageRef = inherited.pageRef ??
+          _findPageRefFromField(
+            dict,
+            fieldRef: currentFieldRef,
+          );
+      var pageIndex = (pageRef != null && pageIndexByObj != null)
           ? pageIndexByObj[pageRef.obj]
           : null;
+      pageIndex ??= _resolvePageIndexFromAnnotationRef(
+        dict,
+        pageIndexByObj,
+        fieldRef: currentFieldRef,
+      );
       final rect = _findRectFromField(dict);
       out.add(PdfSignatureFieldInfo(
         fieldName: fieldName,
@@ -812,10 +832,19 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     final subFilter =
         PdfParserObjects.asName(sigVal.values[PdfNameTokens.subFilter]);
     final byteRange = asIntArray(sigVal.values[PdfNameTokens.byteRange]);
-    final pageRef = _findPageRefFromField(dict);
-    final pageIndex = (pageRef != null && pageIndexByObj != null)
+    final pageRef = inherited.pageRef ??
+        _findPageRefFromField(
+          dict,
+          fieldRef: currentFieldRef,
+        );
+    var pageIndex = (pageRef != null && pageIndexByObj != null)
         ? pageIndexByObj[pageRef.obj]
         : null;
+    pageIndex ??= _resolvePageIndexFromAnnotationRef(
+      dict,
+      pageIndexByObj,
+      fieldRef: currentFieldRef,
+    );
     final rect = _findRectFromField(dict);
 
     out.add(PdfSignatureFieldInfo(
@@ -861,8 +890,13 @@ class PdfDocumentParser extends PdfDocumentParserBase {
 
     final dict = fieldDictToken;
 
-    final ownName = _asString(dict.values[PdfNameTokens.t]);
-    final resolvedName = ownName ?? inheritedName;
+    final inherited = _resolveFieldInheritance(
+      dict,
+      inheritedName: inheritedName,
+      inheritedFieldType: inheritedFieldType,
+    );
+    final resolvedName = inherited.name;
+    final resolvedFieldType = inherited.fieldType;
 
     final kidsVal = dict.values[PdfNameTokens.kids];
     final kids = _resolveArrayFromValue(kidsVal);
@@ -874,16 +908,13 @@ class PdfDocumentParser extends PdfDocumentParserBase {
           visited,
           inheritedName: resolvedName,
           fieldIndex: fieldIndex,
-          inheritedFieldType:
-              PdfParserObjects.asName(dict.values[PdfNameTokens.ft]) ??
-                  inheritedFieldType,
+          inheritedFieldType: resolvedFieldType,
           pageIndexByObj: pageIndexByObj,
         );
       }
     }
 
-    final fieldType = PdfParserObjects.asName(dict.values[PdfNameTokens.ft]) ??
-        inheritedFieldType;
+    final fieldType = resolvedFieldType;
     final fieldName = resolvedName;
 
     dynamic sigVal = dict.values[PdfNameTokens.v];
@@ -917,6 +948,17 @@ class PdfDocumentParser extends PdfDocumentParserBase {
         ? (_asString(sigDictToken.values[PdfNameTokens.name]) ??
             _asString(dict.values[PdfNameTokens.name]))
         : _asString(dict.values[PdfNameTokens.name]);
+    var reasonResolved = reason;
+    var locationResolved = location;
+    var nameResolved = name;
+    if (sigRef != null) {
+      reasonResolved ??=
+          _tryReadPdfStringFromObject(sigRef.obj, sigRef.gen, 'Reason');
+      locationResolved ??=
+          _tryReadPdfStringFromObject(sigRef.obj, sigRef.gen, 'Location');
+      nameResolved ??=
+          _tryReadPdfStringFromObject(sigRef.obj, sigRef.gen, 'Name');
+    }
     var signingTime = sigDictToken != null
         ? (_asString(sigDictToken.values[PdfNameTokens.m]) ??
             _asString(dict.values[PdfNameTokens.m]))
@@ -943,18 +985,29 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     if (byteRange == null && sigRef != null) {
       byteRange = _tryReadByteRangeFromObject(sigRef.obj, sigRef.gen);
     }
-    final pageRef = _findPageRefFromField(dict);
-    final pageIndex = (pageRef != null && pageIndexByObj != null)
+    final pageRef = inherited.pageRef ??
+        _findPageRefFromField(
+          dict,
+          fieldRef:
+              fieldRef != null ? PdfRefToken(fieldRef.obj, fieldRef.gen) : null,
+        );
+    var pageIndex = (pageRef != null && pageIndexByObj != null)
         ? pageIndexByObj[pageRef.obj]
         : null;
+    pageIndex ??= _resolvePageIndexFromAnnotationRef(
+      dict,
+      pageIndexByObj,
+      fieldRef:
+          fieldRef != null ? PdfRefToken(fieldRef.obj, fieldRef.gen) : null,
+    );
     final rect = _findRectFromField(dict);
 
     out.add(PdfSignatureFieldObjectInfo(
       info: PdfSignatureFieldInfo(
         fieldName: fieldName,
-        reason: reason,
-        location: location,
-        name: name,
+        reason: reasonResolved,
+        location: locationResolved,
+        name: nameResolved,
         signingTimeRaw: signingTime,
         filter: filter,
         subFilter: subFilter,
@@ -988,16 +1041,173 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     return out;
   }
 
-  PdfRefToken? _findPageRefFromField(PdfDictToken dict) {
-    final direct = PdfParserObjects.asRef(dict.values[PdfNameTokens.p]);
+  PdfRefToken? _findPageRefFromField(
+    PdfDictToken dict, {
+    PdfRefToken? fieldRef,
+  }) {
+    final direct = _asValidPageRef(
+      PdfParserObjects.asRef(dict.values[PdfNameTokens.p]),
+    );
     if (direct != null) return direct;
+
+    final visitedParents = <int>{};
+    dynamic parentVal = dict.values[PdfNameTokens.parent];
+    while (parentVal != null) {
+      final parentRef = PdfParserObjects.asRef(parentVal);
+      if (parentRef == null || !visitedParents.add(parentRef.obj)) break;
+      final parentObj =
+          _getObjectNoStream(parentRef.obj) ?? _getObject(parentRef.obj);
+      if (parentObj == null || parentObj.value is! PdfDictToken) break;
+      final parentDict = parentObj.value as PdfDictToken;
+      final parentPageRef = _asValidPageRef(
+        PdfParserObjects.asRef(parentDict.values[PdfNameTokens.p]),
+      );
+      if (parentPageRef != null) return parentPageRef;
+      parentVal = parentDict.values[PdfNameTokens.parent];
+    }
+
     final kids = _resolveArrayFromValue(dict.values[PdfNameTokens.kids]);
-    if (kids == null) return null;
-    for (final kid in kids.values) {
-      final kidDict = _resolveDictFromValueNoStream(kid);
-      if (kidDict == null) continue;
-      final p = PdfParserObjects.asRef(kidDict.values[PdfNameTokens.p]);
-      if (p != null) return p;
+    if (kids != null) {
+      for (final kid in kids.values) {
+        final kidDict = _resolveDictFromValueNoStream(kid);
+        if (kidDict == null) continue;
+        final p = _asValidPageRef(
+          PdfParserObjects.asRef(kidDict.values[PdfNameTokens.p]),
+        );
+        if (p != null) return p;
+      }
+    }
+
+    final possibleAnnotObjIds = <int>{};
+    if (fieldRef != null) {
+      possibleAnnotObjIds.add(fieldRef.obj);
+    }
+    if (kids != null) {
+      for (final kid in kids.values) {
+        final kidRef = PdfParserObjects.asRef(kid);
+        if (kidRef != null) {
+          possibleAnnotObjIds.add(kidRef.obj);
+        }
+      }
+    }
+    if (possibleAnnotObjIds.isNotEmpty) {
+      final byAnnots = _findPageRefByAnnotObjectIds(possibleAnnotObjIds);
+      if (byAnnots != null) {
+        return byAnnots;
+      }
+    }
+    return null;
+  }
+
+  PdfRefToken? _findPageRefByAnnotObjectIds(Set<int> annotObjIds) {
+    try {
+      _ensureXrefParsed();
+      final trailer = _trailerInfo ??
+          PdfParserXref.readTrailerInfoFromReader(reader, xrefOffset);
+      final rootObjId = trailer.rootObj;
+      if (rootObjId == null) return null;
+
+      final rootObj = _getObjectNoStream(rootObjId) ?? _getObject(rootObjId);
+      if (rootObj == null || rootObj.value is! PdfDictToken) {
+        return null;
+      }
+      final rootDict = rootObj.value as PdfDictToken;
+      final pagesRef =
+          PdfParserObjects.asRef(rootDict.values[PdfNameTokens.pages]);
+      if (pagesRef == null) return null;
+
+      final pageRefs = _collectPageRefs(pagesRef);
+      for (final pageRef in pageRefs) {
+        final pageObj =
+            _getObjectNoStream(pageRef.obj) ?? _getObject(pageRef.obj);
+        if (pageObj == null || pageObj.value is! PdfDictToken) continue;
+        final pageDict = pageObj.value as PdfDictToken;
+        final annots =
+            _resolveArrayFromValue(pageDict.values[PdfNameTokens.annots]);
+        if (annots == null) continue;
+        for (final annot in annots.values) {
+          final annotRef = PdfParserObjects.asRef(annot);
+          if (annotRef != null && annotObjIds.contains(annotRef.obj)) {
+            return pageRef;
+          }
+        }
+      }
+    } catch (_) {
+      return null;
+    }
+    return null;
+  }
+
+  int? _resolvePageIndexFromAnnotationRef(
+    PdfDictToken dict,
+    Map<int, int>? pageIndexByObj, {
+    PdfRefToken? fieldRef,
+  }) {
+    if (pageIndexByObj == null || pageIndexByObj.isEmpty) return null;
+    final annotObjIds = <int>{};
+    if (fieldRef != null) {
+      annotObjIds.add(fieldRef.obj);
+    }
+    final kids = _resolveArrayFromValue(dict.values[PdfNameTokens.kids]);
+    if (kids != null) {
+      for (final kid in kids.values) {
+        final kidRef = PdfParserObjects.asRef(kid);
+        if (kidRef != null) {
+          annotObjIds.add(kidRef.obj);
+        }
+      }
+    }
+    if (annotObjIds.isEmpty) return null;
+    final pageRef = _findPageRefByAnnotObjectIds(annotObjIds);
+    if (pageRef == null) return null;
+    return pageIndexByObj[pageRef.obj];
+  }
+
+  ({String? name, String? fieldType, PdfRefToken? pageRef})
+      _resolveFieldInheritance(
+    PdfDictToken dict, {
+    String? inheritedName,
+    String? inheritedFieldType,
+  }) {
+    var name = _asString(dict.values[PdfNameTokens.t]) ?? inheritedName;
+    var fieldType = PdfParserObjects.asName(dict.values[PdfNameTokens.ft]) ??
+        inheritedFieldType;
+    PdfRefToken? pageRef = _asValidPageRef(
+      PdfParserObjects.asRef(dict.values[PdfNameTokens.p]),
+    );
+
+    final visitedParents = <int>{};
+    dynamic parentVal = dict.values[PdfNameTokens.parent];
+    while (parentVal != null) {
+      final parentRef = PdfParserObjects.asRef(parentVal);
+      if (parentRef == null || !visitedParents.add(parentRef.obj)) break;
+      final parentObj =
+          _getObjectNoStream(parentRef.obj) ?? _getObject(parentRef.obj);
+      if (parentObj == null || parentObj.value is! PdfDictToken) break;
+      final parentDict = parentObj.value as PdfDictToken;
+
+      name ??= _asString(parentDict.values[PdfNameTokens.t]);
+      fieldType ??=
+          PdfParserObjects.asName(parentDict.values[PdfNameTokens.ft]);
+      pageRef ??= _asValidPageRef(
+        PdfParserObjects.asRef(parentDict.values[PdfNameTokens.p]),
+      );
+
+      parentVal = parentDict.values[PdfNameTokens.parent];
+    }
+
+    return (name: name, fieldType: fieldType, pageRef: pageRef);
+  }
+
+  PdfRefToken? _asValidPageRef(PdfRefToken? ref) {
+    if (ref == null) return null;
+    final obj = _getObjectNoStream(ref.obj) ?? _getObject(ref.obj);
+    if (obj == null || obj.value is! PdfDictToken) return null;
+    final dict = obj.value as PdfDictToken;
+    final type = PdfParserObjects.asName(dict.values[PdfNameTokens.type]);
+    if (type == PdfNameTokens.page ||
+        dict.values.containsKey(PdfNameTokens.contents)) {
+      return ref;
     }
     return null;
   }
@@ -1140,6 +1350,28 @@ class PdfDocumentParser extends PdfDocumentParserBase {
       if (i <= startName) return null;
       final name = ascii.decode(bytes.sublist(startName, i));
       return '/$name';
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String? _tryReadPdfStringFromObject(int objId, int gen, String key) {
+    try {
+      final bytes = reader.readAll();
+      final header = ascii.encode('$objId $gen obj');
+      final start =
+          PdfParserTokens.indexOfSequence(bytes, header, 0, bytes.length);
+      if (start == -1) return null;
+
+      final endObjToken = ascii.encode('endobj');
+      final searchStart = start + header.length;
+      final endObj = PdfParserTokens.indexOfSequence(
+          bytes, endObjToken, searchStart, bytes.length);
+      final end = endObj == -1 ? bytes.length : endObj;
+
+      final objectSlice = Uint8List.sublistView(bytes, searchStart, end);
+      final token = ascii.encode('/$key');
+      return PdfParserMisc.scanPdfStringValue(objectSlice, token);
     } catch (_) {
       return null;
     }
@@ -1778,4 +2010,3 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     }
   }
 }
-

@@ -9,7 +9,11 @@ class PdfPemUtils {
   const PdfPemUtils._();
 
   /// Decodes all PEM blocks matching [label].
-  static List<Uint8List> decodePemBlocks(String pem, String label) {
+  static List<Uint8List> decodePemBlocks(
+    String pem,
+    String label, {
+    bool lenient = false,
+  }) {
     final escaped = RegExp.escape(label);
     final re = RegExp(
       '-----BEGIN $escaped-----([\\s\\S]*?)-----END $escaped-----',
@@ -21,7 +25,13 @@ class PdfPemUtils {
     for (final m in matches) {
       final body = (m.group(1) ?? '').replaceAll(RegExp(r'\s+'), '');
       if (body.isEmpty) continue;
-      out.add(Uint8List.fromList(base64Decode(body)));
+      try {
+        out.add(Uint8List.fromList(base64Decode(body)));
+      } catch (_) {
+        if (!lenient) {
+          rethrow;
+        }
+      }
     }
     return out;
   }
