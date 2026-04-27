@@ -2119,41 +2119,47 @@ Uint8List? _extractContentsFromByteRange(
     return null;
   }
 
-  int lt = -1;
-  for (int i = gapStart; i < gapEnd; i++) {
-    if (bytes[i] == 0x3C /* < */) {
-      lt = i;
-      break;
-    }
-  }
-  if (lt == -1) return null;
-  int gt = -1;
-  for (int i = lt + 1; i < gapEnd; i++) {
-    if (bytes[i] == 0x3E /* > */) {
-      gt = i;
-      break;
-    }
-  }
-  if (gt == -1 || gt <= lt) return null;
+  for (int lt = gapStart; lt < gapEnd; lt++) {
+    if (bytes[lt] != 0x3C /* < */) continue;
+    if (lt + 1 < gapEnd && bytes[lt + 1] == 0x3C /* < */) continue;
 
+    var gt = -1;
+    for (int i = lt + 1; i < gapEnd; i++) {
+      if (bytes[i] == 0x3E /* > */) {
+        gt = i;
+        break;
+      }
+    }
+    if (gt == -1 || gt <= lt) return null;
+
+    final decoded = _decodePdfHexCandidate(bytes, lt + 1, gt);
+    if (decoded == null) continue;
+
+    final trimmed = _trimCmsPadding(decoded);
+    if (trimmed.isEmpty) return null;
+    return _normalizeBerToDer(trimmed);
+  }
+
+  return null;
+}
+
+Uint8List? _decodePdfHexCandidate(Uint8List bytes, int start, int end) {
   var hexCount = 0;
-  for (int i = lt + 1; i < gt; i++) {
+  for (int i = start; i < end; i++) {
     final b = bytes[i];
-    if (b == 0x20 || b == 0x0A || b == 0x0D || b == 0x09) continue;
+    if (_isPdfHexWhitespace(b)) continue;
+    if (_hexValue(b) < 0) return null;
     hexCount++;
   }
-  if (hexCount.isOdd) return null;
+  if (hexCount == 0 || hexCount.isOdd) return null;
 
   final decoded = Uint8List(hexCount ~/ 2);
   var outIndex = 0;
   var hiNibble = -1;
-  for (int i = lt + 1; i < gt; i++) {
+  for (int i = start; i < end; i++) {
     final b = bytes[i];
-    if (b == 0x20 || b == 0x0A || b == 0x0D || b == 0x09) continue;
+    if (_isPdfHexWhitespace(b)) continue;
     final nibble = _hexValue(b);
-    if (nibble < 0) {
-      throw FormatException('Hex inválido em /Contents.');
-    }
     if (hiNibble < 0) {
       hiNibble = nibble;
     } else {
@@ -2162,8 +2168,16 @@ Uint8List? _extractContentsFromByteRange(
     }
   }
 
-  final trimmed = _trimCmsPadding(decoded);
-  return _normalizeBerToDer(trimmed);
+  return decoded;
+}
+
+bool _isPdfHexWhitespace(int b) {
+  return b == 0x00 ||
+      b == 0x09 ||
+      b == 0x0A ||
+      b == 0x0C ||
+      b == 0x0D ||
+      b == 0x20;
 }
 
 Uint8List _trimCmsPadding(Uint8List bytes) {

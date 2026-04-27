@@ -55,6 +55,30 @@ void main() {
       expect(result.issues, isNotEmpty);
     });
 
+    test('marca PDF assinado com ByteRange fora do arquivo como corrompido',
+        () async {
+      final bytes = _readAsset(
+        'test/assets/pdfs/ANDRESSA_assinatura_corrompida.pdf',
+      );
+      final inspector = PdfSecurityInspector();
+
+      final quick = inspector.quickInspect(bytes);
+
+      expect(quick.isPdf, isTrue);
+      expect(quick.isSigned, isTrue);
+      expect(quick.signatureCount, 3);
+      expect(quick.hasValidByteRanges, isFalse);
+      expect(quick.isCorrupted, isTrue);
+      expect(
+        quick.issues,
+        contains('ByteRange inconsistente com o tamanho do arquivo.'),
+      );
+
+      final deep = await inspector.inspect(bytes, validateSignatures: true);
+      expect(deep.isCorrupted, isTrue);
+      expect(deep.allSignaturesIntact, isFalse);
+    });
+
     test('detecta dicionario /Encrypt no trailer', () {
       final bytes = _buildSyntheticEncryptedPdf();
       final inspector = PdfSecurityInspector();
@@ -128,7 +152,8 @@ startxref
       final inspector = PdfSecurityInspector();
       final result = inspector.quickInspect(bytes);
       expect(result.startXref, 12);
-      expect(result.issues.where((e) => e.contains('startxref')).isEmpty, isTrue);
+      expect(
+          result.issues.where((e) => e.contains('startxref')).isEmpty, isTrue);
     });
 
     test('ativa modo reparo quando startxref ausente e xref existe', () {
