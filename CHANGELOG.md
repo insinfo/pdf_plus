@@ -4,6 +4,7 @@
 
 - Add `SpanningTable`, a paginatable table widget with header repetition, flexible/fixed/fractional column widths, `rowspan`, `colspan`, per-cell padding/alignment, widget cell content, and page continuation context.
 - Add `SpanningTableOverflowMode.clip`, explicit `textDirection`, layout caching across pages, and `SpanningTable.fromTextArray()` for easier migration from text-array tables.
+- Fix signature field metadata extraction from Flate-compressed object streams, including field names and page indexes for widget annotations stored inside `/ObjStm` objects.
 
 ## 3.16.0
 

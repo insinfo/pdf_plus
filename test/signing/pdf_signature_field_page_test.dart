@@ -8,6 +8,8 @@ import 'package:test/test.dart';
 
 void main() {
   const pdfPath = 'test/assets/pdfs/documento (13).pdf';
+  const pdfMissingFieldPagePath =
+      'test/assets/pdfs/documento_nao_mostra_field_page.pdf';
   const bksIcp = 'test/assets/truststore/icp_brasil/cadeiasicpbrasil.bks';
   const bksGov = 'test/assets/truststore/gov.br/cadeia_govbr_unica.bks';
   const bksPassword = 'serprosigner';
@@ -90,4 +92,28 @@ void main() {
     expect(fields, isNotEmpty);
     expect(fields.first.fieldName, 'AssinaturaInterna_2');
   });
+
+  test(
+    'reports fieldName and page when signature field is only reachable from page annotation',
+    () async {
+      final file = File(pdfMissingFieldPagePath);
+      expect(
+        file.existsSync(),
+        isTrue,
+        reason: 'Arquivo obrigatório não encontrado: $pdfMissingFieldPagePath',
+      );
+
+      final pdfBytes = Uint8List.fromList(file.readAsBytesSync());
+      final report = await PdfSignatureValidator().validateAllSignatures(
+        pdfBytes,
+        includeCertificates: false,
+        includeSignatureFields: true,
+      );
+
+      expect(report.signatures, hasLength(1));
+      final signature = report.signatures.single;
+      expect(signature.signatureField?.fieldName, 'AssinaturaInterna_1');
+      expect(signature.signatureField?.pageIndex, 1);
+    },
+  );
 }

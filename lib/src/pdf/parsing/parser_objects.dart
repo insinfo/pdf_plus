@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:archive/archive.dart';
+
 import '../format/array.dart';
 import '../format/base.dart';
 import '../format/bool.dart';
@@ -16,6 +18,8 @@ import 'parser_tokens.dart';
 import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
 class PdfParserObjects {
+  static const int _maxStreamDecodeSize = 256 * 1024 * 1024;
+
   static Uint8List? extractStream(
       Uint8List bytes, int dictEnd, int end, int? length) {
     int i = dictEnd;
@@ -239,6 +243,12 @@ class PdfParserObjects {
     if (n == null || first == null) return null;
 
     Uint8List data = objStm.streamData!;
+    final filter = asName(dict.values[PdfNameTokens.filter]);
+    if (filter == PdfNameTokens.flateDecode) {
+      if (data.length > _maxStreamDecodeSize) return null;
+      data = Uint8List.fromList(ZLibDecoder().decodeBytes(data));
+    }
+
     final header = readObjectStreamHeader(data, n);
     if (header == null) return null;
     final objOffset = header.index[objId];
