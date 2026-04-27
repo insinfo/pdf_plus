@@ -223,7 +223,7 @@ XPathSequence _fnFormatInteger(
 ]) {
   if (value == null) return XPathSequence.empty;
   // Basic implementation ignoring picture string intricacies
-  // TODO: Add proper picture string parsing support
+  // Full picture string parsing is not implemented.
   return XPathSequence.single(value.toInt().toString());
 }
 
@@ -257,7 +257,7 @@ XPathSequence _fnFormatNumber(
 ]) {
   if (value == null) return XPathSequence.empty;
   // Basic implementation
-  // TODO: Add proper picture string parsing support
+  // Full picture string parsing is not implemented.
   return XPathSequence.single(value.toString());
 }
 

@@ -47,12 +47,14 @@ class SpanningTableContext extends WidgetContext {
   int firstRow = 0;
   int lastRow = 0;
   int? deferredRow;
+  bool retryDeferredRow = false;
 
   @override
   void apply(SpanningTableContext other) {
     firstRow = other.firstRow;
     lastRow = other.lastRow;
     deferredRow = other.deferredRow;
+    retryDeferredRow = other.retryDeferredRow;
   }
 
   @override
@@ -60,7 +62,7 @@ class SpanningTableContext extends WidgetContext {
 
   @override
   String toString() => '$runtimeType firstRow: $firstRow lastRow: $lastRow '
-      'deferredRow: $deferredRow';
+      'deferredRow: $deferredRow retryDeferredRow: $retryDeferredRow';
 }
 
 /// Exception thrown when [SpanningTable] cannot produce a safe layout.
@@ -196,6 +198,7 @@ class SpanningTable extends Widget with SpanningWidget {
         TableCellVerticalAlignment.full,
     SpanningTableOverflowMode overflow = SpanningTableOverflowMode.strict,
     TextDirection? textDirection,
+    bool repeatHeaderRows = true,
   }) {
     assert(headerCount >= 0);
 
@@ -274,7 +277,7 @@ class SpanningTable extends Widget with SpanningWidget {
     if (headers != null) {
       rows.add(
         SpanningTableRow(
-          repeat: true,
+          repeat: repeatHeaderRows,
           decoration: headerDecoration,
           children: <SpanningTableCell>[
             for (var index = 0; index < headers.length; index++)
@@ -296,7 +299,7 @@ class SpanningTable extends Widget with SpanningWidget {
       final isOdd = (rowNum - headerCount) % 2 != 0;
       rows.add(
         SpanningTableRow(
-          repeat: isHeader,
+          repeat: repeatHeaderRows && isHeader,
           decoration: isHeader
               ? headerDecoration
               : isOdd
@@ -360,6 +363,7 @@ class SpanningTable extends Widget with SpanningWidget {
   void restoreContext(SpanningTableContext context) {
     _context.apply(context);
     _context.firstRow = _context.lastRow;
+    _context.retryDeferredRow = _context.deferredRow != null;
   }
 
   @override
@@ -682,9 +686,10 @@ class SpanningTable extends Widget with SpanningWidget {
             'reduce padding/font size, increase the page height, or render '
             'that content outside this table.';
 
-        if (_context.deferredRow == row) {
+        if (_context.deferredRow == row && _context.retryDeferredRow) {
           if (overflow == SpanningTableOverflowMode.clip) {
             _context.deferredRow = null;
+            _context.retryDeferredRow = false;
             for (var r = row; r < end; r++) {
               rows.add(r);
             }
@@ -701,6 +706,7 @@ class SpanningTable extends Widget with SpanningWidget {
         }
 
         _context.deferredRow = row;
+        _context.retryDeferredRow = false;
         return _VisibleLayout(
           rows: const <int>[],
           rowBottoms: const <int, double>{},
@@ -711,6 +717,7 @@ class SpanningTable extends Widget with SpanningWidget {
     }
 
     _context.deferredRow = null;
+    _context.retryDeferredRow = false;
 
     var hasBodyRow = false;
     while (row < children.length) {

@@ -219,9 +219,6 @@ class BksSecretEntry extends KeystoreEntry {
 /// - Iteration count: 4 bytes
 /// - Entries: variable, null-terminated
 /// - HMAC: 20 bytes (SHA-1)
-///
-/// TODO: Full implementation requires:
-/// - Sealed key decryption (PBEWithSHAAnd3-KeyTripleDES-CBC) [Implemented]
 class BksKeyStore extends AbstractKeystore {
   /// The version of this keystore (1 or 2).
   final int version;

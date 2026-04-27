@@ -258,7 +258,7 @@ const fnDistinctValues = XPathFunctionDefinition(
   function: _fnDistinctValues,
 );
 
-// Argument 2: collation (ignored for now via TODO)
+// Argument 2: collation is currently ignored.
 XPathSequence _fnDistinctValues(
   XPathContext context,
   XPathSequence arg, [
@@ -294,7 +294,7 @@ XPathSequence _fnIndexOf(
   XPathSequence search, [
   XPathString? collation,
 ]) {
-  // Argument 3: collation (ignored for now via TODO)
+  // Argument 3: collation is currently ignored.
   // Search item is exactly one? 'search' argument definition minValues: 1.
   // But strictly `index-of` takes `$search as xs:anyAtomicType`.
   // If we say `type: XPathValue` (generic single item)?
@@ -347,7 +347,7 @@ XPathSequence _fnDeepEqual(
   XPathSequence parameter2, [
   XPathString? collation,
 ]) {
-  // Argument 3: collation (ignored for now via TODO)
+  // Argument 3: collation is currently ignored.
   if (parameter1.length != parameter2.length) {
     return XPathSequence.falseSequence;
   }

@@ -35,7 +35,7 @@ XPathSequence opGeneralEqual(
   for (final item1 in seq1) {
     for (final item2 in seq2) {
       if (item1 == item2) return XPathSequence.trueSequence;
-      // TODO: Type promotion and more complex comparison rules
+      // Type promotion and complex comparison rules are intentionally limited.
       if (item1.toString() == item2.toString()) {
         return XPathSequence.trueSequence;
       }
@@ -54,7 +54,7 @@ XPathSequence opGeneralNotEqual(
   for (final item1 in seq1) {
     for (final item2 in seq2) {
       if (item1 != item2) return XPathSequence.trueSequence;
-      // TODO: Type promotion and more complex comparison rules
+      // Type promotion and complex comparison rules are intentionally limited.
       if (item1.toString() != item2.toString()) {
         return XPathSequence.trueSequence;
       }

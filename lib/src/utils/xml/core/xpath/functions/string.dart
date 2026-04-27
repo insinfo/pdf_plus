@@ -233,7 +233,7 @@ XPathSequence _fnContains(
   XPathString? arg2, [
   XPathString? collation,
 ]) {
-  // TODO: Handle collation
+  // Collation is currently ignored.
   final s1 = arg1 ?? '';
   final s2 = arg2 ?? '';
   return XPathSequence.single(s1.contains(s2));
@@ -271,7 +271,7 @@ XPathSequence _fnStartsWith(
   XPathString? arg2, [
   XPathString? collation,
 ]) {
-  // TODO: Handle collation
+  // Collation is currently ignored.
   final s1 = arg1 ?? '';
   final s2 = arg2 ?? '';
   return XPathSequence.single(s1.startsWith(s2));
@@ -309,7 +309,7 @@ XPathSequence _fnEndsWith(
   XPathString? arg2, [
   XPathString? collation,
 ]) {
-  // TODO: Handle collation
+  // Collation is currently ignored.
   final s1 = arg1 ?? '';
   final s2 = arg2 ?? '';
   return XPathSequence.single(s1.endsWith(s2));
@@ -349,7 +349,7 @@ XPathSequence _fnSubstringBefore(
 ]) {
   final s1 = arg1 ?? '';
   final s2 = arg2 ?? '';
-  // TODO: Handle collation parameter
+  // Collation parameter is currently ignored.
   final index = s1.indexOf(s2);
   return XPathSequence.single(index >= 0 ? s1.substring(0, index) : '');
 }
@@ -388,7 +388,7 @@ XPathSequence _fnSubstringAfter(
 ]) {
   final s1 = arg1 ?? '';
   final s2 = arg2 ?? '';
-  // TODO: Handle collation parameter
+  // Collation parameter is currently ignored.
   if (s2.isEmpty) return XPathSequence.single(s1);
   final index = s1.indexOf(s2);
   return XPathSequence.single(
@@ -581,7 +581,7 @@ XPathSequence _fnCompare(
 ]) {
   final c1 = comparand1 ?? '';
   final c2 = comparand2 ?? '';
-  // TODO: Handle collation parameter
+  // Collation parameter is currently ignored.
   return XPathSequence.single(c1.compareTo(c2));
 }
 
@@ -640,7 +640,7 @@ XPathSequence _fnCollationKey(
   XPathString? collation,
 ]) {
   final k = key ?? '';
-  // TODO: Handle collation parameter
+  // Collation parameter is currently ignored.
   return XPathSequence.single(
     String.fromCharCodes(k.runes), // Identity for now
   );
@@ -675,7 +675,7 @@ XPathSequence _fnContainsToken(
   XPathString? collation,
 ]) {
   final i = input ?? '';
-  // TODO: Handle collation parameter
+  // Collation parameter is currently ignored.
   final tokens = i.trim().split(RegExp(r'\s+'));
   return XPathSequence.single(tokens.contains(token.trim()));
 }
@@ -791,7 +791,7 @@ RegExp _createRegExp(String pattern, String flags) {
       case 's':
         isDotAll = true;
       case 'x':
-        // TODO: Implement extended whitespace ignoring if possible
+        // Extended whitespace ignoring is not implemented.
         break;
       case 'q':
         return RegExp(RegExp.escape(pattern));

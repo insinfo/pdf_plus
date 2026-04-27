@@ -5,7 +5,6 @@ import 'package:pdf_plus/src/utils/path_parsing/path_parsing.dart';
 import 'package:pdf_plus/src/utils/path_parsing/src/path_segment_type.dart';
 import 'package:test/test.dart';
 
-// TODO(dnfield): a bunch of better tests could be written to track that commands are actually called with expected values/order
 // For now we just want to know that something gets emitted and no exceptions are thrown (that's all the legacy tests really did anyway).
 class TestPathProxy extends PathProxy {
   bool called = false;

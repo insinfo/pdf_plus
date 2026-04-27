@@ -77,6 +77,7 @@ mixin TableHelper {
     TextDirection? tableDirection,
     OnCell? cellBuilder,
     OnCellTextStyle? textStyleBuilder,
+    bool repeatHeaderRows = true,
   }) {
     assert(headerCount >= 0);
 
@@ -120,7 +121,7 @@ mixin TableHelper {
       }
       rows.add(TableRow(
         children: tableRow,
-        repeat: true,
+        repeat: repeatHeaderRows,
         decoration: headerDecoration,
       ));
       rowNum++;
@@ -190,7 +191,7 @@ mixin TableHelper {
 
       rows.add(TableRow(
         children: tableRow,
-        repeat: rowNum < headerCount,
+        repeat: repeatHeaderRows && rowNum < headerCount,
         decoration: decoration,
       ));
       rowNum++;

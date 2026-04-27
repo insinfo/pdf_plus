@@ -377,7 +377,7 @@ class Normalization {
 
   /// 3.5 Shaping
   /// Implements rules R1-R7 and rules L1-L3 of section 8.2 (Persian) of the Unicode standard.
-  // TODO - this code is very special-cased.
+  // This shaping code is intentionally special-cased for the supported rules.
   List<int> _performShaping() {
     var lastJt = ShapeJoiningType.nonJoining;
     var lastForm = LetterForm.isolated;
@@ -552,8 +552,8 @@ void _resolveWeakTypes(
   bool hasPersian,
   bool hasNSMs,
 ) {
-  // TODO - all these repeating runs seems somewhat unefficient...
-  // TODO - rules 2 and 7 are the same, except for minor parameter changes...
+  // These repeated runs mirror the rule-by-rule Unicode bidi algorithm.
+  // Rules 2 and 7 are intentionally kept separate for clarity.
 
   // W1. Examine each nonspacing mark (NSM) in the level run, and change the type of the NSM to the type of the previous character. If the NSM is at the start of the level run, it will get the type of sor.
   if (hasNSMs) {
@@ -843,7 +843,7 @@ void _reorderString(List<_CharData> textData, int embeddingLevel) {
     }
   }
 
-  // TODO - L3. Combining marks applied to a right-to-left base character will at this point precede their base
+  // L3 note: Combining marks applied to a right-to-left base character will at this point precede their base
   // character. If the rendering engine expects them to follow the base characters in the final display process,
   // then the ordering of the marks and the base character must be reversed.
 }

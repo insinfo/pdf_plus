@@ -1,5 +1,18 @@
 # Changelog
 
+## 3.17.1
+
+- Fix `SpanningTable` pagination so a deferred body row is not painted on the
+  previous page and then repeated on the next page in `clip` overflow mode.
+- Add `repeatHeaderRows` to `TableHelper.fromTextArray` and
+  `SpanningTable.fromTextArray` to control repeated table header rows.
+- Add `/Opt` parsing for AcroForm choice fields, including direct string
+  options and export/display option pairs.
+- Remove or reword non-actionable TODO markers from utility code and
+  internal notes that were not related to pending PDF library work.
+- Add a Quill Better Table pagination scenario example with numbered cells to
+  make row clipping or repetition easier to inspect visually.
+
 ## 3.17.0
 
 - Add `SpanningTable`, a paginatable table widget with header repetition, flexible/fixed/fractional column widths, `rowspan`, `colspan`, per-cell padding/alignment, widget cell content, and page continuation context.

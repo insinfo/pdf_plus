@@ -97,6 +97,25 @@ Matcher _spanningTableExceptionContaining(String text) {
   );
 }
 
+class _PaintCounterBox extends Widget {
+  _PaintCounterBox({required this.height, required this.onPaint});
+
+  final double height;
+  final void Function() onPaint;
+
+  @override
+  void layout(Context context, BoxConstraints constraints,
+      {bool parentUsesSize = false}) {
+    box = constraints.constrainRect(width: 20, height: height);
+  }
+
+  @override
+  void paint(Context context) {
+    super.paint(context);
+    onPaint();
+  }
+}
+
 void main() {
   test('SpanningTable paginates long tables with header', () async {
     final doc = Document();
@@ -414,6 +433,53 @@ void main() {
     expect(bytes, isNotEmpty);
   });
 
+  test('SpanningTable defers row without painting it on the previous page',
+      () async {
+    final doc = Document();
+    var bodyPaintCount = 0;
+
+    doc.addPage(
+      MultiPage(
+        pageFormat: const PdfPageFormat(220, 120, marginAll: 10),
+        maxPages: 4,
+        build: (Context context) => <Widget>[
+          SizedBox(height: 62),
+          SpanningTable(
+            overflow: SpanningTableOverflowMode.clip,
+            border: TableBorder.all(),
+            children: <SpanningTableRow>[
+              SpanningTableRow(
+                repeat: true,
+                children: <SpanningTableCell>[
+                  SpanningTableCell(
+                    padding: const EdgeInsets.all(2),
+                    child: SizedBox(height: 10, child: Text('Header')),
+                  ),
+                ],
+              ),
+              SpanningTableRow(
+                children: <SpanningTableCell>[
+                  SpanningTableCell(
+                    padding: const EdgeInsets.all(2),
+                    child: _PaintCounterBox(
+                      height: 32,
+                      onPaint: () => bodyPaintCount++,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    final bytes = await doc.save();
+    expect(bytes, isNotEmpty);
+    expect(doc.document.pdfPageList.pages.length, 2);
+    expect(bodyPaintCount, 1);
+  });
+
   test('SpanningTable clip mode recovers malformed row spans', () async {
     final doc = Document();
 
@@ -508,6 +574,19 @@ void main() {
     final bytes = await doc.save();
     expect(bytes, isNotEmpty);
     expect(doc.document.pdfPageList.pages.length, greaterThan(1));
+  });
+
+  test('SpanningTable.fromTextArray can disable repeated headers', () {
+    final table = SpanningTable.fromTextArray(
+      headers: <String>['A', 'B'],
+      data: <List<dynamic>>[
+        <dynamic>[1, 2],
+      ],
+      repeatHeaderRows: false,
+    );
+
+    expect(table.children.first.repeat, isFalse);
+    expect(table.children.last.repeat, isFalse);
   });
 
   test('SpanningTable handles 250+ pages with dense spans', () async {

@@ -10,10 +10,8 @@
 //   * https://github.com/chromium/chromium/blob/master/third_party/blink/renderer/core/html/parser/html_parser_idioms.h (IsHTMLSpace)
 //   * https://github.com/chromium/chromium/blob/master/third_party/blink/renderer/core/svg/svg_path_parser_test.cc
 
-// TODO(stuartmorgan): Remove public_member_api_docs, adding documentation for
-//  all public members.
-// TODO(stuartmorgan): Remove library_private_types_in_public_api and do a
-//  breaking change to not use _PathOffset in public APIs.
+// Public member docs and private public API lints are suppressed for this
+// vendored parser until the API can make a breaking cleanup.
 // ignore_for_file: public_member_api_docs, library_private_types_in_public_api, deprecated_member_use, deprecated_member_use_from_same_package
 
 import 'dart:math' as math show atan2, cos, max, pi, pow, sin, sqrt, tan;
@@ -85,7 +83,6 @@ class _PathOffset {
     return other is _PathOffset && other.dx == dx && other.dy == dy;
   }
 
-  // TODO(dnfield): Use a real hashing function - but this should at least be better than the default.
   @override
   int get hashCode => (((17 * 23) ^ dx.hashCode) * 23) ^ dy.hashCode;
 }
@@ -413,7 +410,6 @@ class SvgPathStringSource {
 }
 
 @Deprecated('Utility function that should not be public.')
-// TODO(kevmoo): Remove this in the next release https://github.com/flutter/flutter/issues/157940
 _PathOffset reflectedPoint(
     _PathOffset reflectedIn, _PathOffset pointToReflect) {
   return _PathOffset(2 * reflectedIn.dx - pointToReflect.dx,
@@ -424,7 +420,6 @@ const double _kOneOverThree = 1.0 / 3.0;
 
 /// Blend the points with a ratio (1/3):(2/3).
 @Deprecated('Utility function that should not be public.')
-// TODO(kevmoo): Remove this in the next release https://github.com/flutter/flutter/issues/157940
 _PathOffset blendPoints(_PathOffset p1, _PathOffset p2) {
   return _PathOffset((p1.dx + 2 * p2.dx) * _kOneOverThree,
       (p1.dy + 2 * p2.dy) * _kOneOverThree);
@@ -444,8 +439,8 @@ bool isQuadraticCommand(SvgPathSegType command) {
       command == SvgPathSegType.smoothQuadToRel;
 }
 
-// TODO(dnfield): This can probably be cleaned up a bit.  Some of this was designed in such a way to pack data/optimize for C++
-// There are probably better/clearer ways to do it for Dart.
+// This representation mirrors the upstream parser structure and keeps the
+// segment data packed similarly to the original C++-oriented implementation.
 class PathSegmentData {
   PathSegmentData()
       : command = SvgPathSegType.unknown,
@@ -453,7 +448,6 @@ class PathSegmentData {
         arcLarge = false;
 
   @Deprecated('Utility member that should not be public.')
-  // TODO(kevmoo): Remove this in the next release https://github.com/flutter/flutter/issues/157940
   _PathOffset get arcRadii => point1;
 
   /// Angle in degrees.
@@ -480,15 +474,12 @@ class PathSegmentData {
   SvgPathSegType command;
 
   @Deprecated('Utility member that should not be public.')
-  // TODO(kevmoo): Remove this in the next release https://github.com/flutter/flutter/issues/157940
   _PathOffset targetPoint = _PathOffset.zero;
 
   @Deprecated('Utility member that should not be public.')
-  // TODO(kevmoo): Remove this in the next release https://github.com/flutter/flutter/issues/157940
   _PathOffset point1 = _PathOffset.zero;
 
   @Deprecated('Utility member that should not be public.')
-  // TODO(kevmoo): Remove this in the next release https://github.com/flutter/flutter/issues/157940
   _PathOffset point2 = _PathOffset.zero;
   bool arcSweep;
   bool arcLarge;

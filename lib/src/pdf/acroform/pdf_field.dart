@@ -1,9 +1,12 @@
+import 'dart:convert';
+
 import '../format/array.dart';
 import '../format/base.dart';
 import '../format/dict.dart';
 import '../format/indirect.dart';
 import '../format/name.dart';
 import '../format/num.dart';
+import '../format/string.dart';
 import 'pdf_acroform.dart';
 import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
@@ -162,8 +165,37 @@ class PdfAcroChoiceField extends PdfAcroField {
 
   /// Gets the options (/Opt) for the choice field.
   List<String> get options {
-    // TODO: Implement parsing of /Opt (can be array of strings or array of arrays)
-    return [];
+    final opt = dictionary[PdfNameTokens.opt];
+    if (opt is! PdfArray) return const <String>[];
+
+    final options = <String>[];
+    for (final value in opt.values) {
+      final option = _choiceOptionLabel(value);
+      if (option != null) options.add(option);
+    }
+    return options;
+  }
+
+  String? _choiceOptionLabel(PdfDataType value) {
+    if (value is PdfString) return _decodePdfString(value);
+    if (value is PdfArray && value.values.isNotEmpty) {
+      final displayValue =
+          value.values.length > 1 ? value.values[1] : value.values[0];
+      if (displayValue is PdfString) return _decodePdfString(displayValue);
+    }
+    return null;
+  }
+
+  String _decodePdfString(PdfString value) {
+    final bytes = value.value;
+    if (bytes.length >= 2 && bytes[0] == 0xfe && bytes[1] == 0xff) {
+      final codeUnits = <int>[];
+      for (var index = 2; index + 1 < bytes.length; index += 2) {
+        codeUnits.add((bytes[index] << 8) | bytes[index + 1]);
+      }
+      return String.fromCharCodes(codeUnits);
+    }
+    return latin1.decode(bytes);
   }
 
   /// Gets the top index (/TI).
@@ -223,4 +255,3 @@ class PdfAcroSignatureField extends PdfAcroField {
     }
   }
 }
-

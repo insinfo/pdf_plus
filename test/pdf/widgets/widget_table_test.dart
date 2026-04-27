@@ -201,6 +201,19 @@ void main() {
     ));
   });
 
+  test('Table fromTextArray can disable repeated headers', () {
+    final table = TableHelper.fromTextArray(
+      headers: <String>['A', 'B'],
+      data: <List<dynamic>>[
+        <dynamic>[1, 2],
+      ],
+      repeatHeaderRows: false,
+    );
+
+    expect(table.children.first.repeat, isFalse);
+    expect(table.children.last.repeat, isFalse);
+  });
+
   test('Table fromTextArray with formatting', () {
     pdf.addPage(Page(
       build: (Context context) => TableHelper.fromTextArray(

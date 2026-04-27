@@ -180,7 +180,6 @@ class PdfNameTokens {
   static const names = '/Names';
   static const next = '/Next';
   static const nm = '/NM';
-// TODO no futuro talver ver um nome melhor
   static const nullName = '/Null';
 
   static const num = '/Num';

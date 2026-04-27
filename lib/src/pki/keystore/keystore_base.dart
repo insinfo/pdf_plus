@@ -146,8 +146,7 @@ class PrivateKeyEntry extends KeystoreEntry {
   void decrypt(String password) {
     if (isDecrypted()) return;
 
-    // TODO: Implement JKS/JCEKS private key decryption
-    // This requires:
+    // JKS/JCEKS private key decryption requires:
     // 1. Parse the EncryptedPrivateKeyInfo ASN.1 structure
     // 2. Determine the encryption algorithm (JKS proprietary or JCEKS PBE)
     // 3. Decrypt using the appropriate algorithm

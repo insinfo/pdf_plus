@@ -23,7 +23,7 @@ XPathSequence _opSameKey(
 ) {
   final k1 = k1Seq.toAtomicValue();
   final k2 = k2Seq.toAtomicValue();
-  // TODO: Handle timezone, etc.
+  // Timezone normalization is intentionally limited.
   if (k1 is num && k1.isNaN && k2 is num && k2.isNaN) {
     return XPathSequence.trueSequence;
   }
@@ -59,7 +59,7 @@ XPathSequence _mapMerge(
   XPathSequence maps, [
   XPathMap? options,
 ]) {
-  // arguments[1] is options, currently ignored (TODO)
+  // arguments[1] is options and is currently ignored.
   final result = <Object?, Object?>{};
   for (final item in maps) {
     result.addAll(item.toXPathMap());

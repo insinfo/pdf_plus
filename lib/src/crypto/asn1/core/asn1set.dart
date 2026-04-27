@@ -42,9 +42,6 @@ class ASN1Set extends ASN1Object {
     return _encodedBytes!;
   }
 
-  ///
-  /// TODO: Merge with Sequence code
-  ///
   int _childLength() {
     var l = 0;
     for (var obj in elements) {

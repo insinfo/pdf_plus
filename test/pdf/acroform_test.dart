@@ -1,6 +1,9 @@
 import 'package:pdf_plus/pdf.dart';
 import 'package:pdf_plus/src/pdf/acroform/pdf_acroform.dart';
 import 'package:pdf_plus/src/pdf/acroform/pdf_field.dart';
+import 'package:pdf_plus/src/pdf/format/array.dart';
+import 'package:pdf_plus/src/pdf/format/base.dart';
+import 'package:pdf_plus/src/pdf/format/string.dart';
 
 import 'package:test/test.dart';
 
@@ -62,6 +65,18 @@ void main() {
 
       choiceField.indices = [1, 3];
       expect(choiceField.indices, [1, 3]);
+
+      choiceField.dictionary[PdfNameTokens.opt] = PdfArray(<PdfDataType>[
+        PdfString.fromString('Simples'),
+        PdfArray(<PdfString>[
+          PdfString.fromString('export-1'),
+          PdfString.fromString('Exibicao 1'),
+        ]),
+        PdfArray(<PdfString>[
+          PdfString.fromString('Export unico'),
+        ]),
+      ]);
+      expect(choiceField.options, ['Simples', 'Exibicao 1', 'Export unico']);
     });
 
     test('flattenFields removes AcroForm from catalog', () {
@@ -79,5 +94,3 @@ void main() {
     });
   });
 }
-
-

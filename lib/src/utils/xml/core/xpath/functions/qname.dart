@@ -25,7 +25,7 @@ XPathSequence _fnResolveQName(
   XPathSequence element,
 ) {
   if (qname == null || element.isEmpty) return XPathSequence.empty;
-  // TODO: Implement proper QName resolution using element's in-scope namespaces.
+  // Full QName resolution using element in-scope namespaces is not implemented.
   return XPathSequence.single(XmlName.fromString(qname));
 }
 
@@ -44,7 +44,7 @@ const fnQName = XPathFunctionDefinition(
   function: _fnQName,
 );
 
-// TODO: XmlName in PetitXml currently does not store the namespace URI explicitly
+// XmlName in PetitXml currently does not store the namespace URI explicitly
 // when detached, so uriOpt is ignored here. This is a limitation.
 XPathSequence _fnQName(
   XPathContext context,
