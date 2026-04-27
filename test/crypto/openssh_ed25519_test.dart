@@ -95,6 +95,37 @@ bool _hasSshKeygen() {
 
 Future<void> _ensurePrivateKeyPermissions(String keyPath) async {
   if (Platform.isWindows) {
+    final domain = Platform.environment['USERDOMAIN'];
+    final user = Platform.environment['USERNAME'];
+    final identity = domain == null || domain.isEmpty || user == null
+        ? user
+        : '$domain\\$user';
+    if (identity == null || identity.isEmpty) {
+      throw StateError('Unable to determine current Windows user.');
+    }
+
+    final removeInheritance = await Process.run(
+      'icacls',
+      <String>[keyPath, '/inheritance:r'],
+    );
+    if (removeInheritance.exitCode != 0) {
+      throw StateError(
+        'Failed to remove inherited private key permissions: '
+        '${removeInheritance.stdout}\n${removeInheritance.stderr}',
+      );
+    }
+
+    final grantUser = await Process.run(
+      'icacls',
+      <String>[keyPath, '/grant:r', '$identity:R'],
+    );
+    if (grantUser.exitCode != 0) {
+      throw StateError(
+        'Failed to grant private key read permission: '
+        '${grantUser.stdout}\n${grantUser.stderr}',
+      );
+    }
+
     return;
   }
 

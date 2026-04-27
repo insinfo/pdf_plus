@@ -52,6 +52,7 @@ export 'src/widgets/placeholders.dart';
 export 'src/widgets/progress.dart';
 export 'src/widgets/shape.dart';
 export 'src/widgets/stack.dart';
+export 'src/widgets/spanning_table.dart';
 export 'src/widgets/svg.dart';
 export 'src/widgets/table.dart';
 export 'src/widgets/table_helper.dart';
