@@ -2186,11 +2186,54 @@ Uint8List _trimCmsPadding(Uint8List bytes) {
   while (start < end && bytes[start] == 0x00) {
     start++;
   }
+
+  final asn1Length = _readAsn1ElementTotalLength(bytes, start);
+  if (asn1Length != null && start + asn1Length <= bytes.length) {
+    final end = start + asn1Length;
+    if (start == 0 && end == bytes.length) return bytes;
+    return bytes.sublist(start, end);
+  }
+
   while (end > start && bytes[end - 1] == 0x00) {
     end--;
   }
   if (start == 0 && end == bytes.length) return bytes;
   return bytes.sublist(start, end);
+}
+
+int? _readAsn1ElementTotalLength(Uint8List bytes, int offset) {
+  if (offset < 0 || offset >= bytes.length) return null;
+
+  var cursor = offset + 1;
+  if ((bytes[offset] & 0x1F) == 0x1F) {
+    var completed = false;
+    while (cursor < bytes.length) {
+      final b = bytes[cursor++];
+      if ((b & 0x80) == 0) {
+        completed = true;
+        break;
+      }
+    }
+    if (!completed) return null;
+  }
+
+  if (cursor >= bytes.length) return null;
+  final lenByte = bytes[cursor++];
+  if (lenByte == 0x80) return null;
+
+  int length;
+  if ((lenByte & 0x80) == 0) {
+    length = lenByte;
+  } else {
+    final lenLen = lenByte & 0x7F;
+    if (lenLen == 0 || cursor + lenLen > bytes.length) return null;
+    length = 0;
+    for (var i = 0; i < lenLen; i++) {
+      length = (length << 8) | bytes[cursor++];
+    }
+  }
+
+  return cursor - offset + length;
 }
 
 class _NormalizeResult {
