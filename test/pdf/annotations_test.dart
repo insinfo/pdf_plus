@@ -44,6 +44,41 @@ void main() {
     );
   });
 
+  test('Pdf Link Annotations use uppercase action key', () async {
+    final doc = Document();
+    doc.addPage(
+      Page(
+        build: (context) => Column(
+          children: [
+            Anchor(child: Text('Destination'), name: 'destination'),
+            Link(child: Text('Named destination'), destination: 'destination'),
+            UrlLink(
+              child: Text('Internal URL'),
+              destination:
+                  '/restrito/visualiza-processo/2026/26759?a=67&tab=tramites&tipo=anexo&id=41752',
+            ),
+          ],
+        ),
+      ),
+    );
+
+    final content = String.fromCharCodes(await doc.save());
+    final linkObjects = _linkAnnotationObjects(content);
+
+    expect(linkObjects, hasLength(2));
+    for (final object in linkObjects) {
+      expect(object, contains('/A'),
+          reason: 'PDF annotation actions are case-sensitive and must use /A');
+      expect(_hasLowercaseActionKey(object), isFalse,
+          reason: 'Lowercase /a is not a valid Link annotation action key');
+    }
+    expect(
+      RegExp(r'/URI\s*\(/restrito/visualiza-processo/2026/26759')
+          .hasMatch(linkObjects.join('\n')),
+      isTrue,
+    );
+  });
+
   test('Pdf Shape Annotations', () async {
     pdf.addPage(
       Page(
@@ -118,4 +153,32 @@ void main() {
     final file = outputFile('annotations.pdf');
     await file.writeAsBytes(await pdf.save());
   });
+}
+
+List<String> _linkAnnotationObjects(String content) {
+  final result = <String>[];
+  var searchFrom = 0;
+
+  while (searchFrom < content.length) {
+    final objStart = content.indexOf(' obj', searchFrom);
+    if (objStart < 0) break;
+
+    final objectHeaderStart = content.lastIndexOf('\n', objStart);
+    final start = objectHeaderStart < 0 ? 0 : objectHeaderStart + 1;
+    final end = content.indexOf('endobj', objStart);
+    if (end < 0) break;
+
+    final object = content.substring(start, end);
+    if (RegExp(r'/Subtype\s*/Link').hasMatch(object)) {
+      result.add(object);
+    }
+
+    searchFrom = end + 'endobj'.length;
+  }
+
+  return result;
+}
+
+bool _hasLowercaseActionKey(String object) {
+  return RegExp(r'/a(?=\s|<|/|\[|\])').hasMatch(object);
 }

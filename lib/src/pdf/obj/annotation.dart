@@ -408,7 +408,7 @@ class PdfAnnotNamedLink extends PdfAnnotBase {
   /// Writes the named destination action.
   void build(PdfPage page, PdfObject object, PdfDict params) {
     super.build(page, object, params);
-    params[PdfNameTokens.a] = PdfDict.values(
+    params[PdfNameTokens.action] = PdfDict.values(
       {
         PdfNameTokens.s: const PdfName(PdfNameTokens.goto),
         PdfNameTokens.d: PdfString.fromString(dest),
@@ -447,7 +447,7 @@ class PdfAnnotUrlLink extends PdfAnnotBase {
   /// Writes the URI action.
   void build(PdfPage page, PdfObject object, PdfDict params) {
     super.build(page, object, params);
-    params[PdfNameTokens.a] = PdfDict.values(
+    params[PdfNameTokens.action] = PdfDict.values(
       {
         PdfNameTokens.s: const PdfName(PdfNameTokens.uri),
         PdfNameTokens.uri: PdfString.fromString(url),
@@ -1094,7 +1094,6 @@ class PdfButtonField extends PdfFormField {
     }
   }
 }
-
 
 
 

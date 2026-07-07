@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.17.2
+
+- Fix link annotations to write the action dictionary with the PDF-standard
+  `/A` key instead of lowercase `/a`, preserving clickability in PDF.js and
+  other standards-compliant viewers.
+- Add a regression test covering URI and named-destination link annotations.
+
 ## 3.17.1
 
 - Fix `SpanningTable` pagination so a deferred body row is not painted on the

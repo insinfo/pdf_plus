@@ -79,6 +79,7 @@ class PdfNameTokens {
   static const xml = '/XML';
   static const yes = '/Yes';
   static const a = '/a';
+  static const action = '/A';
   static const af = '/AF';
   static const afrelationship = '/AFRelationship';
   static const antialias = '/AntiAlias';
