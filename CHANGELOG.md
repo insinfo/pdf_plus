@@ -2,10 +2,34 @@
 
 ## 3.17.2
 
+- Fix PDF signature `/Contents` extraction to trim reserved zero padding by the
+  declared ASN.1/DER element length instead of stripping every trailing `00`,
+  preserving valid CMS signatures whose DER payload legitimately ends in zero.
+  Added regression coverage for DER padding and the VISTO 24822 ICP-Brasil PDF.
+- Fix `TextStyle.copyWith(font: X)` being a silent no-op on styles that
+  already carry a non-null `fontNormal` (any theme/inherited style): the
+  constructor only routes `font` into a variant slot when that slot is null,
+  so the new typeface was never applied. `copyWith`/`apply` now treat an
+  explicit `font` as the new `fontNormal` when `fontNormal` is not passed.
+  Regression tests in `test/text_style_copywith_font_test.dart`.
+- Fix `TextStyle.apply()` dropping `fontFallback`, `lineSpacing` and the
+  decoration fields, which violated the `inherit || field != null` constructor
+  asserts for non-inherited styles (e.g. `TextStyle.defaultStyle().apply(...)`).
 - Fix link annotations to write the action dictionary with the PDF-standard
   `/A` key instead of lowercase `/a`, preserving clickability in PDF.js and
   other standards-compliant viewers.
 - Add a regression test covering URI and named-destination link annotations.
+- **Known dart2js (Dart SDK 3.6.x) codegen bug — avoid `List.unmodifiable` in
+  code that runs in the browser**: when a `List.unmodifiable(...)` call (e.g.
+  in a getter) is inlined inside an `async` method that contains loops and
+  `await`s, dart2js release builds (with or without `--minify`) can emit the
+  store `tmp.$flags = 3` on an unassigned temporary and crash at runtime with
+  `TypeError: Cannot set properties of undefined (setting '$flags')`. The same
+  code works on the VM and DDC, so the failure only shows up in release and
+  looks intermittent. Prefer `UnmodifiableListView(...)` (a view, no `$flags`
+  in the generated JS) or capture the list once in a local variable before the
+  loop. A minimal reproduction (crashing/fixed pair runnable under Node) lives
+  in `new_sali/backend/resources/bug/`.
 
 ## 3.17.1
 

@@ -257,7 +257,11 @@ class TextStyle {
       inherit: inherit,
       color: color ?? this.color,
       font: font ?? this.font,
-      fontNormal: fontNormal ?? this.fontNormal,
+      // An explicit `font` must actually switch the regular typeface: the
+      // constructor only routes `font` into a variant slot when that slot is
+      // null, and inherited/theme styles always carry a non-null fontNormal,
+      // which used to make `copyWith(font: X)` a silent no-op.
+      fontNormal: fontNormal ?? font ?? this.fontNormal,
       fontBold: fontBold ?? this.fontBold,
       fontItalic: fontItalic ?? this.fontItalic,
       fontBoldItalic: fontBoldItalic ?? this.fontBoldItalic,
@@ -308,7 +312,9 @@ class TextStyle {
       inherit: inherit,
       color: color ?? this.color,
       font: font ?? this.font,
-      fontNormal: fontNormal ?? this.fontNormal,
+      // Same rationale as in copyWith: `font` alone must replace the
+      // regular typeface even when the style already has a fontNormal.
+      fontNormal: fontNormal ?? font ?? this.fontNormal,
       fontBold: fontBold ?? this.fontBold,
       fontItalic: fontItalic ?? this.fontItalic,
       fontBoldItalic: fontBoldItalic ?? this.fontBoldItalic,
@@ -323,8 +329,17 @@ class TextStyle {
           ? null
           : wordSpacing! * wordSpacingFactor + wordSpacingDelta,
       height: height == null ? null : height! * heightFactor + heightDelta,
+      // Forward the remaining fields: dropping them used to violate the
+      // `inherit || field != null` constructor asserts for non-inherited
+      // styles (e.g. TextStyle.defaultStyle().apply(...)).
+      fontFallback: fontFallback,
+      lineSpacing: lineSpacing,
       background: background,
       decoration: decoration,
+      decorationColor: decorationColor,
+      decorationStyle: decorationStyle,
+      decorationThickness: decorationThickness,
+      renderingMode: renderingMode,
     );
   }
 
