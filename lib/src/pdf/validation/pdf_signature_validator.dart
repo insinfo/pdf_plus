@@ -256,6 +256,7 @@ class PdfSignatureInfoReport {
     this.certValid,
     this.validationStatus = PdfSignatureValidationStatus.indeterminate,
     this.message,
+    this.byteRangeCoverage,
   });
 
   final int signatureIndex;
@@ -277,6 +278,7 @@ class PdfSignatureInfoReport {
   final bool? certValid;
   final PdfSignatureValidationStatus validationStatus;
   final String? message;
+  final PdfSignatureByteRangeCoverage? byteRangeCoverage;
 }
 
 enum PdfSignatureValidationStatus {
@@ -303,6 +305,58 @@ class PdfSignatureValidationReport {
   const PdfSignatureValidationReport({required this.signatures});
 
   final List<PdfSignatureInfoReport> signatures;
+}
+
+/// How much of the PDF file a signature's `/ByteRange` actually protects.
+///
+/// A PDF signature signs two spans — from the start of the file up to the
+/// `/Contents` placeholder and from just after it to some offset — leaving the
+/// `/Contents` hex string itself as an unsigned gap. Anything before the first
+/// span or after the second is not covered by this signature. Later, legitimate
+/// incremental updates (a second signature, a form fill, an LTV/DSS update) are
+/// appended after the signed span, so trailing unsigned bytes are normal for
+/// every signature except, usually, the outermost one — they are NOT tampering
+/// on their own. This object exposes the raw coverage so callers can apply their
+/// own policy (e.g. flag a lone signature that does not reach `%%EOF`, or
+/// trailing bytes that are not even a well-formed incremental update).
+class PdfSignatureByteRangeCoverage {
+  const PdfSignatureByteRangeCoverage({
+    required this.fileLength,
+    required this.signedLength,
+    required this.startsAtDocumentStart,
+    required this.unsignedTrailingBytes,
+    required this.trailingBytesAreIncrementalUpdate,
+  });
+
+  /// Total size of the PDF file, in bytes.
+  final int fileLength;
+
+  /// Offset up to which the `/ByteRange` protects the document (`start2 + len2`
+  /// of the range). Bytes beyond this offset are not covered by this signature.
+  final int signedLength;
+
+  /// Whether the `/ByteRange` begins at offset 0. A well-formed PDF signature
+  /// always starts at the very beginning of the file; `false` means the leading
+  /// bytes are unsigned and the document is malformed or tampered — there is no
+  /// legitimate reason for a non-zero start.
+  final bool startsAtDocumentStart;
+
+  /// Number of bytes after [signedLength] that this signature does not protect.
+  /// Expected to be `> 0` for every signature except the outermost one, because
+  /// later revisions are appended as incremental updates.
+  final int unsignedTrailingBytes;
+
+  /// When [unsignedTrailingBytes] is `> 0`, whether the trailing region looks
+  /// like a well-formed PDF incremental update (it contains a `startxref` and a
+  /// terminating `%%EOF`). `null` when there are no trailing bytes. `false`
+  /// signals raw appended data that is not part of the PDF revision structure —
+  /// a strong tampering indicator.
+  final bool? trailingBytesAreIncrementalUpdate;
+
+  /// Whether this signature protects the file end-to-end (starts at 0 and leaves
+  /// no unsigned trailing bytes).
+  bool get coversEntireDocument =>
+      startsAtDocumentStart && unsignedTrailingBytes == 0;
 }
 
 class PdfSignatureExtractionInfo {
@@ -615,6 +669,7 @@ class PdfSignatureValidator {
       final fieldInfo =
           includeSignatureFields ? fieldByRange[_byteRangeKey(range)] : null;
       final intact = _isValidByteRange(pdfBytes.length, range);
+      final byteRangeCoverage = _computeByteRangeCoverage(pdfBytes, range);
       var cmsValid = false;
       var digestValid = false;
       bool? certValid;
@@ -646,6 +701,7 @@ class PdfSignatureValidator {
           certValid: null,
           validationStatus: PdfSignatureValidationStatus.rejected,
           message: 'ByteRange inconsistente.',
+          byteRangeCoverage: byteRangeCoverage,
         ));
         continue;
       }
@@ -673,6 +729,7 @@ class PdfSignatureValidator {
           certValid: null,
           validationStatus: PdfSignatureValidationStatus.rejected,
           message: 'Conteúdo de assinatura ausente ou inválido.',
+          byteRangeCoverage: byteRangeCoverage,
         ));
         continue;
       }
@@ -696,11 +753,37 @@ class PdfSignatureValidator {
       signaturePolicyOid = _extractSignaturePolicyOid(contents);
       signedAttrsOids = _extractSignedAttrsOids(contents);
       signedAttrsReport = _buildSignedAttrsReport(signedAttrsOids);
-      final digestOid = _extractDigestOid(contents);
+      final isAdbePkcs7Sha1 = _isAdbePkcs7Sha1(fieldInfo?.subFilter);
+      final digestOid =
+          isAdbePkcs7Sha1 ? '1.3.14.3.2.26' : _extractDigestOid(contents);
       final contentDigest =
           _computeByteRangeDigestForOid(pdfBytes, range, digestOid);
       final messageDigest = _extractMessageDigest(contents);
-      if (messageDigest != null) {
+      if (isAdbePkcs7Sha1) {
+        // ISO 32000-1 §12.8.3.3: em /adbe.pkcs7.sha1 o conteúdo encapsulado
+        // (eContent) do PKCS#7 é o resumo SHA-1 do ByteRange assinado. A
+        // integridade do documento exige dois vínculos:
+        //  1) SHA1(ByteRange) == eContent  (documento ↔ conteúdo encapsulado);
+        //  2) quando há atributos assinados, o messageDigest autentica o
+        //     eContent e deve ser SHA1(eContent) (eContent ↔ assinatura).
+        // Sem o vínculo 2 o eContent não estaria amarrado à assinatura e um
+        // documento adulterado (ByteRange + eContent trocados juntos) passaria
+        // como íntegro.
+        final encapsulatedDigest = _extractCmsEncapsulatedContent(contents);
+        if (encapsulatedDigest == null) {
+          message =
+              'Conteúdo SHA-1 encapsulado não encontrado no PKCS#7 legado.';
+        } else if (!_listEquals(contentDigest, encapsulatedDigest)) {
+          message =
+              'Resumo criptográfico do ByteRange incompatível com o conteúdo assinado.';
+        } else if (messageDigest != null &&
+            !_listEquals(PdfCrypto.sha1(encapsulatedDigest), messageDigest)) {
+          message =
+              'Atributo messageDigest não corresponde ao conteúdo SHA-1 encapsulado.';
+        } else {
+          digestValid = true;
+        }
+      } else if (messageDigest != null) {
         digestValid = _listEquals(contentDigest, messageDigest);
       } else {
         message = 'Atributo messageDigest não encontrado no CMS.';
@@ -794,6 +877,7 @@ class PdfSignatureValidator {
         certValid: certValid,
         validationStatus: status,
         message: message,
+        byteRangeCoverage: byteRangeCoverage,
       ));
     }
 
@@ -2094,6 +2178,46 @@ bool _isValidByteRange(int fileLength, List<int> range) {
   return true;
 }
 
+PdfSignatureByteRangeCoverage _computeByteRangeCoverage(
+  Uint8List bytes,
+  List<int> range,
+) {
+  final fileLength = bytes.length;
+  final startsAtZero = range.length == 4 && range[0] == 0;
+  final rawSignedLength =
+      range.length == 4 ? range[2] + range[3] : fileLength;
+  final signedLength = rawSignedLength.clamp(0, fileLength);
+  final trailing = fileLength - signedLength;
+  bool? trailingIsIncremental;
+  if (trailing > 0) {
+    trailingIsIncremental =
+        _trailingLooksLikeIncrementalUpdate(bytes, signedLength);
+  }
+  return PdfSignatureByteRangeCoverage(
+    fileLength: fileLength,
+    signedLength: signedLength,
+    startsAtDocumentStart: startsAtZero,
+    unsignedTrailingBytes: trailing,
+    trailingBytesAreIncrementalUpdate: trailingIsIncremental,
+  );
+}
+
+/// Heuristic: does the region `[from, end)` form a well-formed PDF incremental
+/// update? A legitimate appended revision carries its own cross-reference
+/// section and terminates with `%%EOF`; raw appended data (a classic shadow
+/// attack) does not.
+bool _trailingLooksLikeIncrementalUpdate(Uint8List bytes, int from) {
+  if (from < 0 || from >= bytes.length) return false;
+  const startxref = [
+    0x73, 0x74, 0x61, 0x72, 0x74, 0x78, 0x72, 0x65, 0x66 // 'startxref'
+  ];
+  const eof = [0x25, 0x25, 0x45, 0x4F, 0x46]; // '%%EOF'
+  final hasStartxref =
+      _indexOfSequence(bytes, startxref, from, bytes.length) >= 0;
+  final hasEof = _indexOfSequence(bytes, eof, from, bytes.length) >= 0;
+  return hasStartxref && hasEof;
+}
+
 Uint8List _computeByteRangeDigestForOid(
   Uint8List bytes,
   List<int> range,
@@ -2368,17 +2492,22 @@ Future<bool> _verifyCmsSignature(Uint8List cmsBytes) async {
     final signerInfo = parsed.signerInfo!;
 
     final parsedSigner = _parseSignerInfo(signerInfo);
-    if (parsedSigner.signature == null ||
-        parsedSigner.signedAttrsTagged == null) {
+    if (parsedSigner.signature == null) {
       return false;
     }
 
-    final signedAttrsTagged = parsedSigner.signedAttrsTagged!;
     final signatureBytes = parsedSigner.signature!;
     final digestOid = parsedSigner.digestOid;
     final signatureAlgorithmOid = parsedSigner.signatureAlgorithmOid;
 
-    final candidates = _extractSignedAttrsCandidates(signedAttrsTagged);
+    final signedAttrsTagged = parsedSigner.signedAttrsTagged;
+    final candidates = signedAttrsTagged == null
+        ? _extractEncapsulatedContentCandidates(cmsBytes)
+        : _extractSignedAttrsCandidates(signedAttrsTagged);
+    if (candidates.isEmpty) {
+      return false;
+    }
+
     final signerSid = _parseSignerIdentifier(signerInfo);
     final primaryCert = _findSignerCert(parsed.certs, signerSid);
     final certsToTry = <Uint8List>[
@@ -3166,6 +3295,14 @@ List<Uint8List> _extractSignedAttrsCandidates(ASN1Object signedAttrsTagged) {
   return candidates;
 }
 
+List<Uint8List> _extractEncapsulatedContentCandidates(Uint8List cmsBytes) {
+  final content = _extractCmsEncapsulatedContent(cmsBytes);
+  if (content == null || content.isEmpty) {
+    return const <Uint8List>[];
+  }
+  return <Uint8List>[content];
+}
+
 bool _verifyRsaWithDigest(
   RSAPublicKey publicKey,
   Uint8List data,
@@ -3706,6 +3843,69 @@ Uint8List? _extractMessageDigest(Uint8List cmsBytes) {
     }
   } catch (_) {}
   return _extractMessageDigestByScan(cmsBytes);
+}
+
+bool _isAdbePkcs7Sha1(String? subFilter) {
+  if (subFilter == null) return false;
+  final normalized = subFilter.trim().toLowerCase();
+  return normalized == '/adbe.pkcs7.sha1' || normalized == 'adbe.pkcs7.sha1';
+}
+
+Uint8List? _extractCmsEncapsulatedContent(Uint8List cmsBytes) {
+  try {
+    final contentInfo = ASN1Parser(cmsBytes).nextObject();
+    if (contentInfo is! ASN1Sequence || contentInfo.elements.length < 2) {
+      return null;
+    }
+    final signedDataObj = _unwrapTagged(contentInfo.elements[1]);
+    if (signedDataObj is! ASN1Sequence || signedDataObj.elements.length < 3) {
+      return null;
+    }
+
+    for (final element in signedDataObj.elements) {
+      final seq = element is ASN1Sequence ? element : _asAsn1Sequence(element);
+      if (seq == null || seq.elements.length < 2) continue;
+      final first = seq.elements.first;
+      if (first is! ASN1ObjectIdentifier) continue;
+      if (_oidToString(first) != '1.2.840.113549.1.7.1') continue;
+
+      for (var i = 1; i < seq.elements.length; i++) {
+        final content = _extractOctetStringFromTagged(seq.elements[i]);
+        if (content != null && content.isNotEmpty) {
+          return content;
+        }
+      }
+    }
+  } catch (_) {}
+  return null;
+}
+
+Uint8List? _extractOctetStringFromTagged(ASN1Object obj) {
+  final unwrapped = _unwrapTagged(obj);
+  if (unwrapped is ASN1OctetString) {
+    return unwrapped.valueBytes();
+  }
+
+  final raw = _readTaggedValueBytes(obj);
+  if (raw == null || raw.isEmpty) return null;
+
+  try {
+    final parsed = ASN1Parser(raw).nextObject();
+    if (parsed is ASN1OctetString) {
+      return parsed.valueBytes();
+    }
+  } catch (_) {}
+
+  if (raw.first == 0x04) {
+    try {
+      final parsed = ASN1Parser(raw).nextObject();
+      if (parsed is ASN1OctetString) {
+        return parsed.valueBytes();
+      }
+    } catch (_) {}
+  }
+
+  return raw;
 }
 
 DateTime? _extractSigningTimeFromCms(Uint8List cmsBytes) {

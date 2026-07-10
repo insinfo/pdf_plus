@@ -1,5 +1,23 @@
 # Changelog
 
+## 3.17.3
+
+- Improve validation of legacy PDF signatures using `/adbe.pkcs7.sha1`
+  (ISO 32000-1 §12.8.3.3). Document integrity is now verified through both
+  required links: `SHA1(ByteRange) == eContent` and, when signed attributes are
+  present, `messageDigest == SHA1(eContent)`. This fixes a false "tampered"
+  result for signatures that carry signed attributes and prevents a false
+  "intact" result when the ByteRange and encapsulated digest are altered
+  together. CMS signatures without signed attributes are verified against the
+  encapsulated content, and certificate-expiration diagnostics remain separate
+  from document-integrity failures.
+- Expose `/ByteRange` coverage per signature via
+  `PdfSignatureInfoReport.byteRangeCoverage` (new `PdfSignatureByteRangeCoverage`:
+  `startsAtDocumentStart`, `unsignedTrailingBytes`, `coversEntireDocument`,
+  `trailingBytesAreIncrementalUpdate`). This surfaces unsigned leading/trailing
+  bytes (shadow-attack surface) without failing legitimate incremental updates
+  such as multi-signature revisions and LTV/DSS additions.
+
 ## 3.17.2
 
 - Fix PDF signature `/Contents` extraction to trim reserved zero padding by the
