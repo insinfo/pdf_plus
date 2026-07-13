@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.17.4
+
+- Fix `MultiPage` infinite page-creation loop when a non-spanning widget (e.g. a
+  plain `Text` with the default `TextOverflow.visible`) is taller than the space
+  available below the header/footer but still fits within a bare page. Previously
+  the layout kept scheduling empty pages until it hit `maxPages`, surfacing as a
+  confusing `TooManyPagesException` (and freezing web apps while thousands of
+  layout attempts ran). It now fails fast on an already-empty page with a clear
+  message pointing to the fix (reduce header/footer height, split the content, or
+  use a `SpanningWidget` such as `Text(..., overflow: TextOverflow.span)`).
+
 ## 3.17.3
 
 - Improve validation of legacy PDF signatures using `/adbe.pkcs7.sha1`

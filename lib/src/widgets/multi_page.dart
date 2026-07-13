@@ -334,6 +334,18 @@ class MultiPage extends Page {
         // If it is not a multi-page widget and its height
         // is smaller than a full new page, we schedule a new page creation
         if (child.box!.height <= pageHeight - pageHeightMargin && !canSpan) {
+          // If the current page is already empty (nothing placed on it yet),
+          // the widget did not fit even on a fresh page: the available space
+          // below the header/footer is smaller than the widget. Scheduling
+          // another empty page would loop forever (previously surfacing as a
+          // confusing TooManyPagesException). Fail fast with a clear message.
+          if (_pages.isNotEmpty && _pages.last.widgets.isEmpty) {
+            throw Exception(
+                'Widget won\'t fit into the page as its height (${child.box!.height}) '
+                'exceeds the available space (${offsetStart - offsetEnd}) below the '
+                'header/footer. Reduce the header/footer height, split the content, '
+                'or use a SpanningWidget (e.g. Text(..., overflow: TextOverflow.span)).');
+          }
           context = null;
           continue;
         }

@@ -71,6 +71,39 @@ Future<void> main() async {
 }
 ```
 
+## MultiPage: long text and page-breaking
+
+In a `MultiPage`, each widget returned by `build` is laid out on a page and, by
+default, **must fit on a single page**. Only widgets that mix in `SpanningWidget`
+can be split across page boundaries. A plain `Text` is *not* spanning unless you
+opt in with `overflow: TextOverflow.span`:
+
+```dart
+// Splits across pages when the paragraph is long:
+pw.Text(veryLongParagraph, overflow: pw.TextOverflow.span);
+```
+
+### Why a long paragraph can loop / throw `TooManyPagesException`
+
+If a non-spanning widget is **taller than the space left below the header/footer
+but shorter than a bare page**, it can never be placed: it doesn't fit under the
+header, and moving it to a fresh page doesn't help because every page repeats the
+header. Older behavior kept scheduling empty pages until `maxPages` was reached,
+surfacing as a confusing `TooManyPagesException` (and, on the web, freezing the
+tab while thousands of layout attempts ran).
+
+Since **3.17.4** this fails fast on an already-empty page with a clear message
+instead of looping. When you hit it, do one of:
+
+- Mark long text as spanning: `Text(text, overflow: TextOverflow.span)`.
+- Reduce the `header`/`footer` height so more content fits per page.
+- Split the content into smaller widgets, or use a spanning container
+  (`Column`, `Wrap`, `Table`, `Partition`, `GridView`).
+
+Note that manually slicing a long string into several fixed-size `Text` chunks
+does **not** avoid the problem: each chunk is still an unbreakable widget unless
+it is marked with `overflow: TextOverflow.span`.
+
 ## Basic example: sign an existing PDF (PAdES)
 
 ```dart
