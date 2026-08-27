@@ -6,6 +6,7 @@ import 'package:pdf_plus/src/pdf/io/pdf_random_access_reader_io.dart';
 // .\tool\pdf_info.exe "Z:\desenvolvimento\DIGITALIZADOS_SEMFAZ\14_34074_Vol. 4_Fls. 2649 à 2891.pdf"
 // .\tool\pdf_info.exe  "Z:\desenvolvimento\DIGITALIZADOS_SEMFAZ\14_34074_Vol 5.pdf" 
 void main(List<String> args) {
+  final stopwatch = Stopwatch()..start();
   if (args.isEmpty) {
     stderr.writeln('Uso: dart tool/pdf_info.dart <arquivo.pdf>');
     exitCode = 2;
@@ -22,9 +23,11 @@ void main(List<String> args) {
 
   final reader = PdfRandomAccessFileReader.openSync(file);
   final parser = PdfDocumentParser.fromReader(reader, allowRepair: true);
+  final openElapsed = stopwatch.elapsed;
   
   // Extrai as informações usando o parser otimizado
   final info = parser.extractInfo();
+  final extractElapsed = stopwatch.elapsed;
 
   stdout.writeln('$path:');
   stdout.writeln('\nPDF-${info.version}');
@@ -67,6 +70,15 @@ void main(List<String> args) {
   }
 
   reader.close();
+  stopwatch.stop();
+
+  stdout.writeln('\nTempo de execução:');
+  stdout.writeln('        abertura/parse: ${_fmtDuration(openElapsed)}');
+  stdout.writeln(
+      '        extração info:  ${_fmtDuration(extractElapsed - openElapsed)}');
+  stdout.writeln('        impressão:      '
+      '${_fmtDuration(stopwatch.elapsed - extractElapsed)}');
+  stdout.writeln('        total:          ${_fmtDuration(stopwatch.elapsed)}');
 }
 
 String _formatInfoDict(Map<String, String>? dict) {
@@ -100,4 +112,15 @@ String _fmtNum(num value) {
     return value.toStringAsFixed(2).replaceFirst(RegExp(r'\.?0+$'), '');
   }
   return value.toString();
+}
+
+/// Formata uma duração de forma legível: ms abaixo de 1s, senão segundos.
+String _fmtDuration(Duration d) {
+  final ms = d.inMicroseconds / 1000.0;
+  if (ms < 1000) return '${ms.toStringAsFixed(1)} ms';
+  final s = ms / 1000.0;
+  if (s < 60) return '${s.toStringAsFixed(3)} s';
+  final minutes = s ~/ 60;
+  final rest = s - minutes * 60;
+  return '${minutes}m ${rest.toStringAsFixed(3)}s (${s.toStringAsFixed(3)} s)';
 }
