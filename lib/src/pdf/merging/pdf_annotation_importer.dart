@@ -15,12 +15,11 @@ import 'pdf_import_context.dart';
 import 'pdf_object_importer.dart';
 import 'pdf_signature_policy.dart';
 
-/// Importa as anotações de uma página: links, notas, carimbos e widgets de
-/// formulário.
+/// Imports the annotations of a page: links, notes, stamps and form widgets.
 ///
-/// Roda na segunda passagem, quando todas as páginas do intervalo já existem no
-/// destino — é o que permite religar `/P` e reapontar destinos sem precisar de
-/// um mecanismo de pendências.
+/// Runs on the second pass, when every page of the range already exists in the
+/// destination — that is what makes it possible to relink `/P` and repoint
+/// destinations without needing a deferred-fixup mechanism.
 class PdfAnnotationImporter {
   PdfAnnotationImporter(this.context, this.objects)
       : _signatures = PdfSignaturePolicy(context);
@@ -29,12 +28,12 @@ class PdfAnnotationImporter {
   final PdfObjectImporter objects;
   final PdfSignaturePolicy _signatures;
 
-  /// Chaves da anotação que a importação sempre trata à parte.
+  /// Annotation keys the import always handles separately.
   static const _handledKeys = <String>{
-    PdfNameTokens.p, // reaponta para a página do destino
-    PdfNameTokens.parent, // hierarquia de campo, resolvida pelo formulário
-    PdfNameTokens.dest, // destino resolvido a partir da origem
-    PdfNameTokens.action, // idem, dentro da ação
+    PdfNameTokens.p, // repointed at the destination page
+    PdfNameTokens.parent, // field hierarchy, resolved by the form importer
+    PdfNameTokens.dest, // destination resolved from the source
+    PdfNameTokens.action, // ditto, inside the action
   };
 
   void importPageAnnotations(PdfPage page, PdfDictToken pageDict) {
@@ -101,7 +100,7 @@ class PdfAnnotationImporter {
       if (converted != null) object.params[key] = converted;
     });
 
-    // `/P` sempre aponta para a página que de fato contém a anotação.
+    // `/P` always points at the page that actually holds the annotation.
     object.params[PdfNameTokens.p] = page.ref();
 
     if (signature == PdfSignatureAction.stamp) {
@@ -132,14 +131,14 @@ class PdfAnnotationImporter {
   }
 
   // ---------------------------------------------------------------------------
-  // Destinos
+  // Destinations
   // ---------------------------------------------------------------------------
 
-  /// Reaponta `/Dest` e `/A << /S /GoTo /D … >>` para as páginas do destino.
+  /// Repoints `/Dest` and `/A << /S /GoTo /D … >>` at the destination pages.
   ///
-  /// O destino é sempre reconstruído a partir do dicionário de origem, nunca do
-  /// que a conversão genérica produziu: `/Dest` costuma ser uma referência
-  /// indireta para o array, e é o array que precisa ser reescrito.
+  /// The destination is always rebuilt from the source dictionary, never from
+  /// what the generic conversion produced: `/Dest` is usually an indirect
+  /// reference to the array, and it is the array that needs rewriting.
   void _remapDestinations(PdfObject annotation, PdfDictToken sourceDict) {
     final params = annotation.params;
     if (params is! PdfDict) return;
@@ -158,7 +157,8 @@ class PdfAnnotationImporter {
     }
   }
 
-  /// Recria uma ação, reapontando o destino quando ela é interna ao documento.
+  /// Recreates an action, repointing the destination when it is internal to
+  /// the document.
   PdfDict? _buildAction(PdfDictToken source, int depth) {
     if (depth > 16) return null;
 
@@ -172,7 +172,7 @@ class PdfAnnotationImporter {
       if (converted != null) action[key] = converted;
     });
 
-    // `/URI`, `/Launch` e `/GoToR` apontam para fora e são copiadas inteiras.
+    // `/URI`, `/Launch` and `/GoToR` point outside and are copied whole.
     if (type == PdfNameTokens.goto) {
       final sourceDest = source.values[PdfNameTokens.d];
       if (sourceDest != null) {
@@ -199,10 +199,10 @@ class PdfAnnotationImporter {
     return action;
   }
 
-  /// Devolve o destino explícito equivalente, lendo o valor da origem.
+  /// Returns the equivalent explicit destination, reading the source value.
   ///
-  /// `null` quando ele não pode ser resolvido dentro do que foi importado — o
-  /// chamador remove a chave e a anotação continua na página, sem o salto.
+  /// `null` when it cannot be resolved within what was imported — the caller
+  /// removes the key and the annotation stays on the page, without the jump.
   PdfDataType? _destinationFrom(dynamic sourceValue,
       {required String owner}) {
     final resolved = context.source.resolve(sourceValue);
@@ -243,7 +243,8 @@ class PdfAnnotationImporter {
     return target;
   }
 
-  /// Resolve um destino nomeado da origem e o reemite como destino explícito.
+  /// Resolves a named destination of the source and re-emits it as an explicit
+  /// destination.
   PdfDataType? _resolveNamed(String name) {
     if (!context.options.importNamedDestinations) return null;
     try {
@@ -262,7 +263,7 @@ class PdfAnnotationImporter {
       if (converted.values.first is PdfNull) return null;
       return converted;
     } catch (error) {
-      // Árvore de nomes malformada não pode derrubar a mesclagem inteira.
+      // A malformed name tree must not bring the whole merge down.
       context.warn('destino nomeado "$name" não pôde ser lido: $error');
       return null;
     }
@@ -272,7 +273,7 @@ class PdfAnnotationImporter {
     final root = context.source.rootDict;
     if (root == null) return null;
 
-    // PDF 1.2+: /Root /Names /Dests, uma árvore de nomes.
+    // PDF 1.2+: /Root /Names /Dests, a name tree.
     final names = context.source.resolve(root.values[PdfNameTokens.names]);
     if (names is PdfDictToken) {
       final tree = context.source.resolve(names.values[PdfNameTokens.dests]);
@@ -282,7 +283,7 @@ class PdfAnnotationImporter {
       }
     }
 
-    // PDF 1.1: /Root /Dests, um dicionário simples.
+    // PDF 1.1: /Root /Dests, a plain dictionary.
     final legacy = context.source.resolve(root.values[PdfNameTokens.dests]);
     if (legacy is PdfDictToken) {
       final direct = legacy.values['/$name'] ?? legacy.values[name];
@@ -297,8 +298,8 @@ class PdfAnnotationImporter {
 
     final names = context.source.resolve(node.values[PdfNameTokens.names]);
     if (names is PdfArrayToken) {
-      // Pares [nome, destino]; um array com número ímpar de itens é inválido,
-      // mas existe no mundo real.
+      // [name, destination] pairs; an array with an odd number of items is
+      // invalid, but exists in the wild.
       for (var i = 0; i + 1 < names.values.length; i += 2) {
         final key = names.values[i];
         final keyName = key is PdfStringToken
@@ -324,7 +325,8 @@ class PdfAnnotationImporter {
     return null;
   }
 
-  /// Usa `/Limits` para não descer em ramos que não podem conter o nome.
+  /// Uses `/Limits` to avoid descending into branches that cannot hold the
+  /// name.
   bool _withinLimits(PdfDictToken node, String name) {
     final limits = context.source.resolve(node.values[PdfNameTokens.limits]);
     if (limits is! PdfArrayToken || limits.values.length < 2) return true;

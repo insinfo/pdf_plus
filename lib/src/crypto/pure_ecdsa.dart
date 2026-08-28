@@ -322,8 +322,12 @@ Uint8List _encodeEcdsaDer(BigInt r, BigInt s) {
 }
 
 (BigInt, BigInt)? _decodeEcdsaSignature(Uint8List signature, _EcCurve curve) {
+  // O primeiro byte sozinho não distingue DER de RAW: uma assinatura RAW cujo
+  // `r` comece em 0x30 — uma em 256 — parece uma SEQUENCE. Só se aceita DER
+  // quando a estrutura fecha inteira; do contrário, tenta-se RAW.
   if (signature.isNotEmpty && signature.first == 0x30) {
-    return _decodeEcdsaDer(signature);
+    final der = _decodeEcdsaDer(signature);
+    if (der != null) return der;
   }
   final coordLen = (curve.n.bitLength + 7) >> 3;
   if (signature.length != coordLen * 2) return null;

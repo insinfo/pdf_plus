@@ -174,7 +174,7 @@ class PdfParserFields {
     return null;
   }
 
-  /// Prende [value] dentro do arquivo.
+  /// Clamps [value] to the bounds of the file.
   static int _clamp(int value, int length) {
     if (value < 0) return 0;
     return value > length ? length : value;
@@ -188,10 +188,10 @@ class PdfParserFields {
 
     final out = <PdfSignatureFieldInfo>[];
     for (final range in ranges) {
-      // O /ByteRange pode não descrever este arquivo: é o caso de um documento
-      // mesclado, que reescreve os bytes que a assinatura cobria. A janela é
-      // limitada ao arquivo real para que a leitura ainda descreva o campo em
-      // vez de estourar.
+      // The /ByteRange may not describe this file: that is the case of a
+      // merged document, which rewrites the bytes the signature used to
+      // cover. The window is clamped to the real file so that the read still
+      // describes the field instead of overflowing.
       final gapStart = _clamp(range[0] + range[1], bytes.length);
       final gapEnd = _clamp(range[2], bytes.length);
       const windowSize = 524288;

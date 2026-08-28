@@ -5,22 +5,22 @@ import '../parsing/pdf_document_parser.dart';
 import '../parsing/pdf_parser_types.dart';
 import 'pdf_merge_options.dart';
 
-/// Estado de uma sessão de mesclagem.
+/// State of a merge session.
 ///
-/// Guarda o que precisa sobreviver entre as duas passagens da importação
-/// (páginas primeiro, anotações e bookmarks depois) e entre documentos de
-/// origem sucessivos.
+/// Holds what must survive between the two import passes (pages first,
+/// annotations and bookmarks afterwards) and between successive source
+/// documents.
 class PdfImportContext {
   PdfImportContext(this.destination, this.options);
 
-  /// Documento que recebe as páginas.
+  /// Document that receives the pages.
   final PdfDocument destination;
 
   final PdfMergeOptions options;
 
   PdfDocumentParser? _source;
 
-  /// Documento de origem da importação em andamento.
+  /// Source document of the import in progress.
   PdfDocumentParser get source {
     final current = _source;
     if (current == null) {
@@ -29,58 +29,59 @@ class PdfImportContext {
     return current;
   }
 
-  /// Objetos já importados da origem atual: número na ORIGEM -> objeto no
-  /// DESTINO. Reiniciado a cada origem, porque os números colidem entre
-  /// documentos diferentes.
+  /// Objects already imported from the current source: number in the SOURCE ->
+  /// object in the DESTINATION. Reset for every source, because the numbers
+  /// collide between different documents.
   final Map<int, PdfObject> imported = <int, PdfObject>{};
 
-  /// Páginas já criadas: número do objeto da página na ORIGEM -> página no
-  /// DESTINO. Também reiniciado a cada origem.
+  /// Pages already created: page object number in the SOURCE -> page in the
+  /// DESTINATION. Also reset for every source.
   final Map<int, PdfPage> pageMap = <int, PdfPage>{};
 
-  /// Números de objeto que são páginas na origem atual.
+  /// Object numbers that are pages in the current source.
   ///
-  /// Usado para cortar a travessia: importar uma referência de página
-  /// arrastaria a árvore de páginas inteira do documento de origem.
+  /// Used to cut the traversal short: importing a page reference would drag in
+  /// the whole page tree of the source document.
   final Set<int> sourcePageIds = <int>{};
 
-  /// Nomes de campos de formulário já ocupados no destino.
+  /// Form field names already taken in the destination.
   final Set<String> usedFieldNames = <String>{};
 
-  /// Renomeações aplicadas na origem atual: nome original -> nome final.
+  /// Renames applied in the current source: original name -> final name.
   final Map<String, String> renamedFields = <String, String>{};
 
-  /// Streams já materializados no destino, por assinatura de conteúdo.
-  /// Vale entre origens — é o que permite deduplicar a mesma fonte embutida em
-  /// documentos diferentes.
+  /// Streams already materialized in the destination, keyed by content
+  /// signature. Kept across sources — it is what allows deduplicating the same
+  /// embedded font coming from different documents.
   final Map<String, PdfObject> streamsByDigest = <String, PdfObject>{};
 
-  /// Avisos não fatais acumulados durante a mesclagem.
+  /// Non-fatal warnings accumulated during the merge.
   final List<String> warnings = <String>[];
 
-  /// Índice, dentro do documento de origem atual, das páginas efetivamente
-  /// importadas. Usado para descartar destinos que apontam para fora.
+  /// Index, within the current source document, of the pages actually
+  /// imported. Used to discard destinations that point outside of it.
   final Set<int> importedSourcePages = <int>{};
 
-  /// Widgets de formulário importados da origem atual, na ordem em que
-  /// apareceram nas páginas. O importador de formulários usa esta lista para
-  /// montar `/AcroForm /Fields`.
+  /// Form widgets imported from the current source, in the order they appeared
+  /// in the pages. The form importer uses this list to build
+  /// `/AcroForm /Fields`.
   final List<PdfImportedWidget> widgets = <PdfImportedWidget>[];
 
-  /// Números de objeto, na origem atual, dos campos terminais já alcançados
-  /// por algum widget. O que sobrar de `/AcroForm /Fields` é campo órfão.
+  /// Object numbers, in the current source, of the terminal fields already
+  /// reached by some widget. Whatever is left in `/AcroForm /Fields` is an
+  /// orphan field.
   final Set<int> reachedFieldIds = <int>{};
 
-  /// Se a origem atual tem assinatura digital.
+  /// Whether the current source has digital signatures.
   bool sourceHasSignatures = false;
 
-  /// Rótulo do documento de origem, usado nas mensagens de aviso.
+  /// Label of the source document, used in the warning messages.
   String sourceLabel = 'documento';
 
-  /// Quantidade de páginas que o destino tinha antes da origem atual.
+  /// Number of pages the destination had before the current source.
   int pagesBeforeSource = 0;
 
-  /// Prepara o contexto para importar de [parser].
+  /// Prepares the context to import from [parser].
   void beginSource(PdfDocumentParser parser, {String? label}) {
     _source = parser;
     imported.clear();
@@ -99,24 +100,24 @@ class PdfImportContext {
     }
   }
 
-  /// Encerra a origem atual.
+  /// Ends the current source.
   void endSource() {
     _source = null;
   }
 
   bool get hasSource => _source != null;
 
-  /// Se [objId] é uma página do documento de origem atual.
+  /// Whether [objId] is a page of the current source document.
   bool isSourcePage(int objId) => sourcePageIds.contains(objId);
 
-  /// Página do destino correspondente a uma página da origem, se importada.
+  /// Destination page matching a source page, when it was imported.
   PdfPage? mappedPage(PdfRefToken ref) => pageMap[ref.obj];
 
   void warn(String message) => warnings.add('[$sourceLabel] $message');
 }
 
-/// Widget de formulário trazido de uma origem, com o vínculo entre o que foi
-/// lido e o que foi criado no destino.
+/// Form widget brought in from a source, with the link between what was read
+/// and what was created in the destination.
 class PdfImportedWidget {
   PdfImportedWidget({
     required this.sourceRef,
@@ -125,15 +126,15 @@ class PdfImportedWidget {
     required this.page,
   });
 
-  /// Referência da anotação no documento de origem.
+  /// Reference of the annotation in the source document.
   final PdfRefToken? sourceRef;
 
-  /// Dicionário da anotação na origem.
+  /// Dictionary of the annotation in the source.
   final PdfDictToken sourceDict;
 
-  /// Objeto criado no destino.
+  /// Object created in the destination.
   final PdfObject destination;
 
-  /// Página do destino onde o widget aparece.
+  /// Destination page where the widget appears.
   final PdfPage page;
 }

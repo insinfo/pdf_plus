@@ -8,32 +8,32 @@ import '../pdf_names.dart';
 import 'pdf_import_context.dart';
 import 'pdf_merge_options.dart';
 
-/// O que fazer com um campo de assinatura encontrado na origem.
+/// What to do with a signature field found in the source.
 enum PdfSignatureAction {
-  /// Importar como está — o visualizador vai reportar assinatura inválida.
+  /// Import it as is — the viewer will report an invalid signature.
   keep,
 
-  /// Manter só a marca visual, como carimbo somente-leitura.
+  /// Keep only the visual mark, as a read-only stamp.
   stamp,
 
-  /// Não importar nada.
+  /// Import nothing.
   drop,
 }
 
-/// Política aplicada às assinaturas digitais das origens.
+/// Policy applied to the digital signatures of the sources.
 ///
-/// Mesclar invalida toda assinatura existente: ela cobre os bytes exatos do
-/// documento em que foi aplicada, e a mesclagem reescreve o arquivo inteiro.
-/// Nenhuma ferramenta de mercado recusa documentos assinados — todas mesclam e
-/// a assinatura deixa de conferir. Esta biblioteca faz o mesmo, avisando, e
-/// oferece três chaves para escolher o desfecho.
+/// Merging invalidates every existing signature: it covers the exact bytes of
+/// the document it was applied to, and merging rewrites the whole file. No
+/// tool on the market refuses signed documents — they all merge and the
+/// signature stops checking out. This library does the same, with a warning,
+/// and offers three switches to choose the outcome.
 class PdfSignaturePolicy {
   PdfSignaturePolicy(this.context);
 
   final PdfImportContext context;
 
-  /// Chaves que fazem de uma anotação um campo de formulário. Removê-las
-  /// transforma o widget em anotação comum.
+  /// Keys that make an annotation a form field. Removing them turns the
+  /// widget into a plain annotation.
   static const signatureFieldKeys = <String>{
     PdfNameTokens.v,
     PdfNameTokens.ft,
@@ -52,18 +52,18 @@ class PdfSignaturePolicy {
   static const _additionalActions = '/AA';
   static const _seedValue = '/SV';
 
-  /// Bits de `/F`: imprimir (4) e somente-leitura (64).
+  /// `/F` bits: print (4) and read-only (64).
   static const _printFlag = 4;
   static const _readOnlyFlag = 64;
 
-  /// Verifica a origem antes de importar qualquer página.
+  /// Checks the source before importing any page.
   void inspectSource() {
     List<dynamic> fields;
     try {
       fields = context.source.extractSignatureFields();
     } catch (_) {
-      // Um documento cuja estrutura de assinatura não pode ser lida não deve
-      // impedir a mesclagem; o tratamento por widget ainda vale.
+      // A document whose signature structure cannot be read must not block
+      // the merge; the per-widget handling still applies.
       return;
     }
 
@@ -79,7 +79,7 @@ class PdfSignaturePolicy {
     }
   }
 
-  /// Classifica um widget. Devolve `null` quando não é campo de assinatura.
+  /// Classifies a widget. Returns `null` when it is not a signature field.
   PdfSignatureAction? classify(PdfDictToken widgetDict) {
     if (!_isSignatureField(widgetDict)) return null;
 
@@ -90,10 +90,10 @@ class PdfSignaturePolicy {
     return PdfSignatureAction.stamp;
   }
 
-  /// Converte o widget importado em carimbo somente-leitura.
+  /// Turns the imported widget into a read-only stamp.
   ///
-  /// A página continua parecendo assinada, e nenhum visualizador reclama de
-  /// assinatura quebrada, porque não sobrou assinatura para conferir.
+  /// The page still looks signed, and no viewer complains about a broken
+  /// signature, because there is no signature left to check.
   void turnIntoStamp(PdfObject object) {
     final params = object.params;
     if (params is! PdfDict) return;

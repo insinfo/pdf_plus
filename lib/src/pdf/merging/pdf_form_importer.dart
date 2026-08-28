@@ -4,7 +4,6 @@ import 'dart:typed_data';
 import '../format/array.dart';
 import '../format/bool.dart';
 import '../format/dict.dart';
-import '../format/indirect.dart';
 import '../format/num.dart';
 import '../format/string.dart';
 import '../obj/object.dart';
@@ -17,12 +16,12 @@ import 'pdf_merge_options.dart';
 import 'pdf_object_importer.dart';
 import 'pdf_signature_policy.dart';
 
-/// Monta o `/AcroForm` do documento mesclado.
+/// Builds the `/AcroForm` of the merged document.
 ///
-/// A hierarquia de campos é achatada: cada campo terminal entra no topo de
-/// `/Fields` com o nome totalmente qualificado em `/T`. Campos com vários
-/// widgets — grupos de rádio, campos que atravessam páginas — continuam
-/// agrupados sob um único campo por `/Kids`.
+/// The field hierarchy is flattened: every terminal field goes to the top of
+/// `/Fields` with the fully qualified name in `/T`. Fields with several
+/// widgets — radio groups, fields spanning pages — stay grouped under a single
+/// field through `/Kids`.
 class PdfFormImporter {
   PdfFormImporter(this.context, this.objects)
       : _signatures = PdfSignaturePolicy(context);
@@ -31,7 +30,7 @@ class PdfFormImporter {
   final PdfObjectImporter objects;
   final PdfSignaturePolicy _signatures;
 
-  /// Chaves que pertencem ao campo, não ao widget.
+  /// Keys that belong to the field, not to the widget.
   static const _fieldKeys = <String>{
     PdfNameTokens.ft,
     PdfNameTokens.t,
@@ -91,8 +90,8 @@ class PdfFormImporter {
 
   void _importFieldGroup(_FieldGroup group) {
     final action = _signatures.classify(group.dict);
-    // `drop` remove tudo; `stamp` faz o campo sumir e deixa só o carimbo, que a
-    // importação da página já criou.
+    // `drop` removes everything; `stamp` makes the field disappear and leaves
+    // only the stamp, which the page import already created.
     if (action == PdfSignatureAction.drop ||
         action == PdfSignatureAction.stamp) {
       return;
@@ -118,7 +117,7 @@ class PdfFormImporter {
       final params = widget.destination.params;
       if (params is PdfDict) {
         params[PdfNameTokens.parent] = field.ref();
-        // O que é do campo não se repete no widget.
+        // What belongs to the field is not repeated on the widget.
         for (final key in _fieldKeys) {
           params.values.remove(key);
         }
@@ -130,11 +129,12 @@ class PdfFormImporter {
     _registerField(object: field, name: group.qualifiedName);
   }
 
-  /// Campos que nenhum widget alcançou.
+  /// Fields no widget reached.
   ///
-  /// `/AcroForm /Fields` pode conter campo sem widget nenhum — um campo de
-  /// dados oculto, ou uma assinatura invisível, que é a forma dos documentos
-  /// exportados pelo SEI. Descobrir campos só pelas páginas os perderia.
+  /// `/AcroForm /Fields` may hold a field with no widget at all — a hidden data
+  /// field, or an invisible signature, which is the shape of the documents
+  /// exported by SEI. Discovering fields through the pages alone would lose
+  /// them.
   void _importOrphanFields() {
     final acroForm = _sourceAcroForm();
     if (acroForm == null) return;
@@ -179,7 +179,7 @@ class PdfFormImporter {
 
     if (ref == null) return;
     if (context.reachedFieldIds.contains(ref.obj)) return;
-    // Widgets deste campo podem ter sido alcançados individualmente.
+    // Widgets of this field may have been reached individually.
     for (final kid in kidList) {
       final kidRef = PdfParserObjects.asRef(kid);
       if (kidRef != null && context.imported.containsKey(kidRef.obj)) return;
@@ -213,14 +213,14 @@ class PdfFormImporter {
 
   // ---------------------------------------------------------------------------
 
-  /// Acrescenta o campo a `/AcroForm /Fields`, resolvendo colisão de nome.
+  /// Appends the field to `/AcroForm /Fields`, resolving name collisions.
   void _registerField({
     required PdfObject object,
     required String name,
   }) {
     final params = object.params;
     final effective = _resolveName(name);
-    if (effective == null) return; // keepFirst: campo descartado
+    if (effective == null) return; // keepFirst: field discarded
 
     if (params is PdfDict && effective.isNotEmpty) {
       params[PdfNameTokens.t] = PdfString.fromString(effective);
@@ -259,7 +259,7 @@ class PdfFormImporter {
     }
   }
 
-  /// Mescla as chaves de nível de formulário da origem no destino.
+  /// Merges the form-level keys of the source into the destination.
   void _mergeAcroFormDictionary() {
     final source = _sourceAcroForm();
     if (source == null) return;
@@ -292,7 +292,7 @@ class PdfFormImporter {
     _mergeResourceDictionary(source, target);
   }
 
-  /// `/DR`: recursos usados pelas aparências dos campos.
+  /// `/DR`: resources used by the field appearances.
   void _mergeResourceDictionary(PdfDictToken source, PdfDict target) {
     final sourceDr = context.source.resolve(source.values[PdfNameTokens.dr]);
     if (sourceDr is! PdfDictToken) return;
@@ -308,7 +308,8 @@ class PdfFormImporter {
       if (resolved is PdfDictToken && current is PdfDict) {
         resolved.values.forEach((name, entry) {
           if (current.containsKey(name)) {
-            // Renomear exigiria reescrever toda string /DA que cita o recurso.
+            // Renaming would require rewriting every /DA string that names
+            // the resource.
             context.warn(
               'recurso "$name" de /AcroForm /DR já existia no destino e o do '
               'documento importado foi ignorado',
@@ -356,7 +357,7 @@ class PdfFormImporter {
     return created;
   }
 
-  /// Percorre `/Parent` montando o nome totalmente qualificado.
+  /// Walks `/Parent` building the fully qualified name.
   _FieldChain _chainOf(PdfDictToken widgetDict, PdfRefToken? widgetRef) {
     final names = <String>[];
     final ownName = _fieldName(widgetDict);
@@ -366,7 +367,7 @@ class PdfFormImporter {
     var terminalIsWidget = false;
 
     if (ownName != null) {
-      // Widget e campo no mesmo objeto: o caso comum.
+      // Widget and field in the same object: the common case.
       terminalIsWidget = true;
       terminalRef = widgetRef;
       terminalDict = widgetDict;
@@ -425,7 +426,7 @@ class _FieldChain {
   final PdfRefToken? terminalRef;
   final PdfDictToken? terminalDict;
 
-  /// Widget e campo são o mesmo objeto.
+  /// Widget and field are the same object.
   final bool terminalIsWidget;
 }
 
@@ -438,5 +439,3 @@ class _FieldGroup {
   final List<PdfImportedWidget> widgets = <PdfImportedWidget>[];
 }
 
-/// Referência não usada diretamente, mantida para clareza da API interna.
-typedef PdfFormFieldRef = PdfIndirect;

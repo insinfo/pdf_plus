@@ -34,6 +34,13 @@ class PdfNames extends PdfObject<PdfDict> {
 
   final Map<String, PdfDataType> _dests = <String, PdfDataType>{};
 
+  /// Named destinations registered so far, keyed by name.
+  ///
+  /// Exposed so that reference repair — see `PdfPageCollectionEditor` — can
+  /// drop or retarget a destination whose page was removed. The map is the
+  /// live one used by [prepare], so mutating it changes the output.
+  Map<String, PdfDataType> get dests => _dests;
+
   /// Add a named destination
   void addDest(
     String name,

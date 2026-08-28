@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
-/// Parâmetros de `/DecodeParms` que afetam a decodificação de um stream Flate
-/// ou LZW.
+/// `/DecodeParms` parameters that affect the decoding of a Flate or LZW
+/// stream.
 class PdfPredictorParams {
   const PdfPredictorParams({
     this.predictor = 1,
@@ -15,30 +15,30 @@ class PdfPredictorParams {
   final int bitsPerComponent;
   final int columns;
 
-  /// Se há alguma transformação a desfazer.
+  /// Whether there is any transformation to undo.
   bool get isActive => predictor > 1;
 }
 
-/// Desfaz os preditores previstos na ISO 32000-1 §7.4.4.4.
+/// Undoes the predictors defined in ISO 32000-1 §7.4.4.4.
 ///
-/// Um stream com `/Predictor 12` — o padrão da maioria dos geradores de PDF
-/// 1.5+ para tabelas de referências cruzadas — sai do inflate ainda filtrado
-/// por linhas no estilo PNG. Sem desfazer isso, cada byte lido é lixo: offsets
-/// de objeto apontando para fora do arquivo, por exemplo.
+/// A stream with `/Predictor 12` — what most PDF 1.5+ generators use for
+/// cross-reference tables — comes out of inflate still filtered row by row in
+/// the PNG style. Without undoing that, every byte read is garbage: object
+/// offsets pointing outside the file, for example.
 class PdfParserPredictor {
-  /// Aplica o preditor inverso sobre [data].
+  /// Applies the inverse predictor over [data].
   ///
-  /// Devolve os dados originais quando não há preditor ou quando os parâmetros
-  /// não fazem sentido — nunca lança.
+  /// Returns the original data when there is no predictor or when the
+  /// parameters make no sense — never throws.
   static Uint8List apply(Uint8List data, PdfPredictorParams params) {
     if (!params.isActive) return data;
     if (params.predictor == 2) return _undoTiff(data, params);
     return _undoPng(data, params);
   }
 
-  /// Preditor TIFF (2): cada componente é a diferença para o anterior na mesma
-  /// linha. Só o caso de 8 bits por componente é tratado; os demais são raros e
-  /// devolvidos sem alteração.
+  /// TIFF predictor (2): each component is the difference from the previous
+  /// one on the same row. Only the 8 bits per component case is handled; the
+  /// others are rare and returned unchanged.
   static Uint8List _undoTiff(Uint8List data, PdfPredictorParams params) {
     if (params.bitsPerComponent != 8) return data;
     final colors = params.colors;
@@ -54,8 +54,8 @@ class PdfParserPredictor {
     return out;
   }
 
-  /// Preditores PNG (10 a 15). Cada linha vem precedida do byte que diz qual
-  /// filtro foi usado nela.
+  /// PNG predictors (10 to 15). Each row is preceded by the byte telling
+  /// which filter was used on it.
   static Uint8List _undoPng(Uint8List data, PdfPredictorParams params) {
     final bpp = _bytesPerPixel(params);
     final rowLength = _rowLength(params);
@@ -101,7 +101,7 @@ class PdfParserPredictor {
           }
           break;
         default:
-          // Linha com filtro desconhecido: mantém como veio.
+          // Row with an unknown filter: keep it as it came.
           break;
       }
 

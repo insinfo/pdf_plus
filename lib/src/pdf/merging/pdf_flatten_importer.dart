@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'package:archive/archive.dart';
 
 import '../format/array.dart';
-import '../format/name.dart';
 import '../obj/formxobject.dart';
 import '../obj/page.dart';
 import '../page_format.dart';
@@ -14,13 +13,12 @@ import '../pdf_names.dart';
 import 'pdf_import_context.dart';
 import 'pdf_object_importer.dart';
 
-/// Importa cada página de origem como um Form XObject desenhado em uma página
-/// nova.
+/// Imports each source page as a form XObject drawn on a new page.
 ///
-/// Mantém só o conteúdo gráfico: anotações, links, campos e marcação ficam de
-/// fora — é o contrato do modo. Os recursos (fontes, imagens) continuam sendo
-/// importados de verdade, porque um XObject cujos recursos vivem no arquivo de
-/// origem não renderiza nada.
+/// Keeps only the graphical content: annotations, links, fields and tagging
+/// are left out — that is the contract of the mode. Resources (fonts, images)
+/// are still imported for real, because an XObject whose resources live in the
+/// source file renders nothing.
 class PdfFlattenImporter {
   PdfFlattenImporter(this.context, this.objects);
 
@@ -62,7 +60,7 @@ class PdfFlattenImporter {
       if (converted != null) xObject.params[PdfNameTokens.group] = converted;
     }
 
-    // Desloca a origem quando a caixa da origem não começa em (0,0).
+    // Shifts the origin when the source box does not start at (0,0).
     page.getGraphics().drawFormXObject(
       xObject,
       matrix: <double>[1, 0, 0, 1, -box[0], -box[1]],
@@ -71,10 +69,10 @@ class PdfFlattenImporter {
     return page;
   }
 
-  /// Conteúdo da página, já decodificado e concatenado.
+  /// Page content, already decoded and concatenated.
   ///
-  /// Concatenar exige um estado de filtro único, então o conteúdo é
-  /// decodificado aqui; o `PdfFormXObject` recomprime na serialização.
+  /// Concatenating requires a single filter state, so the content is decoded
+  /// here; `PdfFormXObject` recompresses it on serialization.
   Uint8List? _pageContent(PdfDictToken pageDict) {
     final contents = pageDict.values[PdfNameTokens.contents];
     if (contents == null) return null;
@@ -110,7 +108,7 @@ class PdfFlattenImporter {
     for (final part in parts) {
       out.setRange(offset, offset + part.length, part);
       offset += part.length;
-      out[offset++] = 0x0A; // separador entre streams
+      out[offset++] = 0x0A; // separator between streams
     }
     return out;
   }
@@ -162,5 +160,3 @@ class PdfFlattenImporter {
   }
 }
 
-/// `/Name` é usado só para comparar filtros.
-typedef PdfFilterName = PdfName;

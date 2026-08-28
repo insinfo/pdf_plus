@@ -8,29 +8,29 @@ import '../../obj/object.dart';
 import '../../parsing/pdf_document_parser.dart';
 import 'pdf_object_converter.dart';
 
-/// Identidade de um objeto indireto: o par (número, geração).
+/// Identity of an indirect object: the (number, generation) pair.
 ///
-/// A geração faz parte da chave porque um arquivo pode ter `5 0 obj` e
-/// `5 1 obj` ao mesmo tempo, e `5 0 R` só aponta para o primeiro.
+/// The generation is part of the key because a file can hold `5 0 obj` and
+/// `5 1 obj` at the same time, and `5 0 R` points only to the first.
 final class PdfObjectId {
-  /// Cria a identidade a partir do número e da geração.
+  /// Creates the identity from the number and the generation.
   const PdfObjectId(this.number, this.generation);
 
-  /// Identidade apontada por uma referência indireta.
+  /// Identity pointed to by an indirect reference.
   factory PdfObjectId.fromIndirect(PdfIndirect ref) =>
       PdfObjectId(ref.ser, ref.gen);
 
-  /// Identidade de um objeto já materializado.
+  /// Identity of an already materialized object.
   factory PdfObjectId.fromObject(PdfObjectBase object) =>
       PdfObjectId(object.objser, object.objgen);
 
-  /// Número do objeto (`objser`).
+  /// Object number (`objser`).
   final int number;
 
-  /// Geração do objeto (`objgen`).
+  /// Object generation (`objgen`).
   final int generation;
 
-  /// Referência indireta correspondente.
+  /// Matching indirect reference.
   PdfIndirect toIndirect() => PdfIndirect(number, generation);
 
   @override
@@ -46,51 +46,51 @@ final class PdfObjectId {
   String toString() => '$number $generation R';
 }
 
-/// Ponto único de resolução de objetos indiretos de um [PdfDocument].
+/// Single resolution point for the indirect objects of a [PdfDocument].
 ///
-/// Substitui as varreduras lineares que cada subsistema fazia sobre
-/// `document.objects`: o store indexa os objetos por [PdfObjectId] e resolve
-/// em O(1).
+/// Replaces the linear scans each subsystem used to run over
+/// `document.objects`: the store indexes the objects by [PdfObjectId] and
+/// resolves in O(1).
 ///
-/// ## Invalidação do índice
+/// ## Index invalidation
 ///
-/// `PdfDocument.objects` é um `Set` público e mutável — qualquer código pode
-/// acrescentar ou remover objetos sem avisar ninguém. O índice é construído
-/// sob demanda e refeito sempre que o tamanho do conjunto muda. Uma troca que
-/// mantenha o tamanho (remover um objeto e acrescentar outro entre duas
-/// consultas) não é detectável por tamanho; nesse caso chame [invalidate].
+/// `PdfDocument.objects` is a public, mutable `Set` — any code can add or
+/// remove objects without telling anyone. The index is built on demand and
+/// rebuilt whenever the size of the set changes. A swap that keeps the size
+/// (removing one object and adding another between two lookups) is not
+/// detectable by size; call [invalidate] in that case.
 ///
-/// ## Documento carregado de um arquivo
+/// ## Document loaded from a file
 ///
-/// Quando o documento vem de um arquivo (`document.prev != null`), a maior
-/// parte do grafo continua nos bytes originais: só o catálogo, a árvore de
-/// páginas e o que foi alterado existem como [PdfObject]. Passando o
-/// [PdfDocumentParser] de origem ao construtor, o store passa a cair para o
-/// parser quando o objeto não está materializado, convertendo o valor lido com
-/// o [PdfObjectConverter] e a política [PdfReferencePolicy.preserve]: em um
-/// documento carregado os números de objeto do arquivo continuam valendo,
-/// então não há remapeamento.
+/// When the document comes from a file (`document.prev != null`), most of the
+/// graph stays in the original bytes: only the catalog, the page tree and what
+/// was changed exist as [PdfObject]. By passing the source
+/// [PdfDocumentParser] to the constructor, the store starts falling back to
+/// the parser when the object is not materialized, converting the value read
+/// with the [PdfObjectConverter] and the [PdfReferencePolicy.preserve] policy:
+/// in a loaded document the object numbers from the file still hold, so there
+/// is no remapping.
 ///
-/// Esses objetos vindos do parser são apenas uma **visão de leitura**:
+/// These objects coming from the parser are only a **read view**:
 ///
-/// - ficam em um cache próprio do store e **não** entram em
-///   `document.objects`, porque reescrevê-los no incremental update duplicaria
-///   a definição do objeto sem necessidade;
-/// - de um objeto com stream só vem o dicionário; o corpo continua acessível
-///   pelo parser (`readStreamData`).
+/// - they live in a cache owned by the store and do **not** enter
+///   `document.objects`, because rewriting them in the incremental update
+///   would duplicate the object definition needlessly;
+/// - from an object with a stream only the dictionary comes; the body stays
+///   reachable through the parser (`readStreamData`).
 ///
-/// Transformar essa visão em uma mutação registrada é papel da sessão de
-/// edição (F2), não do store.
+/// Turning that view into a recorded mutation is the job of the editing
+/// session (F2), not of the store.
 ///
-/// Sem parser, o store enxerga somente o que já está materializado — é assim
-/// que os chamadores atuais o usam, para preservar o comportamento que tinham
-/// com a varredura manual.
+/// Without a parser, the store sees only what is already materialized — that
+/// is how the current callers use it, to preserve the behavior they had with
+/// the manual scan.
 class PdfObjectStore {
-  /// Cria um store sobre [document].
+  /// Creates a store over [document].
   ///
-  /// [parser] é o parser de origem do documento carregado; sem ele o store
-  /// resolve apenas objetos materializados. [converter] permite trocar a
-  /// conversão usada na leitura pelo parser.
+  /// [parser] is the source parser of the loaded document; without it the
+  /// store resolves only materialized objects. [converter] allows swapping
+  /// the conversion used when reading through the parser.
   PdfObjectStore(
     this.document, {
     PdfDocumentParser? parser,
@@ -98,7 +98,7 @@ class PdfObjectStore {
   })  : _parser = parser,
         _converter = converter;
 
-  /// Cria um store já ligado ao parser de origem de [document], quando houver.
+  /// Creates a store already bound to the source parser of [document], if any.
   factory PdfObjectStore.forDocument(
     PdfDocument document, {
     PdfObjectConverter converter = PdfObjectConverter.preserving,
@@ -111,19 +111,19 @@ class PdfObjectStore {
     );
   }
 
-  /// Store compartilhado de [document], sem parser de origem.
+  /// Shared store of [document], without a source parser.
   ///
-  /// Serve a quem só precisa resolver objetos já materializados e não quer
-  /// reconstruir o índice a cada chamada — o índice fica vivo enquanto o
-  /// documento existir. Quem precisa do parser de origem cria a própria
-  /// instância com [PdfObjectStore.forDocument].
+  /// Serves whoever only needs to resolve already materialized objects and
+  /// does not want to rebuild the index on every call — the index stays alive
+  /// as long as the document exists. Whoever needs the source parser creates
+  /// their own instance with [PdfObjectStore.forDocument].
   static PdfObjectStore of(PdfDocument document) =>
       _shared[document] ??= PdfObjectStore(document);
 
   static final Expando<PdfObjectStore> _shared =
       Expando<PdfObjectStore>('PdfObjectStore');
 
-  /// Documento indexado.
+  /// The indexed document.
   final PdfDocument document;
 
   final PdfDocumentParser? _parser;
@@ -132,27 +132,27 @@ class PdfObjectStore {
   Map<PdfObjectId, PdfObject>? _index;
   int _indexedCount = -1;
 
-  /// Objetos lidos do parser, mantidos fora de `document.objects`.
+  /// Objects read from the parser, kept out of `document.objects`.
   final Map<PdfObjectId, PdfObject> _fromSource = <PdfObjectId, PdfObject>{};
 
-  /// Se o store pode cair para o parser de origem.
+  /// Whether the store can fall back to the source parser.
   bool get hasSourceParser => _parser != null;
 
-  /// Descarta o índice; a próxima consulta o reconstrói.
+  /// Discards the index; the next lookup rebuilds it.
   void invalidate() {
     _index = null;
     _indexedCount = -1;
   }
 
-  /// Índice atual, reconstruído quando `document.objects` mudou de tamanho.
+  /// Current index, rebuilt when `document.objects` changed size.
   Map<PdfObjectId, PdfObject> get _objects {
     final count = document.objects.length;
     var index = _index;
     if (index == null || count != _indexedCount) {
       index = <PdfObjectId, PdfObject>{};
       for (final object in document.objects) {
-        // Havendo duplicata, o primeiro vence — era o que a varredura linear
-        // substituída por este store já fazia.
+        // On a duplicate, the first one wins — that is what the linear scan
+        // this store replaced already did.
         index.putIfAbsent(PdfObjectId.fromObject(object), () => object);
       }
       _index = index;
@@ -161,10 +161,10 @@ class PdfObjectStore {
     return index;
   }
 
-  /// Objeto apontado por [ref], ou `null` se não houver.
+  /// Object pointed to by [ref], or `null` if there is none.
   PdfObject? lookup(PdfIndirect ref) => lookupId(PdfObjectId.fromIndirect(ref));
 
-  /// Objeto de identidade [id], ou `null` se não houver.
+  /// Object with identity [id], or `null` if there is none.
   PdfObject? lookupId(PdfObjectId id) {
     final materialized = _objects[id];
     if (materialized != null) return materialized;
@@ -173,14 +173,14 @@ class PdfObjectStore {
     return _readFromSource(id);
   }
 
-  /// Se [id] já existe como objeto materializado do documento.
+  /// Whether [id] already exists as a materialized object of the document.
   bool containsId(PdfObjectId id) => _objects.containsKey(id);
 
-  /// Segue as referências indiretas de [value] até um valor direto.
+  /// Follows the indirect references of [value] down to a direct value.
   ///
-  /// Devolve `null` quando a referência não resolve. Cadeias são seguidas até
-  /// [maxDepth] níveis; passado esse limite, o último valor visto é devolvido
-  /// como está — o mesmo contrato de `PdfDocumentParser.resolve`.
+  /// Returns `null` when the reference does not resolve. Chains are followed
+  /// for up to [maxDepth] levels; past that limit, the last value seen is
+  /// returned as is — the same contract as `PdfDocumentParser.resolve`.
   PdfDataType? resolve(PdfDataType? value, {int maxDepth = 32}) {
     var current = value;
     for (var depth = 0; depth < maxDepth; depth++) {
@@ -192,20 +192,21 @@ class PdfObjectStore {
     return current;
   }
 
-  /// Resolve [value] e devolve o dicionário, ou `null` se não for um.
+  /// Resolves [value] and returns the dictionary, or `null` if it is not one.
   PdfDict? resolveDict(PdfDataType? value, {int maxDepth = 32}) {
     final resolved = resolve(value, maxDepth: maxDepth);
     return resolved is PdfDict ? resolved : null;
   }
 
-  /// Resolve [value] e devolve o array, ou `null` se não for um.
+  /// Resolves [value] and returns the array, or `null` if it is not one.
   PdfArray? resolveArray(PdfDataType? value, {int maxDepth = 32}) {
     final resolved = resolve(value, maxDepth: maxDepth);
     return resolved is PdfArray ? resolved : null;
   }
 
-  /// Lê o objeto do parser de origem e o converte, sem registrá-lo no
-  /// documento. Ver a política descrita na documentação da classe.
+  /// Reads the object from the source parser and converts it, without
+  /// registering it in the document. See the policy described in the class
+  /// documentation.
   PdfObject? _readFromSource(PdfObjectId id) {
     final parser = _parser;
     if (parser == null) return null;
@@ -222,9 +223,9 @@ class PdfObjectStore {
       objser: parsed.objId,
       objgen: parsed.gen,
     );
-    // `PdfObject` se registra no documento dentro do construtor. Aqui isso não
-    // vale: o objeto é uma visão de leitura do arquivo original e não deve ser
-    // reescrito no incremental update.
+    // `PdfObject` registers itself in the document inside the constructor.
+    // That does not apply here: the object is a read view of the original file
+    // and must not be rewritten in the incremental update.
     document.objects.remove(object);
 
     _fromSource[id] = object;

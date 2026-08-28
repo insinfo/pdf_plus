@@ -8,54 +8,50 @@ import '../format/num.dart';
 import '../pdf_names.dart';
 import '../rect.dart';
 
-/// As cinco caixas de página definidas pela especificação PDF.
+/// The five page boxes defined by the PDF specification.
 ///
-/// A ordem declarada é a de contenção usual: `/ArtBox`, `/TrimBox` e
-/// `/BleedBox` ficam dentro de `/CropBox`, que fica dentro de `/MediaBox`.
+/// The declaration order follows the usual containment: `/ArtBox`, `/TrimBox`
+/// and `/BleedBox` sit inside `/CropBox`, which sits inside `/MediaBox`.
 enum PdfBoxType {
-  /// `/MediaBox` — o suporte físico. É a única caixa obrigatória.
+  /// `/MediaBox` — the physical medium. It is the only mandatory box.
   media(PdfNameTokens.mediaBox),
 
-  /// `/CropBox` — a região visível. Ausente, vale a `/MediaBox`.
+  /// `/CropBox` — the visible region. When absent, `/MediaBox` applies.
   crop(PdfNameTokens.cropbox),
 
-  /// `/BleedBox` — a região de sangria para produção gráfica.
-  bleed('/BleedBox'),
+  /// `/BleedBox` — the bleed region for print production.
+  bleed(PdfNameTokens.bleedBox),
 
-  /// `/TrimBox` — a região do papel já refilado.
-  trim('/TrimBox'),
+  /// `/TrimBox` — the region of the paper once trimmed.
+  trim(PdfNameTokens.trimBox),
 
-  /// `/ArtBox` — a região de conteúdo significativo.
-  art('/ArtBox');
+  /// `/ArtBox` — the region of meaningful content.
+  art(PdfNameTokens.artBox);
 
   const PdfBoxType(this.key);
 
-  /// Nome da chave no dicionário da página, incluindo a barra inicial.
-  ///
-  /// `/BleedBox`, `/TrimBox` e `/ArtBox` ainda não existem em
-  /// [PdfNameTokens]; quando forem acrescentados lá, estas constantes devem
-  /// passar a referenciá-los.
+  /// Key name in the page dictionary, including the leading slash.
   final String key;
 }
 
-/// Retângulo de página preservando os quatro números do arquivo.
+/// Page rectangle preserving the four numbers from the file.
 ///
-/// Um `PdfPageFormat` só carrega largura e altura, de modo que não consegue
-/// representar uma caixa cuja origem não seja `(0, 0)` — o caso de qualquer
-/// PDF com `/MediaBox [20 30 615 872]`. [PdfBox] guarda `llx`, `lly`, `urx` e
-/// `ury` exatamente como estão no documento, inclusive quando os cantos vêm
-/// invertidos (`[595 842 0 0]`), o que a especificação permite e os
-/// leitores normalizam.
+/// A `PdfPageFormat` only carries a width and a height, so it cannot express
+/// a box whose origin is not `(0, 0)` — the case of any PDF with
+/// `/MediaBox [20 30 615 872]`. [PdfBox] keeps `llx`, `lly`, `urx` and `ury`
+/// exactly as they are in the document, including when the corners come
+/// inverted (`[595 842 0 0]`), which the specification allows and readers
+/// normalize.
 ///
-/// Todas as consultas geométricas ([left], [width], [intersect], [contains])
-/// respondem sobre a versão normalizada; só [llx], [lly], [urx], [ury],
-/// [toList] e [toPdfArray] preservam a ordem original.
+/// Every geometric query ([left], [width], [intersect], [contains]) answers
+/// over the normalized version; only [llx], [lly], [urx], [ury], [toList] and
+/// [toPdfArray] preserve the original order.
 @immutable
 class PdfBox {
-  /// Cria a caixa a partir dos quatro valores crus, na ordem do arquivo.
+  /// Creates the box from the four raw values, in file order.
   const PdfBox(this.llx, this.lly, this.urx, this.ury);
 
-  /// Cria a caixa a partir do canto inferior esquerdo e do tamanho.
+  /// Creates the box from the lower-left corner and the size.
   factory PdfBox.fromLBWH(
     double left,
     double bottom,
@@ -64,18 +60,18 @@ class PdfBox {
   ) =>
       PdfBox(left, bottom, left + width, bottom + height);
 
-  /// Cria a caixa com origem em `(0, 0)` e o tamanho informado.
+  /// Creates the box with origin at `(0, 0)` and the given size.
   factory PdfBox.fromSize(double width, double height) =>
       PdfBox(0, 0, width, height);
 
-  /// Cria a caixa correspondente a um [PdfRect] em espaço do usuário.
+  /// Creates the box matching a [PdfRect] in user space.
   factory PdfBox.fromRect(PdfRect rect) =>
       PdfBox(rect.left, rect.bottom, rect.right, rect.top);
 
-  /// Cria a caixa a partir de uma lista de quatro números.
+  /// Creates the box from a list of four numbers.
   ///
-  /// Lança [ArgumentError] quando a lista não tem exatamente quatro valores
-  /// finitos. Para entrada vinda de arquivo, prefira [tryFromList].
+  /// Throws [ArgumentError] when the list does not hold exactly four finite
+  /// values. For input coming from a file, prefer [tryFromList].
   factory PdfBox.fromList(List<num> values) {
     final box = tryFromList(values);
     if (box == null) {
@@ -85,9 +81,9 @@ class PdfBox {
     return box;
   }
 
-  /// Cria a caixa a partir de um [PdfArray] de quatro números.
+  /// Creates the box from a [PdfArray] of four numbers.
   ///
-  /// Lança [ArgumentError] quando o array não descreve uma caixa válida.
+  /// Throws [ArgumentError] when the array does not describe a valid box.
   factory PdfBox.fromArray(PdfArray array) {
     final box = tryFromArray(array);
     if (box == null) {
@@ -97,7 +93,7 @@ class PdfBox {
     return box;
   }
 
-  /// Versão tolerante de [PdfBox.fromList]: devolve `null` no lugar de lançar.
+  /// Lenient version of [PdfBox.fromList]: returns `null` instead of throwing.
   static PdfBox? tryFromList(List<num>? values) {
     if (values == null || values.length != 4) return null;
     for (final value in values) {
@@ -112,11 +108,11 @@ class PdfBox {
     );
   }
 
-  /// Versão tolerante de [PdfBox.fromArray].
+  /// Lenient version of [PdfBox.fromArray].
   ///
-  /// Aceita qualquer [PdfDataType]; devolve `null` para o que não for um
-  /// array de quatro números — inclusive para uma referência indireta, que
-  /// só o object store sabe resolver.
+  /// Accepts any [PdfDataType]; returns `null` for anything that is not an
+  /// array of four numbers — including an indirect reference, which only the
+  /// object store knows how to resolve.
   static PdfBox? tryFromArray(PdfDataType? value) {
     if (value is! PdfArray) return null;
     if (value.values.length != 4) return null;
@@ -128,75 +124,75 @@ class PdfBox {
     return tryFromList(numbers);
   }
 
-  /// Coordenada x do primeiro canto, como está no arquivo.
+  /// X coordinate of the first corner, as it is in the file.
   final double llx;
 
-  /// Coordenada y do primeiro canto, como está no arquivo.
+  /// Y coordinate of the first corner, as it is in the file.
   final double lly;
 
-  /// Coordenada x do segundo canto, como está no arquivo.
+  /// X coordinate of the second corner, as it is in the file.
   final double urx;
 
-  /// Coordenada y do segundo canto, como está no arquivo.
+  /// Y coordinate of the second corner, as it is in the file.
   final double ury;
 
-  /// A caixa vazia na origem.
+  /// The empty box at the origin.
   static const PdfBox zero = PdfBox(0, 0, 0, 0);
 
-  /// Se os cantos já estão em ordem crescente.
+  /// Whether the corners are already in increasing order.
   bool get isNormalized => llx <= urx && lly <= ury;
 
-  /// A mesma caixa com os cantos em ordem crescente.
+  /// The same box with the corners in increasing order.
   ///
-  /// `PdfBox(595, 842, 0, 0).normalized()` devolve `PdfBox(0, 0, 595, 842)`.
+  /// `PdfBox(595, 842, 0, 0).normalized()` returns `PdfBox(0, 0, 595, 842)`.
   PdfBox normalized() =>
       isNormalized ? this : PdfBox(left, bottom, right, top);
 
-  /// Menor coordenada x.
+  /// Smallest x coordinate.
   double get left => math.min(llx, urx);
 
-  /// Menor coordenada y.
+  /// Smallest y coordinate.
   double get bottom => math.min(lly, ury);
 
-  /// Maior coordenada x.
+  /// Largest x coordinate.
   double get right => math.max(llx, urx);
 
-  /// Maior coordenada y.
+  /// Largest y coordinate.
   double get top => math.max(lly, ury);
 
-  /// Largura, sempre positiva.
+  /// Width, always positive.
   double get width => right - left;
 
-  /// Altura, sempre positiva.
+  /// Height, always positive.
   double get height => top - bottom;
 
-  /// Centro horizontal.
+  /// Horizontal center.
   double get horizontalCenter => left + width / 2;
 
-  /// Centro vertical.
+  /// Vertical center.
   double get verticalCenter => bottom + height / 2;
 
-  /// Se a caixa não tem área.
+  /// Whether the box has no area.
   bool get isEmpty => width <= 0 || height <= 0;
 
-  /// Se a caixa tem área.
+  /// Whether the box has area.
   bool get isNotEmpty => !isEmpty;
 
-  /// Se [other] está inteiramente contida nesta caixa.
+  /// Whether [other] is entirely contained in this box.
   bool contains(PdfBox other) =>
       other.left >= left &&
       other.bottom >= bottom &&
       other.right <= right &&
       other.top <= top;
 
-  /// Se o ponto `(x, y)` está dentro desta caixa, bordas inclusive.
+  /// Whether the point `(x, y)` is inside this box, edges included.
   bool containsPoint(double x, double y) =>
       x >= left && x <= right && y >= bottom && y <= top;
 
-  /// Interseção com [other], ou `null` quando não há sobreposição com área.
+  /// Intersection with [other], or `null` when there is no overlap with area.
   ///
-  /// É a operação usada para aplicar a regra da especificação de que a
-  /// `/CropBox` efetiva é a interseção dela com a `/MediaBox`.
+  /// This is the operation used to apply the specification rule that the
+  /// effective `/CropBox` is its intersection with the `/MediaBox`.
   PdfBox? intersect(PdfBox other) {
     final l = math.max(left, other.left);
     final b = math.max(bottom, other.bottom);
@@ -206,27 +202,27 @@ class PdfBox {
     return PdfBox(l, b, r, t);
   }
 
-  /// Move a caixa por `(dx, dy)`, preservando a ordem dos cantos.
+  /// Moves the box by `(dx, dy)`, preserving the corner order.
   PdfBox translate(double dx, double dy) =>
       PdfBox(llx + dx, lly + dy, urx + dx, ury + dy);
 
-  /// Afasta as bordas por [delta] a partir da caixa normalizada.
+  /// Pushes the edges out by [delta], starting from the normalized box.
   PdfBox inflate(double delta) =>
       PdfBox(left - delta, bottom - delta, right + delta, top + delta);
 
-  /// Aproxima as bordas por [delta] a partir da caixa normalizada.
+  /// Pulls the edges in by [delta], starting from the normalized box.
   PdfBox deflate(double delta) => inflate(-delta);
 
-  /// A caixa normalizada como [PdfRect].
+  /// The normalized box as a [PdfRect].
   PdfRect toRect() => PdfRect(left, bottom, width, height);
 
-  /// Os quatro valores na ordem do arquivo.
+  /// The four values in file order.
   List<double> toList() => <double>[llx, lly, urx, ury];
 
-  /// Os quatro valores como o array que vai para o dicionário da página.
+  /// The four values as the array that goes into the page dictionary.
   ///
-  /// A saída preserva a ordem original: normalize antes se quiser gravar a
-  /// caixa já corrigida.
+  /// The output preserves the original order: normalize first if you want to
+  /// write the already-corrected box.
   PdfArray<PdfNum> toPdfArray() => PdfArray.fromNum(toList());
 
   @override

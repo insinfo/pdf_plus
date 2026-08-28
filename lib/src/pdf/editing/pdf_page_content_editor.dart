@@ -18,54 +18,54 @@ import 'object_graph/pdf_object_store.dart';
 import 'pdf_box.dart';
 import 'pdf_coordinate_transformer.dart';
 
-/// Em que camada o carimbo é desenhado.
+/// Which layer the stamp is drawn on.
 enum PdfStampLayer {
-  /// Depois do conteúdo original: cobre o que já estava na página.
+  /// After the original content: covers what was already on the page.
   overlay,
 
-  /// Antes do conteúdo original: fica por baixo, como marca-d'água.
+  /// Before the original content: sits underneath, as a watermark.
   underlay,
 }
 
-/// Onde o carimbo se ancora na área visível da página.
+/// Where the stamp anchors within the visible area of the page.
 enum PdfStampAnchor {
-  /// Canto superior esquerdo.
+  /// Upper-left corner.
   topLeft,
 
-  /// Centro do topo.
+  /// Center of the top.
   topCenter,
 
-  /// Canto superior direito.
+  /// Upper-right corner.
   topRight,
 
-  /// Meio da borda esquerda.
+  /// Middle of the left edge.
   centerLeft,
 
-  /// Centro da página.
+  /// Center of the page.
   center,
 
-  /// Meio da borda direita.
+  /// Middle of the right edge.
   centerRight,
 
-  /// Canto inferior esquerdo.
+  /// Lower-left corner.
   bottomLeft,
 
-  /// Centro do rodapé.
+  /// Center of the footer.
   bottomCenter,
 
-  /// Canto inferior direito.
+  /// Lower-right corner.
   bottomRight,
 }
 
-/// Carimbo posicionado pelo [PdfCoordinateTransformer].
+/// Stamp positioned by the [PdfCoordinateTransformer].
 ///
-/// A subclasse informa o tamanho em [measure] e desenha em [paint] num
-/// sistema local com origem no canto inferior esquerdo do carimbo, eixo `y`
-/// para cima e unidade igual ao ponto de exibição. O editor cuida de girar e
-/// deslocar esse sistema para o lugar certo do espaço do usuário, inclusive em
-/// páginas com `/Rotate`, `/CropBox` deslocada ou `/UserUnit` diferente de 1.
+/// The subclass reports the size in [measure] and draws in [paint] on a local
+/// system with origin at the lower-left corner of the stamp, `y` axis upwards
+/// and unit equal to the display point. The editor takes care of rotating and
+/// shifting that system to the right place in the user space, including on
+/// pages with `/Rotate`, a shifted `/CropBox` or a `/UserUnit` other than 1.
 abstract class PdfStamp {
-  /// Configura a ancoragem, as margens e a camada do carimbo.
+  /// Configures the anchoring, the margins and the layer of the stamp.
   const PdfStamp({
     this.anchor = PdfStampAnchor.bottomRight,
     this.marginX = 24,
@@ -75,36 +75,36 @@ abstract class PdfStamp {
     this.layer = PdfStampLayer.overlay,
   });
 
-  /// Canto ou borda de referência dentro da área visível.
+  /// Reference corner or edge within the visible area.
   final PdfStampAnchor anchor;
 
-  /// Distância horizontal entre o carimbo e a borda, em pontos de exibição.
+  /// Horizontal distance between the stamp and the edge, in display points.
   final double marginX;
 
-  /// Distância vertical entre o carimbo e a borda, em pontos de exibição.
+  /// Vertical distance between the stamp and the edge, in display points.
   final double marginY;
 
-  /// Canto superior esquerdo explícito, em coordenadas "top-left".
+  /// Explicit upper-left corner, in "top-left" coordinates.
   ///
-  /// Quando informado, [anchor], [marginX] e [marginY] são ignorados.
+  /// When given, [anchor], [marginX] and [marginY] are ignored.
   final PdfPoint? position;
 
-  /// Giro do próprio carimbo, em graus no sentido anti-horário da exibição.
+  /// Rotation of the stamp itself, in degrees counter-clockwise on display.
   ///
-  /// Serve para a marca-d'água na diagonal. O giro acontece em torno do centro
-  /// do carimbo e não altera a área usada para ancorá-lo.
+  /// Meant for the diagonal watermark. The rotation happens around the center
+  /// of the stamp and does not change the area used to anchor it.
   final double rotationDegrees;
 
-  /// Se o carimbo vai por cima ou por baixo do conteúdo original.
+  /// Whether the stamp goes over or under the original content.
   final PdfStampLayer layer;
 
-  /// Tamanho do carimbo, em pontos de exibição.
+  /// Size of the stamp, in display points.
   PdfPoint measure(PdfDocument document);
 
-  /// Desenha o carimbo no sistema local descrito na documentação da classe.
+  /// Draws the stamp on the local system described in the class documentation.
   void paint(PdfGraphics canvas, PdfPoint size);
 
-  /// Área ocupada pelo carimbo, em coordenadas "top-left".
+  /// Area taken up by the stamp, in "top-left" coordinates.
   PdfTopLeftRect resolveRect(
     PdfCoordinateTransformer transformer,
     PdfPoint size,
@@ -155,15 +155,15 @@ abstract class PdfStamp {
   }
 }
 
-/// Cache da fonte padrão dos carimbos, por documento.
+/// Cache of the default stamp font, per document.
 ///
-/// `PdfFont.helvetica` cria um objeto novo a cada chamada; sem o cache, uma
-/// numeração Bates de duzentas páginas gravaria duzentas fontes iguais.
+/// `PdfFont.helvetica` creates a new object on every call; without the cache,
+/// a Bates numbering of two hundred pages would write two hundred equal fonts.
 final Expando<PdfFont> _defaultStampFonts = Expando<PdfFont>('pdfStampFont');
 
-/// Carimbo de texto em uma linha.
+/// Single-line text stamp.
 class PdfTextStamp extends PdfStamp {
-  /// Cria o carimbo de texto.
+  /// Creates the text stamp.
   const PdfTextStamp({
     required this.text,
     this.font,
@@ -181,31 +181,31 @@ class PdfTextStamp extends PdfStamp {
     super.layer,
   });
 
-  /// O texto a carimbar.
+  /// The text to stamp.
   final String text;
 
-  /// A fonte; quando nula, uma Helvetica compartilhada pelo documento.
+  /// The font; when null, a Helvetica shared by the document.
   final PdfFont? font;
 
-  /// Corpo da fonte, em pontos de exibição.
+  /// Font size, in display points.
   final double fontSize;
 
-  /// Cor do texto.
+  /// Text color.
   final PdfColor color;
 
-  /// Cor de fundo do retângulo do carimbo, ou nula para fundo transparente.
+  /// Background color of the stamp rectangle, or null for a transparent one.
   final PdfColor? background;
 
-  /// Cor da borda do retângulo do carimbo, ou nula para não desenhar borda.
+  /// Border color of the stamp rectangle, or null to draw no border.
   final PdfColor? borderColor;
 
-  /// Espessura da borda.
+  /// Border thickness.
   final double borderWidth;
 
-  /// Espaço entre o texto e as bordas do retângulo.
+  /// Space between the text and the edges of the rectangle.
   final double padding;
 
-  /// A fonte efetiva deste carimbo dentro de [document].
+  /// The effective font of this stamp inside [document].
   PdfFont resolveFont(PdfDocument document) =>
       font ?? (_defaultStampFonts[document] ??= PdfFont.helvetica(document));
 
@@ -235,8 +235,8 @@ class PdfTextStamp extends PdfStamp {
     }
 
     canvas.setFillColor(color);
-    // A linha de base fica acima da borda inferior pela profundidade das
-    // descidas da fonte, senão letras como "g" sairiam cortadas.
+    // The baseline sits above the bottom edge by the depth of the font
+    // descenders, otherwise letters such as "g" would come out clipped.
     canvas.drawString(
       resolved,
       fontSize,
@@ -247,12 +247,13 @@ class PdfTextStamp extends PdfStamp {
   }
 }
 
-/// Carimbo de imagem.
+/// Image stamp.
 class PdfImageStamp extends PdfStamp {
-  /// Cria o carimbo de imagem.
+  /// Creates the image stamp.
   ///
-  /// Sem [width] e [height], a imagem ocupa um ponto de exibição por pixel.
-  /// Informando só um dos dois, o outro sai da proporção original.
+  /// Without [width] and [height], the image takes one display point per
+  /// pixel. Giving only one of the two derives the other from the original
+  /// aspect ratio.
   const PdfImageStamp({
     required this.image,
     this.width,
@@ -265,13 +266,13 @@ class PdfImageStamp extends PdfStamp {
     super.layer,
   });
 
-  /// A imagem já registrada no documento.
+  /// The image, already registered in the document.
   final PdfImage image;
 
-  /// Largura desejada, em pontos de exibição.
+  /// Wanted width, in display points.
   final double? width;
 
-  /// Altura desejada, em pontos de exibição.
+  /// Wanted height, in display points.
   final double? height;
 
   @override
@@ -297,91 +298,93 @@ class PdfImageStamp extends PdfStamp {
   }
 }
 
-/// Sobreposição e subposição de conteúdo em uma página, nova ou carregada.
+/// Overlay and underlay of content on a page, new or loaded.
 ///
-/// ## A técnica
+/// ## The technique
 ///
-/// O conteúdo original **nunca é tocado**. O editor acrescenta dois streams à
-/// página e monta o `/Contents` nesta ordem:
+/// The original content is **never touched**. The editor adds two streams to
+/// the page and assembles the `/Contents` in this order:
 ///
 /// ```text
-/// [ subposições ] [ "q" ] [ conteúdo original ] [ "Q" + sobreposições ]
+/// [ underlays ] [ "q" ] [ original content ] [ "Q" + overlays ]
 /// ```
 ///
-/// O `q` na frente e o `Q` atrás isolam o estado gráfico: qualquer `cm`, cor,
-/// recorte ou espessura de linha que a página tenha deixado aberta no nível
-/// externo é descartada antes do carimbo, e o carimbo não vaza estado para o
-/// que vem depois. É a mesma técnica do `AppendMode` do PDFBox e a que o SEI
-/// usa nos PDFs de processo (roteiro de merge, §10, item 7), e ela preserva a
-/// fidelidade byte a byte do stream original — importante para um documento
-/// que ainda vá ser conferido contra a origem.
+/// The leading `q` and the trailing `Q` isolate the graphics state: any `cm`,
+/// color, clip or line width the page left open at the outer level is
+/// discarded before the stamp, and the stamp does not leak state into what
+/// comes after. It is the same technique as PDFBox's `AppendMode` and the one
+/// SEI uses on case PDFs (merge roadmap, §10, item 7), and it preserves the
+/// byte-for-byte fidelity of the original stream — important for a document
+/// that is still going to be checked against its source.
 ///
-/// ## O que exigiu cuidado
+/// ## What needed care
 ///
-/// `PdfPage.prepare()` sempre coloca o `/Contents` já existente **antes** dos
-/// streams criados por `getGraphics()`, então não há como obter um stream de
-/// prefixo só empilhando conteúdo novo. O editor resolve isso reescrevendo o
-/// `/Contents` da página como um array com a referência do prefixo na frente;
-/// como o `prepare()` reinsere esse array no começo e depois chama `uniq()`,
-/// que preserva a primeira ocorrência, a ordem final é a desejada e salvar
-/// duas vezes não duplica nem reordena nada. Numa página nova, que ainda não
-/// tem `/Contents`, a ordem é a da própria lista `PdfPage.contents` e o editor
-/// apenas move o stream de prefixo para o início dela.
+/// `PdfPage.prepare()` always puts the existing `/Contents` **before** the
+/// streams created by `getGraphics()`, so there is no way to get a prefix
+/// stream just by stacking new content. The editor solves that by rewriting
+/// the page `/Contents` as an array with the prefix reference in front; since
+/// `prepare()` reinserts that array at the start and then calls `uniq()`,
+/// which keeps the first occurrence, the final order is the wanted one and
+/// saving twice neither duplicates nor reorders anything. On a new page, which
+/// does not have a `/Contents` yet, the order is that of the
+/// `PdfPage.contents` list itself and the editor only moves the prefix stream
+/// to its start.
 ///
-/// A consequência é que o desenho feito diretamente com `page.getGraphics()`
-/// **antes** de criar o editor fica dentro do bloco isolado, junto com o
-/// conteúdo original; o desenho feito **depois** vai parar após o carimbo.
-/// Quem precisa de ordem previsível deve fazer todo o desenho pelo editor.
+/// The consequence is that drawing done directly with `page.getGraphics()`
+/// **before** creating the editor ends up inside the isolated block, together
+/// with the original content; drawing done **after** lands past the stamp.
+/// Whoever needs a predictable order should do all the drawing through the
+/// editor.
 ///
-/// ## Limites conhecidos
+/// ## Known limits
 ///
-/// - **Recursos.** A mesclagem de `/Resources` continua sendo a de
-///   `PdfGraphicStream.prepare()`. O editor apenas garante que ela tenha um
-///   dicionário direto para mesclar (ver `_ensureDirectResources`); ele ainda
-///   não resolve colisão de nome em `/Font`, `/XObject`, `/ExtGState`,
-///   `/Pattern`, `/Shading`, `/ColorSpace` e `/Properties`. Na prática a
-///   colisão é improvável, porque o nome dos recursos novos deriva do número
-///   do objeto, que em documento carregado começa depois do último do arquivo.
-///   O tratamento completo é o `PdfResourceManager` da F4.
-/// - **Transparência.** Um carimbo com opacidade exigiria registrar um
-///   `/ExtGState` na página, e hoje `prepare()` **substitui** um `/ExtGState`
-///   direto já existente pela referência do registro do documento, quebrando o
-///   conteúdo original. Por isso não há opção de opacidade: a marca-d'água se
-///   faz com cor clara e [PdfStamp.rotationDegrees].
-/// - **`replaceContent`.** Trocar o conteúdo da página exige descartar o
-///   `/Contents` carregado e depende da coleção de páginas da F3.
+/// - **Resources.** The `/Resources` merging is still the one from
+///   `PdfGraphicStream.prepare()`. The editor only makes sure it has a direct
+///   dictionary to merge into (see `_ensureDirectResources`); it still does
+///   not resolve name collisions in `/Font`, `/XObject`, `/ExtGState`,
+///   `/Pattern`, `/Shading`, `/ColorSpace` and `/Properties`. In practice the
+///   collision is unlikely, because the name of the new resources derives from
+///   the object number, which in a loaded document starts after the last one
+///   in the file. The complete handling is the `PdfResourceManager` from F4.
+/// - **Transparency.** A stamp with opacity would require registering an
+///   `/ExtGState` on the page, and today `prepare()` **replaces** an existing
+///   direct `/ExtGState` with the reference from the document registry,
+///   breaking the original content. That is why there is no opacity option:
+///   the watermark is made with a light color and [PdfStamp.rotationDegrees].
+/// - **`replaceContent`.** Swapping the page content requires discarding the
+///   loaded `/Contents` and depends on the page collection from F3.
 class PdfPageContentEditor {
-  /// Cria o editor para [page].
+  /// Creates the editor for [page].
   ///
-  /// [reference] escolhe a caixa que define a área visível usada para
-  /// posicionar carimbos; o padrão é a `/CropBox`, que é o que o leitor mostra.
+  /// [reference] picks the box that defines the visible area used to position
+  /// stamps; the default is the `/CropBox`, which is what the reader shows.
   PdfPageContentEditor(
     this.page, {
     this.reference = PdfBoxType.crop,
   }) : transformer =
             PdfCoordinateTransformer.forPage(page, reference: reference);
 
-  /// A página editada.
+  /// The edited page.
   final PdfPage page;
 
-  /// A caixa usada como área visível.
+  /// The box used as the visible area.
   final PdfBoxType reference;
 
-  /// Conversor de coordenadas desta página.
+  /// Coordinate converter of this page.
   final PdfCoordinateTransformer transformer;
 
-  /// O documento dono da página.
+  /// The document that owns the page.
   PdfDocument get document => page.pdfDocument;
 
   PdfObjectStream? _suffix;
   PdfGraphics? _suffixGraphics;
   int _underlayCount = 0;
 
-  /// Desenha por cima do conteúdo original.
+  /// Draws over the original content.
   ///
-  /// O callback recebe um [PdfGraphics] no espaço do usuário da página, já
-  /// dentro de um `q ... Q` próprio. Para posicionar pelo alto da página,
-  /// use [transformer].
+  /// The callback receives a [PdfGraphics] in the user space of the page,
+  /// already inside a `q ... Q` of its own. To position from the top of the
+  /// page, use [transformer].
   void drawOverlay(void Function(PdfGraphics canvas) build) {
     _ensureWrap();
     final canvas = _suffixGraphics!;
@@ -391,11 +394,10 @@ class PdfPageContentEditor {
     page.altered = true;
   }
 
-  /// Desenha por baixo do conteúdo original.
+  /// Draws under the original content.
   ///
-  /// Útil para marca-d'água: o conteúdo da página continua legível por cima.
-  /// Chamadas sucessivas empilham na ordem em que foram feitas, a primeira
-  /// mais ao fundo.
+  /// Useful for a watermark: the page content stays legible on top. Successive
+  /// calls stack in the order they were made, the first one furthest back.
   void drawUnderlay(void Function(PdfGraphics canvas) build) {
     _ensureWrap();
     final canvas = page.getGraphics();
@@ -408,14 +410,14 @@ class PdfPageContentEditor {
     page.altered = true;
   }
 
-  /// Aplica [stamp] na página, na camada que ele declara.
+  /// Applies [stamp] to the page, on the layer it declares.
   void drawStamp(PdfStamp stamp) {
     final size = stamp.measure(document);
     final rect = stamp.resolveRect(transformer, size);
     final matrix = transformer.displayTransform(rect);
 
     if (stamp.rotationDegrees != 0) {
-      // Gira em torno do centro do carimbo, sem mover a âncora.
+      // Rotate around the center of the stamp, without moving the anchor.
       final cx = size.x / 2;
       final cy = size.y / 2;
       matrix
@@ -436,13 +438,12 @@ class PdfPageContentEditor {
     }
   }
 
-  /// As páginas distintas de [document], na ordem do documento.
+  /// The distinct pages of [document], in document order.
   ///
-  /// Um documento carregado registra cada página duas vezes em
-  /// `pdfPageList.pages`: uma pelo construtor de `PdfPage` e outra pelo
-  /// `mergeDocument` do parser. Enquanto a coleção de páginas da fase F3 não
-  /// existir, carimbar direto sobre a lista desenharia duas vezes na mesma
-  /// página e ignoraria metade do documento.
+  /// A loaded document registers each page twice in `pdfPageList.pages`: once
+  /// by the `PdfPage` constructor and once by the parser's `mergeDocument`.
+  /// Until the page collection from phase F3 exists, stamping directly over
+  /// the list would draw twice on the same page and ignore half the document.
   static List<PdfPage> distinctPages(PdfDocument document) {
     final seen = <PdfPage>[];
     for (final page in document.pdfPageList.pages) {
@@ -452,20 +453,21 @@ class PdfPageContentEditor {
     return seen;
   }
 
-  /// Traz o `/Resources` da página para dentro do dicionário dela quando ele
-  /// está em um objeto indireto que ninguém materializou.
+  /// Brings the page `/Resources` into the page dictionary when it lives in an
+  /// indirect object nobody materialized.
   ///
-  /// `PdfGraphicStream.prepare()` sabe mesclar os recursos novos em um
-  /// dicionário direto e em um objeto indireto **já materializado**; quando o
-  /// alvo é uma referência que continua só nos bytes originais — o caso da
-  /// maioria dos PDFs carregados — ele substitui a referência pelo dicionário
-  /// novo e a página perde as fontes e imagens que tinha. Copiar o dicionário
-  /// original para dentro da página, preservando as referências indiretas dos
-  /// recursos em si, evita a perda sem tocar no objeto original, que pode ser
-  /// compartilhado com outras páginas.
+  /// `PdfGraphicStream.prepare()` knows how to merge the new resources into a
+  /// direct dictionary and into an **already materialized** indirect object;
+  /// when the target is a reference that still lives only in the original
+  /// bytes — the case of most loaded PDFs — it replaces the reference with the
+  /// new dictionary and the page loses the fonts and images it had. Copying
+  /// the original dictionary into the page, preserving the indirect references
+  /// of the resources themselves, avoids the loss without touching the
+  /// original object, which may be shared with other pages.
   ///
-  /// É um remendo local: o lugar definitivo disso é o `PdfResourceManager`
-  /// previsto na F4, que ainda exige mudar `PdfGraphicStream`.
+  /// It is a local patch: the definitive place for this is the
+  /// `PdfResourceManager` planned for F4, which still requires changing
+  /// `PdfGraphicStream`.
   void _ensureDirectResources() {
     final resources = page.params[PdfNameTokens.resources];
     if (resources is! PdfIndirect) return;
@@ -476,19 +478,19 @@ class PdfPageContentEditor {
     final original = store.resolveDict(resources);
     if (original == null) return;
 
-    // Cópia rasa: os valores continuam apontando para os mesmos objetos.
+    // Shallow copy: the values keep pointing to the same objects.
     page.params[PdfNameTokens.resources] =
         PdfDict<PdfDataType>.values(Map<String, PdfDataType>.of(original.values));
   }
 
-  /// Cria o par de streams que envolve o conteúdo original.
+  /// Creates the pair of streams that wraps the original content.
   void _ensureWrap() {
     if (_suffix != null) return;
 
     _ensureDirectResources();
 
-    // Sem isto, `prepare()` descarta os streams novos de uma página cujo
-    // conteúdo ainda não foi alterado por nenhuma operação de desenho.
+    // Without this, `prepare()` discards the new streams of a page whose
+    // content has not been changed yet by any drawing operation.
     page.altered = true;
 
     page.getGraphics();
@@ -505,13 +507,13 @@ class PdfPageContentEditor {
     _insertContent(prefix, _underlayCount);
   }
 
-  /// Coloca [stream] na posição [position] do conteúdo da página, contando a
-  /// partir do começo — isto é, antes do conteúdo original.
+  /// Puts [stream] at position [position] of the page content, counting from
+  /// the start — that is, before the original content.
   void _insertContent(PdfObjectStream stream, int position) {
     final existing = page.params[PdfNameTokens.contents];
 
     if (existing == null) {
-      // Página nova: quem manda na ordem é a lista de conteúdos.
+      // New page: the contents list is what dictates the order.
       page.contents.remove(stream);
       page.contents.insert(math.min(position, page.contents.length), stream);
       return;

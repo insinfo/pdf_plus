@@ -63,8 +63,12 @@ class PdfCatalog extends PdfObject<PdfDict> {
   /// Attached files (Pdf/A 3b)
   PdfaAttachedFiles? attached;
 
-  /// The initial page mode
-  final PdfPageMode? pageMode;
+  /// The initial page mode.
+  ///
+  /// Mutable because [prepare] rewrites `/PageMode` from it on every save:
+  /// writing the key straight into [params] would be overwritten. `null`
+  /// leaves whatever the loaded document already declared untouched.
+  PdfPageMode? pageMode;
 
   /// The anchor names
   PdfNames? names;

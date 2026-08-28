@@ -209,11 +209,11 @@ class PdfNameTokens {
   static const q = '/Q';
   static const r = '/R';
 
-  /// Estilo de rótulo de página: algarismos romanos minúsculos
-  /// (ISO 32000-1, tabela 159). Distinto de [r], que é o maiúsculo.
+  /// Page label style: lowercase roman numerals
+  /// (ISO 32000-1, table 159). Distinct from [r], which is the uppercase one.
   static const rLower = '/r';
 
-  /// Estilo de rótulo de página: letras maiúsculas. Distinto de [a].
+  /// Page label style: uppercase letters. Distinct from [a].
   static const aUpper = '/A';
   static const range = '/Range';
   static const reference = '/Reference';
@@ -261,14 +261,14 @@ class PdfNameTokens {
   static const winAnsiEncoding = '/WinAnsiEncoding';
   static const xyz = '/XYZ';
 
-  // Caixas e atributos de página além da /MediaBox.
+  // Page boxes and attributes beyond /MediaBox.
   static const bleedBox = '/BleedBox';
   static const trimBox = '/TrimBox';
   static const artBox = '/ArtBox';
   static const userUnit = '/UserUnit';
 
-  // Marcação estrutural, conteúdo opcional e navegação — vocabulário que a
-  // mesclagem e a edição precisam.
+  // Structural markup, optional content and navigation — the vocabulary that
+  // merging and editing need.
   static const structParents = '/StructParents';
   static const structTreeRoot = '/StructTreeRoot';
   static const markInfo = '/MarkInfo';
@@ -276,11 +276,11 @@ class PdfNameTokens {
   static const ocProperties = '/OCProperties';
   static const ocgs = '/OCGs';
 
-  /// Camadas visíveis na configuração padrão. Distinto de [off], que é o estado
-  /// `/Off` de um botão de formulário.
+  /// Layers visible in the default configuration. Distinct from [off], which
+  /// is the `/Off` state of a form button.
   static const layersOn = '/ON';
 
-  /// Camadas ocultas na configuração padrão.
+  /// Layers hidden in the default configuration.
   static const layersOff = '/OFF';
   static const configs = '/Configs';
   static const needAppearances = '/NeedAppearances';

@@ -13,7 +13,7 @@ import 'pdf_outline_importer.dart';
 import 'pdf_page_importer.dart';
 import 'pdf_signature_policy.dart';
 
-/// Mescla documentos PDF em um documento de destino.
+/// Merges PDF documents into a destination document.
 ///
 /// ```dart
 /// final out = PdfDocument();
@@ -24,9 +24,9 @@ import 'pdf_signature_policy.dart';
 /// final bytes = await out.save();
 /// ```
 ///
-/// O destino precisa ser um documento novo: mesclar dentro de um documento
-/// carregado produziria um incremental update contendo objetos de outro
-/// arquivo, o que não é um PDF válido.
+/// The destination must be a brand new document: merging into a loaded
+/// document would produce an incremental update containing objects from
+/// another file, which is not a valid PDF.
 class PdfDocumentMerger {
   PdfDocumentMerger(PdfDocument destination, {PdfMergeOptions? options})
       : context =
@@ -62,24 +62,24 @@ class PdfDocumentMerger {
   bool _finished = false;
   int _sourceCount = 0;
 
-  /// Opções em uso.
+  /// Options in use.
   PdfMergeOptions get options => context.options;
 
-  /// Documento que recebe as páginas.
+  /// Document that receives the pages.
   PdfDocument get destination => context.destination;
 
-  /// Avisos não fatais: links removidos, assinaturas invalidadas, campos
-  /// renomeados.
+  /// Non-fatal warnings: dropped links, invalidated signatures, renamed
+  /// fields.
   List<String> get warnings => List<String>.unmodifiable(context.warnings);
 
-  /// Importa todas as páginas de [source].
+  /// Imports every page of [source].
   List<PdfPage> append(PdfDocumentParser source, {String? label}) {
     final count = source.pageCount;
     if (count == 0) return <PdfPage>[];
     return importPageRange(source, 0, count - 1, label: label);
   }
 
-  /// Importa uma única página (índice base zero).
+  /// Imports a single page (zero-based index).
   PdfPage importPage(PdfDocumentParser source, int pageIndex, {String? label}) {
     final pages = importPageRange(source, pageIndex, pageIndex, label: label);
     if (pages.isEmpty) {
@@ -88,7 +88,7 @@ class PdfDocumentMerger {
     return pages.first;
   }
 
-  /// Importa o intervalo `[start, end]` de páginas, inclusive nas duas pontas.
+  /// Imports the page range `[start, end]`, inclusive on both ends.
   List<PdfPage> importPageRange(
     PdfDocumentParser source,
     int start,
@@ -123,8 +123,8 @@ class PdfDocumentMerger {
 
       final imported = <PdfPage>[];
 
-      // Primeira passagem: todas as páginas do intervalo. Só depois de o mapa
-      // de páginas estar completo é que destinos e `/P` podem ser resolvidos.
+      // First pass: every page of the range. Only once the page map is
+      // complete can destinations and `/P` be resolved.
       for (var index = start; index <= end; index++) {
         final ref = refs[index];
         final dict = _pageDict(source, ref);
@@ -140,7 +140,7 @@ class PdfDocumentMerger {
         );
       }
 
-      // Segunda passagem.
+      // Second pass.
       if (context.options.mode != PdfMergeMode.flatten) {
         for (var index = start; index <= end; index++) {
           final ref = refs[index];
@@ -161,9 +161,9 @@ class PdfDocumentMerger {
     }
   }
 
-  /// Conclui a mesclagem, resolvendo o que depende de todas as origens.
+  /// Finishes the merge, resolving what depends on every source.
   ///
-  /// Chamado automaticamente por [PdfDocument.merge]; é idempotente.
+  /// Called automatically by [PdfDocument.merge]; it is idempotent.
   void finish() {
     if (_finished) return;
     _finished = true;

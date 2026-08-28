@@ -8,32 +8,32 @@ import '../pdf_names.dart';
 import 'pdf_import_context.dart';
 import 'pdf_object_importer.dart';
 
-/// Importa páginas de um documento de origem para o documento de destino.
+/// Imports pages from a source document into the destination document.
 ///
-/// Trata o que se perde ao destacar uma página da árvore em que ela vivia:
-/// atributos herdados de nós `/Pages` ancestrais e a geometria da caixa.
+/// Handles what is lost when a page is detached from the tree it lived in:
+/// attributes inherited from ancestor `/Pages` nodes and the box geometry.
 class PdfPageImporter {
   PdfPageImporter(this.context, this.objects);
 
   final PdfImportContext context;
   final PdfObjectImporter objects;
 
-  /// Chaves da página que não são copiadas diretamente.
+  /// Page keys that are not copied straight across.
   static const _skippedKeys = <String>{
-    PdfNameTokens.parent, // religado à árvore do destino
-    PdfNameTokens.type, // já definido pelo modelo
-    PdfNameTokens.mediaBox, // tratado pela geometria
-    PdfNameTokens.rotate, // idem
-    PdfNameTokens.annots, // importado na segunda passagem
+    PdfNameTokens.parent, // relinked to the destination tree
+    PdfNameTokens.type, // already set by the model
+    PdfNameTokens.mediaBox, // handled by the geometry
+    PdfNameTokens.rotate, // ditto
+    PdfNameTokens.annots, // imported on the second pass
   };
 
-  /// Chaves descartadas quando a árvore de marcação estrutural não é mesclada.
+  /// Keys discarded when the structure tree is not merged.
   static const _structureKeys = <String>{
     PdfNameTokens.structParents,
     PdfNameTokens.beads,
   };
 
-  /// Cria no destino a página descrita por [pageRef].
+  /// Creates in the destination the page described by [pageRef].
   PdfPage import(PdfRefToken pageRef, PdfDictToken pageDict) {
     final geometry = _geometryOf(pageDict);
 
@@ -44,14 +44,13 @@ class PdfPageImporter {
     );
     page.mediaBoxOverride = geometry.mediaBox;
 
-    // Registrado antes de converter o conteúdo: uma anotação da própria página
-    // referencia a página de volta por `/P`.
+    // Registered before converting the content: an annotation of the page
+    // itself references the page back through `/P`.
     context.pageMap[pageRef.obj] = page;
 
     final skipped = <String>{
       ..._skippedKeys,
       if (context.options.dropStructureTree) ..._structureKeys,
-      if (geometry.rotationIsExact) PdfNameTokens.rotate,
     };
 
     pageDict.values.forEach((key, value) {
@@ -63,8 +62,8 @@ class PdfPageImporter {
     });
 
     if (!geometry.rotationIsExact) {
-      // Rotação fora dos múltiplos de 90: preserva o valor original em vez de
-      // normalizar para zero.
+      // Rotation outside the multiples of 90: keep the original value instead
+      // of normalizing it to zero.
       final raw = objects.convert(geometry.rawRotation);
       if (raw != null) page.params[PdfNameTokens.rotate] = raw;
     }
@@ -75,13 +74,13 @@ class PdfPageImporter {
     return page;
   }
 
-  /// Traz para a página o que ela herdava dos nós ancestrais.
+  /// Brings onto the page what it used to inherit from the ancestor nodes.
   void _materializeInherited(PdfPage page, PdfDictToken pageDict) {
     if (!page.params.containsKey(PdfNameTokens.resources)) {
       final resources = context.source.resolvePageResources(pageDict);
       if (resources != null) {
-        // Direto, não indireto: é o formato que `PdfGraphicStream.prepare`
-        // sabe mesclar quando algo for desenhado por cima.
+        // Direct, not indirect: this is the form `PdfGraphicStream.prepare`
+        // knows how to merge when something is drawn on top.
         page.params[PdfNameTokens.resources] = objects.convertDict(resources);
       }
     }
@@ -98,7 +97,12 @@ class PdfPageImporter {
     }
   }
 
-  /// Normaliza as caixas da página para a mesma origem do `/MediaBox`.
+  /// Drops page boxes that are not a four-number array.
+  ///
+  /// A malformed `/CropBox` is worse than an absent one: the viewer would
+  /// clip the page by it. The boxes that survive keep the coordinates they
+  /// had in the source, which share the `/MediaBox` origin preserved by
+  /// [PdfPage.mediaBoxOverride].
   void _applyBoxes(PdfPage page) {
     for (final key in const <String>[
       PdfNameTokens.cropbox,
@@ -139,7 +143,7 @@ class PdfPageImporter {
     );
   }
 
-  /// Ordena os cantos da caixa: o PDF permite `[urx ury llx lly]`.
+  /// Sorts the box corners: PDF allows `[urx ury llx lly]`.
   List<double>? _normalizeBox(List<double>? box) {
     if (box == null || box.length < 4) return null;
     final x0 = box[0] < box[2] ? box[0] : box[2];
@@ -165,7 +169,7 @@ class _PageGeometry {
   final bool rotationIsExact;
   final dynamic rawRotation;
 
-  /// Caixa explícita, quando a origem não é (0,0).
+  /// Explicit box, when the origin is not (0,0).
   final List<double>? mediaBox;
 }
 

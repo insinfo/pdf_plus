@@ -52,7 +52,7 @@ class SignatureAdapter {
       pkcs8PrivateKey: pkcs8PrivateKey,
       data: data,
     );
-    if (_looksLikeDer(signature)) {
+    if (_looksLikeDer(signature, namedCurve: namedCurve)) {
       return signature;
     }
     return ecdsaRawToDer(signature, namedCurve: namedCurve);
@@ -270,8 +270,25 @@ class SignatureAdapter {
     }
   }
 
-  static bool _looksLikeDer(Uint8List signature) {
-    return signature.length >= 8 && signature.first == 0x30;
+  /// Whether [signature] is DER rather than the RAW `r || s` form.
+  ///
+  /// The first byte alone does not decide it: a RAW signature whose `r` starts
+  /// at 0x30 — one in 256 — looks like a SEQUENCE. When the length is exactly
+  /// that of a RAW signature for the curve, DER is only accepted if the
+  /// structure parses whole.
+  static bool _looksLikeDer(Uint8List signature, {required String namedCurve}) {
+    if (signature.isEmpty || signature.first != 0x30) return false;
+
+    if (signature.length == curveCoordinateLength(namedCurve) * 2) {
+      try {
+        ecdsaDerToRaw(signature, namedCurve: namedCurve);
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    return signature.length >= 8;
   }
 
   static (int, int) _readDerLength(Uint8List bytes, int offset) {

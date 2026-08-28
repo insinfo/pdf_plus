@@ -410,21 +410,21 @@ class PdfDocument {
     return pdfCompute(computation);
   }
 
-  /// Mescla vários PDFs em um documento novo.
+  /// Merges several PDFs into a new document.
   ///
   /// ```dart
   /// final bytes = await PdfDocument.merge(<Uint8List>[docA, docB]);
   /// ```
   ///
-  /// Cada entrada é lida por um [PdfDocumentParser] com reparo habilitado, de
-  /// modo que um arquivo com a tabela de referências cruzadas danificada ainda
-  /// possa ser mesclado. Documentos criptografados não são suportados e
-  /// resultam em [PdfMergeException].
+  /// Each entry is read by a [PdfDocumentParser] with repair enabled, so that
+  /// a file with a damaged cross-reference table can still be merged.
+  /// Encrypted documents are not supported and result in
+  /// [PdfMergeException].
   ///
-  /// Mesclar invalida qualquer assinatura digital existente: ela cobre os bytes
-  /// exatos do documento em que foi aplicada. Ver [PdfMergeOptions] para as
-  /// três chaves que controlam o desfecho, e [PdfDocumentMerger.warnings] —
-  /// acessível pela API não estática — para o relato do que se perdeu.
+  /// Merging invalidates any existing digital signature: it covers the exact
+  /// bytes of the document it was applied to. See [PdfMergeOptions] for the
+  /// three keys that control the outcome, and [PdfDocumentMerger.warnings] —
+  /// reachable through the non-static API — for the report of what was lost.
   static Future<Uint8List> merge(
     List<Uint8List> documents, {
     PdfMergeOptions? options,
@@ -451,9 +451,9 @@ class PdfDocument {
     return document.save(useIsolate: useIsolate);
   }
 
-  /// Importa todas as páginas de [source] neste documento.
+  /// Imports every page of [source] into this document.
   ///
-  /// O documento precisa ser novo — ver [PdfDocumentMerger].
+  /// The document must be a new one — see [PdfDocumentMerger].
   List<PdfPage> appendDocument(
     PdfDocumentParser source, {
     PdfMergeOptions? options,
@@ -464,7 +464,7 @@ class PdfDocument {
     return pages;
   }
 
-  /// Importa uma única página de [source] (índice base zero).
+  /// Imports a single page of [source] (zero-based index).
   PdfPage importPage(
     PdfDocumentParser source,
     int pageIndex, {
@@ -476,7 +476,7 @@ class PdfDocument {
     return page;
   }
 
-  /// Importa o intervalo `[start, end]` de páginas de [source], inclusive.
+  /// Imports the page range `[start, end]` of [source], inclusive.
   List<PdfPage> importPageRange(
     PdfDocumentParser source,
     int start,
@@ -593,7 +593,6 @@ class PdfDocument {
     return this;
   }
 
-  /// Converts top-left coordinates into PDF user space.
   /// Converts a top-left rectangle to PDF user space for [page].
   ///
   /// Delegates to [PdfCoordinateTransformer], which honours the page box
@@ -695,9 +694,9 @@ class PdfSignatureFieldEditor {
       }
     }
 
-    // `/Reason`, `/Location`, `/Name` e `/M` são entradas do dicionário de
-    // assinatura (ISO 32000-1 §12.8.1), não do campo. Escrevê-las no campo
-    // deixaria o valor do dicionário de assinatura prevalecendo na leitura.
+    // `/Reason`, `/Location`, `/Name` and `/M` are entries of the signature
+    // dictionary (ISO 32000-1 §12.8.1), not of the field. Writing them on the
+    // field would leave the signature dictionary value prevailing on read.
     final signatureDict = field.signatureDict;
     final signatureRef = field.signatureRef;
     if (signatureDict != null && signatureRef != null) {

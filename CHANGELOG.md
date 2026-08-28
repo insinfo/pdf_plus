@@ -88,8 +88,16 @@ These affect any document, not just merging.
 - `PdfSignatureFieldEditor.updateFieldMetadata` wrote `/Reason`, `/Location`,
   `/Name` and `/M` on the field dictionary. Per ISO 32000-1 §12.8.1 they belong
   to the signature dictionary, which wins on read.
+- **An ECDSA signature in RAW form whose `r` starts with `0x30` was rejected.**
+  DER detection looked at the first byte alone, so roughly one signature in 256
+  was decoded as a SEQUENCE, failed, and a perfectly valid signature verified as
+  `false`. Both detection sites now accept DER only when the structure parses
+  whole. Measured: 3 cases in 600 signatures, all failing before and passing
+  after.
 - `PdfPageLabel` wrote `romanLower` as `/R` and `lettersUpper` as `/a`,
   colliding with the other two styles.
+- `PdfCatalog.pageMode` is mutable: `prepare()` rewrites `/PageMode` from it on
+  every save, so writing the key into the catalog dictionary was discarded.
 - `PdfOutline` accepts a node without a destination instead of throwing on save,
   and gained `destinationOverride` so an imported bookmark keeps its original
   view instead of being normalized to `/Fit`.
@@ -110,6 +118,41 @@ First part of `doc/roteiro_edicao_pdf.md`.
   existing content with `q` before and `Q` after without touching the original
   stream, plus `PdfBatesNumbering` for multi-page numbering.
 - `PdfNameTokens` absorbed the vocabulary that lived in local constants.
+
+### Basic editing
+
+The phases of `doc/roteiro_edicao_pdf.md` that the merge foundation made cheap.
+Text replacement and secure redaction stay out: in the open only MuPDF does
+both, and doing them halfway would be worse than not having them.
+
+- `PdfDocumentRewriter` rewrites a document from scratch instead of appending an
+  incremental update. Only what the object graph reaches survives, so orphan
+  objects and superseded revisions are dropped: `12 assinaturas.pdf` goes from
+  1.55 MB to 226 KB with byte-identical page content. This is the prerequisite
+  for sanitization — it is **not** redaction: content streams are copied
+  verbatim, so whatever was drawn is still drawn.
+- `PdfPageCollectionEditor` adds `insert`, `remove`, `removeRange`, `move`,
+  `reorder` and `duplicate`, repairing what points at the pages: explicit and
+  named destinations, outlines (children are promoted into the removed node's
+  slot), internal links, page labels, widgets, `/P` and `/OpenAction`. A broken
+  reference follows `PdfBrokenReferencePolicy`: `remove`, `retarget` or
+  `throwError`, which refuses before touching anything.
+- `PdfAnnotationCollection` gives a typed view over a loaded page's annotations
+  — read, edit, remove, flatten — materializing the object under the same number
+  so the change lands in the incremental update.
+- `PdfFormFlattener` flattens form fields by drawing the appearance the document
+  already carries (`/AP /N`, state picked by `/AS`), the PDFBox route. It never
+  synthesizes an appearance: a field without `/AP` is kept and reported, rather
+  than removed with its value silently gone.
+- `PdfDocumentProperties` reads and writes `/Info`, XMP, `/PageMode`,
+  `/PageLayout`, `/Lang`, `/OpenAction` and viewer preferences, on new and
+  loaded documents alike.
+- `lib/src/pdf/content/`: content stream lexer, parser and writer, plus
+  `PdfTextExtractor` for positional text. Round-trip is equivalence by reparse,
+  not byte for byte — verified over 183 pages of the test corpus, inline images
+  included. Text replacement is deliberately absent: re-encoding into a subset
+  font, recomputing advances and rewriting `/Widths`, `/W` and `/ToUnicode` is
+  the expensive half.
 
 ## 3.17.4
 

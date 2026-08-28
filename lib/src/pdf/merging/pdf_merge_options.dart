@@ -1,31 +1,32 @@
-/// Estratégia de mesclagem de páginas.
+/// Page merging strategy.
 enum PdfMergeMode {
-  /// Importa o grafo de objetos da página de origem.
+  /// Imports the object graph of the source page.
   ///
-  /// Preserva conteúdo, recursos, anotações, links, campos de formulário,
-  /// bookmarks, camadas e page labels.
+  /// Preserves content, resources, annotations, links, form fields, bookmarks,
+  /// layers and page labels.
   objectImport,
 
-  /// Achata cada página de origem em um Form XObject desenhado na página nova.
+  /// Flattens each source page into a form XObject drawn on the new page.
   ///
-  /// Rápido e previsível, porém mantém apenas o conteúdo gráfico.
+  /// Fast and predictable, but keeps only the graphical content.
   flatten,
 }
 
-/// Política aplicada quando dois documentos têm campos de formulário homônimos.
+/// Policy applied when two documents have form fields with the same name.
 enum PdfFieldNameConflictPolicy {
-  /// Renomeia o campo importado acrescentando um sufixo numérico
-  /// (`nome`, `nome_2`, `nome_3`, …).
+  /// Renames the imported field by appending a numeric suffix
+  /// (`name`, `name_2`, `name_3`, …).
   renameSuffix,
 
-  /// Mantém o campo já presente no destino e descarta o importado.
+  /// Keeps the field already present in the destination and discards the
+  /// imported one.
   keepFirst,
 
-  /// Lança [PdfMergeException].
+  /// Throws [PdfMergeException].
   throwError,
 }
 
-/// Opções de mesclagem.
+/// Merge options.
 class PdfMergeOptions {
   const PdfMergeOptions({
     this.mode = PdfMergeMode.objectImport,
@@ -37,6 +38,7 @@ class PdfMergeOptions {
     this.importLayers = true,
     this.importPageLabels = true,
     this.importAttachments = false,
+    this.importXmpMetadata = false,
     this.dropStructureTree = true,
     this.copyDocumentInfoFromFirst = false,
     this.groupBookmarksPerDocument = false,
@@ -46,62 +48,74 @@ class PdfMergeOptions {
     this.deduplicateResources = true,
   });
 
-  /// Estratégia de importação das páginas.
+  /// Page import strategy.
   final PdfMergeMode mode;
 
-  /// Importa as anotações da página (links, notas, carimbos).
+  /// Imports the page annotations (links, notes, stamps).
   final bool importAnnotations;
 
-  /// Importa os campos de formulário (`/AcroForm`).
+  /// Imports the form fields (`/AcroForm`).
   final bool importFormFields;
 
-  /// O que fazer quando um campo importado tem o mesmo nome de um já presente.
+  /// What to do when an imported field has the same name as an existing one.
   final PdfFieldNameConflictPolicy fieldNameConflict;
 
-  /// Importa a árvore de bookmarks (`/Outlines`).
+  /// Imports the bookmark tree (`/Outlines`).
   final bool importBookmarks;
 
-  /// Resolve destinos nomeados para destinos explícitos ao importar.
+  /// Resolves named destinations into explicit destinations while importing.
   final bool importNamedDestinations;
 
-  /// Importa camadas / grupos de conteúdo opcional (`/OCProperties`).
+  /// Imports layers / optional content groups (`/OCProperties`).
   final bool importLayers;
 
-  /// Importa a numeração de páginas (`/PageLabels`).
+  /// Imports the page numbering (`/PageLabels`).
   final bool importPageLabels;
 
-  /// Importa anexos (`/Names /EmbeddedFiles`).
+  /// Imports attachments (`/Names /EmbeddedFiles`).
   final bool importAttachments;
 
-  /// Descarta a árvore de marcação estrutural (tagged PDF).
+  /// Copies the XMP packet (`/Metadata`) of the first source document.
+  ///
+  /// Off by default when merging: XMP describes the document it was written
+  /// into, and a consolidation of several sources is not that document.
+  /// Rewriting a single file is the case where copying makes sense.
+  final bool importXmpMetadata;
+
+  /// Discards the structure tree (tagged PDF).
+  ///
+  /// When off, `/StructTreeRoot` and `/MarkInfo` of the first source document
+  /// are copied and the pages keep `/StructParents`. With more than one source
+  /// this preserves the tagging of the first one only: the trees of different
+  /// documents are not merged.
   final bool dropStructureTree;
 
-  /// Copia `/Info` do primeiro documento de origem para o destino.
+  /// Copies `/Info` from the first source document into the destination.
   final bool copyDocumentInfoFromFirst;
 
-  /// Agrupa os bookmarks de cada origem sob um nó-pai próprio.
+  /// Groups the bookmarks of each source under a parent node of its own.
   final bool groupBookmarksPerDocument;
 
-  /// Recusa mesclar quando a origem tem assinatura digital.
+  /// Refuses to merge when the source has digital signatures.
   ///
-  /// Tem precedência sobre [keepInvalidSignatures] e
+  /// Takes precedence over [keepInvalidSignatures] and
   /// [removeSignatureAppearance].
   final bool rejectSignedSources;
 
-  /// Mantém os campos de assinatura da origem, com CMS e certificados.
+  /// Keeps the signature fields of the source, with CMS and certificates.
   ///
-  /// A mesclagem reescreve o arquivo inteiro, então toda assinatura existente
-  /// deixa de conferir: os visualizadores vão reportá-las como inválidas. É o
-  /// comportamento do SEI e da maioria das ferramentas de mercado.
+  /// Merging rewrites the whole file, so every existing signature stops
+  /// checking out: viewers will report them as invalid. This is the behavior
+  /// of SEI and of most tools on the market.
   final bool keepInvalidSignatures;
 
-  /// Remove também o carimbo visual da assinatura.
+  /// Removes the visual stamp of the signature as well.
   ///
-  /// Sem efeito quando [keepInvalidSignatures] está ligado.
+  /// No effect when [keepInvalidSignatures] is on.
   final bool removeSignatureAppearance;
 
-  /// Reaproveita um único objeto para streams idênticos vindos de origens
-  /// diferentes (programas de fonte, imagens, logotipos repetidos).
+  /// Reuses a single object for identical streams coming from different
+  /// sources (font programs, images, repeated logos).
   final bool deduplicateResources;
 
   PdfMergeOptions copyWith({
@@ -114,6 +128,7 @@ class PdfMergeOptions {
     bool? importLayers,
     bool? importPageLabels,
     bool? importAttachments,
+    bool? importXmpMetadata,
     bool? dropStructureTree,
     bool? copyDocumentInfoFromFirst,
     bool? groupBookmarksPerDocument,
@@ -133,6 +148,7 @@ class PdfMergeOptions {
       importLayers: importLayers ?? this.importLayers,
       importPageLabels: importPageLabels ?? this.importPageLabels,
       importAttachments: importAttachments ?? this.importAttachments,
+      importXmpMetadata: importXmpMetadata ?? this.importXmpMetadata,
       dropStructureTree: dropStructureTree ?? this.dropStructureTree,
       copyDocumentInfoFromFirst:
           copyDocumentInfoFromFirst ?? this.copyDocumentInfoFromFirst,
@@ -148,7 +164,7 @@ class PdfMergeOptions {
   }
 }
 
-/// Falha de mesclagem que o chamador pode tratar.
+/// Merge failure the caller can handle.
 class PdfMergeException implements Exception {
   PdfMergeException(this.message);
 

@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import 'pdf_random_access_reader.dart';
 
-/// Cache LRU por blocos para leitura randômica.
+/// Block-based LRU cache for random access reading.
 class PdfCachedRandomAccessReader implements PdfRandomAccessReader {
   PdfCachedRandomAccessReader(
     this._inner, {
@@ -15,7 +15,7 @@ class PdfCachedRandomAccessReader implements PdfRandomAccessReader {
   final int blockSize;
   final int maxBlocks;
 
-  /// Leitor embrulhado por este cache.
+  /// The reader wrapped by this cache.
   PdfRandomAccessReader get inner => _inner;
 
   final _cache = LinkedHashMap<int, Uint8List>();

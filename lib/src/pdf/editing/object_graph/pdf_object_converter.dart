@@ -9,79 +9,77 @@ import '../../format/num.dart';
 import '../../format/string.dart';
 import '../../parsing/pdf_parser_types.dart';
 
-/// Decide o que uma referência indireta lida pelo parser vira no modelo de
-/// escrita.
+/// Decides what an indirect reference read by the parser becomes in the
+/// writing model.
 ///
-/// Devolver `null` significa que o valor deve desaparecer: em dicionários a
-/// chave é removida — o que a especificação considera equivalente a `null` —
-/// e em arrays o item some ou vira `null`, conforme [PdfArrayGapPolicy].
+/// Returning `null` means the value must disappear: in dictionaries the key
+/// is removed — which the specification treats as equivalent to `null` — and
+/// in arrays the item vanishes or becomes `null`, per [PdfArrayGapPolicy].
 typedef PdfReferenceResolver = PdfDataType? Function(PdfRefToken ref);
 
-/// Políticas de referência prontas para o [PdfObjectConverter].
+/// Ready-made reference policies for the [PdfObjectConverter].
 abstract final class PdfReferencePolicy {
-  /// Mantém o par (número, geração) tal como está no documento de origem.
+  /// Keeps the (number, generation) pair as it is in the source document.
   ///
-  /// É a política usada na leitura de um documento carregado, onde os números
-  /// de objeto do arquivo continuam valendo.
+  /// This is the policy used when reading a loaded document, where the object
+  /// numbers from the file still hold.
   static PdfDataType? preserve(PdfRefToken ref) => PdfIndirect(ref.obj, ref.gen);
 
-  /// Delega a decisão a [remapper], que traduz a referência de origem para a
-  /// referência correspondente no documento de destino.
+  /// Delegates the decision to [remapper], which translates the source
+  /// reference into the matching reference in the target document.
   ///
-  /// É a política de quem copia objetos entre documentos — a mesclagem, por
-  /// exemplo —, onde os números precisam ser renumerados. O remapeador pode
-  /// devolver `null` para descartar uma referência quebrada.
+  /// This is the policy for whoever copies objects between documents —
+  /// merging, for instance — where the numbers have to be renumbered. The
+  /// remapper can return `null` to drop a broken reference.
   static PdfReferenceResolver remap(PdfReferenceResolver remapper) => remapper;
 }
 
-/// O que fazer com um item de array que a conversão descartou.
+/// What to do with an array item that the conversion dropped.
 enum PdfArrayGapPolicy {
-  /// Remove o item. Usado onde a posição não importa (`/Annots`, `/Kids`).
+  /// Drops the item. Used where position does not matter (`/Annots`, `/Kids`).
   drop,
 
-  /// Substitui por `null` do PDF, preservando a posição dos demais itens.
+  /// Replaces it with the PDF `null`, keeping the position of other items.
   keepNull,
 }
 
-/// Converte o modelo tokenizado do parser (`PdfDictToken`, `PdfArrayToken`,
-/// `PdfNameToken`, `PdfStringToken`, `PdfRefToken`, números, booleanos e
-/// `null`) para o modelo de escrita (`PdfDataType`).
+/// Converts the parser's tokenized model (`PdfDictToken`, `PdfArrayToken`,
+/// `PdfNameToken`, `PdfStringToken`, `PdfRefToken`, numbers, booleans and
+/// `null`) into the writing model (`PdfDataType`).
 ///
-/// Este é o núcleo único dessa conversão. Quem precisa de uma regra diferente
-/// para referências injeta uma [PdfReferenceResolver] em vez de escrever outro
-/// conversor: a leitura de um documento carregado usa
-/// [PdfReferencePolicy.preserve] e a importação entre documentos usa
-/// [PdfReferencePolicy.remap].
+/// This is the single core of that conversion. Whoever needs a different rule
+/// for references injects a [PdfReferenceResolver] instead of writing another
+/// converter: reading a loaded document uses [PdfReferencePolicy.preserve]
+/// and importing between documents uses [PdfReferencePolicy.remap].
 ///
-/// Valores que o parser não sabe representar viram `null`, e não uma exceção.
+/// Values the parser cannot represent become `null`, not an exception.
 class PdfObjectConverter {
-  /// Cria um conversor com a política de referência e a política de lacunas
-  /// desejadas.
+  /// Creates a converter with the wanted reference and array-gap policies.
   const PdfObjectConverter({
     this.referencePolicy = PdfReferencePolicy.preserve,
     this.arrayGapPolicy = PdfArrayGapPolicy.drop,
   });
 
-  /// Conversor que preserva os números de objeto da origem.
+  /// Converter that preserves the source object numbers.
   static const PdfObjectConverter preserving = PdfObjectConverter();
 
-  /// Como uma referência indireta é traduzida.
+  /// How an indirect reference is translated.
   final PdfReferenceResolver referencePolicy;
 
-  /// Como um item descartado de array é tratado.
+  /// How a dropped array item is handled.
   final PdfArrayGapPolicy arrayGapPolicy;
 
-  /// Devolve uma cópia deste conversor com outra política de referência.
+  /// Returns a copy of this converter with another reference policy.
   PdfObjectConverter withReferencePolicy(PdfReferenceResolver policy) =>
       PdfObjectConverter(
         referencePolicy: policy,
         arrayGapPolicy: arrayGapPolicy,
       );
 
-  /// Converte um valor qualquer do modelo tokenizado.
+  /// Converts any value from the tokenized model.
   ///
-  /// `null` do PDF vira [PdfNull]; só um tipo desconhecido devolve `null` do
-  /// Dart.
+  /// The PDF `null` becomes [PdfNull]; only an unknown type returns the Dart
+  /// `null`.
   PdfDataType? convert(dynamic value) {
     if (value == null) return const PdfNull();
     if (value is bool) return PdfBool(value);
@@ -97,9 +95,9 @@ class PdfObjectConverter {
     return null;
   }
 
-  /// Converte um dicionário direto, ignorando as chaves em [ignoreKeys].
+  /// Converts a direct dictionary, ignoring the keys in [ignoreKeys].
   ///
-  /// Chaves cujo valor sumiu na conversão não entram no resultado.
+  /// Keys whose value vanished in the conversion do not enter the result.
   PdfDict<PdfDataType> convertDict(
     PdfDictToken dict, {
     Set<String> ignoreKeys = const <String>{},
@@ -113,9 +111,9 @@ class PdfObjectConverter {
     return PdfDict.values(values);
   }
 
-  /// Converte um array direto.
+  /// Converts a direct array.
   ///
-  /// [gapPolicy] sobrescreve [arrayGapPolicy] só nesta chamada.
+  /// [gapPolicy] overrides [arrayGapPolicy] for this call only.
   PdfArray convertArray(
     PdfArrayToken array, {
     PdfArrayGapPolicy? gapPolicy,
@@ -133,7 +131,7 @@ class PdfObjectConverter {
     return PdfArray(values);
   }
 
-  /// Mescla as chaves de [source] em [target], ignorando [ignoreKeys].
+  /// Merges the keys of [source] into [target], ignoring [ignoreKeys].
   void mergeDictInto(
     PdfDict<PdfDataType> target,
     PdfDictToken source, {

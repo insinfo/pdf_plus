@@ -6,22 +6,22 @@ import '../obj/page.dart';
 import 'pdf_box.dart';
 import 'pdf_page_content_editor.dart';
 
-/// Numeração sequencial estilo Bates, aplicada a um intervalo de páginas.
+/// Sequential Bates-style numbering applied to a range of pages.
 ///
-/// O número Bates é o carimbo de identificação usado em processos e
-/// documentação probatória: um prefixo fixo, um contador com quantidade de
-/// dígitos constante e, opcionalmente, um sufixo — `PROC-000042`. Cada página
-/// recebe o número seguinte, sempre na mesma posição.
+/// The Bates number is the identification stamp used in legal proceedings and
+/// evidentiary documentation: a fixed prefix, a counter with a constant digit
+/// count and, optionally, a suffix — `PROC-000042`. Each page gets the next
+/// number, always in the same position.
 ///
 /// ```dart
 /// const bates = PdfBatesNumbering(prefix: 'PROC-', digits: 6);
 /// bates.applyToDocument(document);
 /// ```
 ///
-/// O carimbo entra como sobreposição isolada por um [PdfPageContentEditor],
-/// de modo que o conteúdo original das páginas continua intacto.
+/// The stamp goes in as an overlay isolated by a [PdfPageContentEditor], so
+/// the original page content stays intact.
 class PdfBatesNumbering {
-  /// Configura a numeração.
+  /// Configures the numbering.
   const PdfBatesNumbering({
     this.prefix = '',
     this.suffix = '',
@@ -35,61 +35,60 @@ class PdfBatesNumbering {
     this.marginX = 24,
     this.marginY = 24,
     this.reference = PdfBoxType.crop,
-  })  : assert(digits >= 0, 'A quantidade de dígitos não pode ser negativa.'),
-        assert(step != 0, 'O passo precisa ser diferente de zero.');
+  })  : assert(digits >= 0, 'The digit count cannot be negative.'),
+        assert(step != 0, 'The step must be non-zero.');
 
-  /// Texto fixo antes do número.
+  /// Fixed text before the number.
   final String prefix;
 
-  /// Texto fixo depois do número.
+  /// Fixed text after the number.
   final String suffix;
 
-  /// Número da primeira página numerada.
+  /// Number of the first numbered page.
   final int start;
 
-  /// Quanto o contador avança de uma página para a seguinte.
+  /// How much the counter advances from one page to the next.
   final int step;
 
-  /// Quantidade mínima de dígitos, completada com zeros à esquerda.
+  /// Minimum digit count, padded with leading zeros.
   final int digits;
 
-  /// A fonte; quando nula, uma Helvetica compartilhada pelo documento.
+  /// The font; when null, a Helvetica shared by the document.
   final PdfFont? font;
 
-  /// Corpo da fonte, em pontos de exibição.
+  /// Font size, in display points.
   final double fontSize;
 
-  /// Cor do texto.
+  /// Text color.
   final PdfColor color;
 
-  /// Posição do carimbo na área visível.
+  /// Position of the stamp within the visible area.
   final PdfStampAnchor anchor;
 
-  /// Distância horizontal até a borda.
+  /// Horizontal distance to the edge.
   final double marginX;
 
-  /// Distância vertical até a borda.
+  /// Vertical distance to the edge.
   final double marginY;
 
-  /// Caixa que define a área visível usada para posicionar o carimbo.
+  /// Box that defines the visible area used to position the stamp.
   final PdfBoxType reference;
 
-  /// O texto carimbado para um dado [number].
+  /// The text stamped for a given [number].
   String format(int number) {
     final digitsOnly = number.abs().toString().padLeft(digits, '0');
     final sign = number < 0 ? '-' : '';
     return '$prefix$sign$digitsOnly$suffix';
   }
 
-  /// Numera as páginas de [document] no intervalo `[from, to)`, base zero.
+  /// Numbers the pages of [document] in the range `[from, to)`, zero based.
   ///
-  /// `to` nulo significa até a última página. Devolve a quantidade de páginas
-  /// carimbadas.
+  /// A null `to` means up to the last page. Returns the number of pages
+  /// stamped.
   ///
-  /// A lista de páginas é a de [PdfPageContentEditor.distinctPages]: um
-  /// documento carregado registra cada página duas vezes em
-  /// `pdfPageList.pages`, e numerar sobre a lista crua carimbaria duas vezes a
-  /// mesma página.
+  /// The page list is the one from [PdfPageContentEditor.distinctPages]: a
+  /// loaded document registers each page twice in `pdfPageList.pages`, and
+  /// numbering over the raw list would stamp the same page twice.
   int applyToDocument(
     PdfDocument document, {
     int from = 0,
@@ -102,7 +101,7 @@ class PdfBatesNumbering {
     return applyToPages(pages.sublist(first, last));
   }
 
-  /// Numera exatamente as páginas informadas, na ordem recebida.
+  /// Numbers exactly the given pages, in the order received.
   int applyToPages(Iterable<PdfPage> pages) {
     var number = start;
     var stamped = 0;

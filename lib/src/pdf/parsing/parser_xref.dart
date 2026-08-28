@@ -18,7 +18,8 @@ class PdfParserXref {
   static int findStartXref(Uint8List bytes) {
     const token = <int>[0x73, 0x74, 0x61, 0x72, 0x74, 0x78, 0x72, 0x65, 0x66];
 
-    // Procura do fim para o começo, limitando a janela para robustez/perf.
+    // Searches backwards from the end, limiting the window for
+    // robustness/perf.
     final int windowStart =
         bytes.length > 64 * 1024 ? bytes.length - 64 * 1024 : 0;
     var searchEnd = bytes.length;
@@ -40,7 +41,7 @@ class PdfParserXref {
           return parsed.value;
         }
       } catch (_) {
-        // Continua procurando ocorrência anterior.
+        // Keep looking for an earlier occurrence.
       }
 
       searchEnd = pos;
@@ -74,7 +75,7 @@ class PdfParserXref {
           return parsed.value;
         }
       } catch (_) {
-        // Continua procurando ocorrência anterior.
+        // Keep looking for an earlier occurrence.
       }
 
       searchEnd = pos;
@@ -89,7 +90,7 @@ class PdfParserXref {
       return startXref;
     }
 
-    // Fallback: procurar a última ocorrência de 'xref'
+    // Fallback: look for the last occurrence of 'xref'
     const xrefToken = <int>[0x78, 0x72, 0x65, 0x66]; // xref
     final windowStart =
         bytes.length > 1024 * 1024 ? bytes.length - 1024 * 1024 : 0;
@@ -166,9 +167,9 @@ class PdfParserXref {
   }
 
   static TrailerInfo _readTrailerInfo(Uint8List bytes, int startXref) {
-    // 1) Se startXref aponta para xref table, buscar trailer após a tabela
-    // 2) Se startXref aponta para xref stream, parsear dicionário do objeto
-    // 3) Caso falhe, buscar último 'trailer' no arquivo
+    // 1) If startXref points to an xref table, look for the trailer after it
+    // 2) If startXref points to an xref stream, parse the object dictionary
+    // 3) If that fails, look for the last 'trailer' in the file
 
     if (startXref > 0 && startXref < bytes.length) {
       final infoFromXref = _tryReadTrailerNearOffset(bytes, startXref);
@@ -219,7 +220,7 @@ class PdfParserXref {
     // xref table?
     if (PdfParserTokens.matchToken(
         bytes, i, const <int>[0x78, 0x72, 0x65, 0x66])) {
-      // procurar 'trailer' depois de xref
+      // look for 'trailer' after xref
       final trailerInfo = _scanForTrailerDict(bytes, i + 4, bytes.length);
       if (trailerInfo.size != null || trailerInfo.prev != null) {
         return trailerInfo;
@@ -278,7 +279,7 @@ class PdfParserXref {
   }
 
   static TrailerInfo _tryReadXrefStreamDict(Uint8List bytes, int offset) {
-    // Verifica padrão: "<obj> <gen> obj" seguido de "<<" com /Type /XRef
+    // Checks the pattern: "<obj> <gen> obj" followed by "<<" with /Type /XRef
     final header = _tryReadIndirectObjectHeader(bytes, offset, bytes.length);
     if (header == null) {
       return TrailerInfo();
@@ -707,7 +708,7 @@ class PdfParserXref {
           );
         }
 
-        // consumir fim de linha
+        // consume the end of line
         while (i < bytes.length && bytes[i] != 0x0A && bytes[i] != 0x0D) {
           i++;
         }
@@ -903,8 +904,8 @@ class PdfParserXref {
   static const _bitsPerComponent = '/BitsPerComponent';
   static const _columns = '/Columns';
 
-  /// Lê `/DecodeParms`, aceitando tanto o dicionário direto quanto o array com
-  /// um dicionário por filtro.
+  /// Reads `/DecodeParms`, accepting both the direct dictionary and the array
+  /// with one dictionary per filter.
   static PdfPredictorParams readPredictorParams(dynamic value) {
     dynamic parms = value;
     if (parms is PdfArrayToken) {
@@ -942,7 +943,7 @@ class PdfParserXref {
     if (PdfParserScan.isValidObjAtOffset(bytes, objId, gen, offset))
       return offset;
 
-    // Heurística: procurar o header do objeto num raio de 1KB
+    // Heuristic: look for the object header within a 1KB radius
     const radius = 1024;
     final start = offset - radius < 0 ? 0 : offset - radius;
     final end = offset + radius > bytes.length ? bytes.length : offset + radius;
@@ -1000,7 +1001,7 @@ class PdfParserXref {
         if (j < bytes.length &&
             PdfParserTokens.matchToken(
                 bytes, j, const <int>[0x6F, 0x62, 0x6A])) {
-          // padrão: <prevInt> <lastInt> obj
+          // pattern: <prevInt> <lastInt> obj
           if (prevInt != null && prevIntPos != null) {
             final objId = prevInt;
             final gen = lastInt;

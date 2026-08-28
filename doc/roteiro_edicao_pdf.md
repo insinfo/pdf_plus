@@ -756,14 +756,15 @@ entre os objetos lazy do parser e os `PdfObject` já usados pelo writer.
 [ ] F0  Baseline, fixtures e invariantes, incluindo streams binários no reparo
 [x] F1  PdfObjectStore + índice por obj/gen + conversor único
 [ ] F2  PdfEditSession + mutation context + policy de segurança
-[ ] F3  Coleção de páginas e reparo de dependências
-[~] F4  Boxes/coordenadas + resource manager + overlay/underlay/carimbos
-[ ] F5  Coleção de anotações carregadas + appearances + flatten
-[ ] F6  PdfFormEditor único + valores + appearances + flatten real
-[ ] F7  Metadata/XMP + navegação + anexos + sanitização estrutural
-[ ] F8  Parser de content streams + extração posicional + edição controlada
+[x] F3  Coleção de páginas e reparo de dependências
+[~] F4  Boxes/coordenadas + overlay/underlay/carimbos (falta o resource manager)
+[~] F5  Coleção de anotações carregadas + flatten (sem síntese de aparência)
+[~] F6  Flatten real desenhando o /AP (falta o editor de valores)
+[~] F7  Metadata/XMP + navegação (anexos ainda não)
+[~] F8  Lexer/parser/writer de content stream + extração posicional
+        (a edição de texto é a metade cara e continua fora)
 [ ] F9  Redação segura com full rewrite obrigatório
-[ ] F10 Writer incremental/rewrite/auto + GC + idempotência
+[~] F10 Full rewrite + GC (falta o writer unificado com modo auto e object streams)
 [ ] F11 Corpus, validação externa, benchmarks dos dois modos de stream, docs e exemplos
 ```
 
@@ -849,3 +850,98 @@ itens que este roteiro listava como pendências de infraestrutura:
 
 Continua valendo a regra de arquitetura da §3: parser lê, store resolve,
 editores mutam, writer salva.
+
+---
+
+## 13. O que é barato e o que é caro, depois da fundação
+
+Levantamento feito comparando o roteiro com o que as bibliotecas de referência
+realmente entregam em aberto.
+
+### O mercado, resumido
+
+| Projeto | O que faz de fato |
+|---|---|
+| **Stirling-PDF** | Orquestrador, não implementação: PDFBox para o estrutural, LibreOffice para conversão, Tesseract para OCR, qpdf para otimização, PDF.js e pdf-lib no front. Na redação delega ao **PDFium** via `jpdfium`, e cai para "desenhar a caixa" quando o motor nativo não dá conta — o que este roteiro proíbe chamar de redação. Na edição de texto converte o PDF para um modelo JSON, edita e **regera** o documento: barato e legítimo, mas reescreve tudo que passa por lá |
+| **MuPDF** | A única aberta que faz quase o roteiro inteiro. Redação de verdade (`pdf_redact_page`, com política para imagem) e a arquitetura da fase 8: cadeia de filtros sobre os operadores (`pdf_processor`, `pdf_filter_options`, `pdf_new_sanitize_filter`, `pdf_op_buffer`), inclusive `pdf_filter_xobject_instance`, que resolve o problema de clonar XObject compartilhado antes de alterar um uso só. Licença AGPL |
+| **PDFBox** | Tem as peças (`PDFStreamParser`, `ContentStreamWriter`), não a funcionalidade: não há classe de redação nem editor de conteúdo no repositório |
+| **iText (aberto)** | Só `PdfRedactAnnotation`, que é o marcador. O motor é o `pdfSweep`/`PdfCleanUpTool`, add-on comercial. Para leitura há `PdfCanvasProcessor`, orientado a evento: reserializar é por conta de quem usa |
+| **pdf-lib** | Superfície de criação e preenchimento de formulário, como esta biblioteca já tinha |
+
+Fora das referências locais, e como conhecimento geral: Apryse (ex-PDFTron), Foxit
+e Adobe fazem edição de conteúdo e redação certificada, e são comerciais.
+PyMuPDF herda a redação do MuPDF por binding. qpdf e pikepdf são estruturais por
+projeto.
+
+### O corte
+
+| Fase | Custo | Por quê |
+|---|---|---|
+| **F10 — full rewrite e GC** | **barato** | O importador da mesclagem já copia um grafo inteiro renumerando; regravar é mesclar um documento só em um destino novo. Cai fora o que não é alcançável: revisões superseded e objetos órfãos |
+| **F3 — coleção de páginas** | **barato** | Reordenar e remover é lista; o reparo de destinos, outlines, page labels e `/P` reusa a lógica que a mesclagem já tem. `duplicate` reusa o importador |
+| **F6 — flatten de formulário** | **barato** | Desenhar o `/AP` que já existe é o caminho do PDFBox. O caro seria **sintetizar** aparência, e isso não é preciso para achatar |
+| **F5 — anotações carregadas** | **barato** | Visão tipada sobre dicionários, com o store resolvendo o que está nos bytes originais |
+| **F8 — metade de leitura** | **médio** | Tokenizar e reserializar content stream é bem definido e testável. É a parte do MuPDF que não depende de motor de fontes |
+| **F7 — metadados e navegação** | **barato** | Trabalho de dicionário |
+| **F2 — sessão de edição** | **médio** | Encanamento, sem risco de semântica PDF; vale quando houver mutação suficiente para justificar |
+| **F4 — substituir texto** | **caro** | Fonte subsetada, `TJ` com kerning, Type0, ligadura, bidi. Em aberto só o MuPDF; o Stirling contorna regenerando o documento inteiro |
+| **F9 — redação segura** | **caro** | Depende de F8 completo e de full rewrite. Sem os dois, é desenhar retângulo — ocultação, não remoção |
+
+A ordem que este corte sugere: F10 e F3 primeiro, porque destravam saneamento e
+manipulação de páginas com o que já existe; F5/F6 e a leitura de F8 em seguida;
+F4 e F9 só com decisão explícita de custo, sabendo que o par de comparação é SDK
+comercial.
+
+---
+
+## 14. Segunda rodada: o que a edição básica entregou
+
+### Entregue
+
+| Fase | Módulo | O que faz, de fato |
+|---|---|---|
+| **F3** | `PdfPageCollectionEditor` | `insert`, `remove`, `removeRange`, `move`, `reorder`, `duplicate`, `insertImported`. O reparo cobre destinos explícitos e por número de página, `/Names /Dests` com `/Kids` e `/Limits`, o `/Dests` do PDF 1.1, `/Outlines` (o nó removido cede o lugar aos filhos, e `/First /Last /Prev /Next /Count` são refeitos), links das páginas sobreviventes, `/P` das anotações, `/AcroForm /Fields`, `/OpenAction` e `/PageLabels`. `PdfBrokenReferencePolicy` escolhe entre `remove`, `retarget` e `throwError`, e o `throwError` confere antes de mexer em qualquer coisa |
+| **F5/F6** | `PdfAnnotationCollection`, `PdfFormFlattener` | Visão tipada sobre as anotações de página carregada, com edição e remoção; achatamento desenhando o `/AP /N` que já existe, com o estado escolhido por `/AS`, geometria `/BBox`×`/Matrix`→`/Rect` no modelo do PDFBox. Campo sem `/AP` é mantido e reportado — nunca some sem ser desenhado |
+| **F7** | `PdfDocumentProperties` | `/Info`, XMP, `/PageMode`, `/PageLayout`, `/Lang`, `/OpenAction` e preferências do visualizador, em documento novo e carregado |
+| **F8 (leitura)** | `lib/src/pdf/content/` | Lexer, parser e writer de content stream, com imagem inline `BI…ID…EI` por três estratégias, e `PdfTextExtractor` com posição, matriz corrente e recursão em Form XObject |
+| **F10** | `PdfDocumentRewriter` | Regravação completa: sobrevive só o que o grafo alcança |
+
+### Números
+
+- Suíte: **1219 testes**, verdes.
+- Regravação: `12 assinaturas.pdf` 1,55 MB → 226 KB (179 → 108 objetos);
+  `10 assinaturas.pdf` 2,59 MB → 567 KB (443 → 258); conteúdo de página
+  byte a byte idêntico nos dois.
+- Prova de coleta de lixo: `3 ass.pdf` tem 3 campos de assinatura e **4**
+  ocorrências de `/ByteRange`; com `keepInvalidSignatures` sobram exatamente 3 —
+  some a revisão superseded, que não é alcançável.
+- Round-trip de content stream: 183 páginas do corpus, zero divergências por
+  reparse. Byte a byte só quando o stream de origem já é canônico — o writer
+  normaliza espaçamento, e o teste afirma isso explicitamente em vez de
+  prometer o que não entrega.
+- Achatamento: os 63 campos de `sample3.pdf`, sem aviso, `/AcroForm` removido e
+  nenhum widget restante nas 366 páginas.
+
+### Bugs que a rodada desenterrou
+
+| Bug | Efeito |
+|---|---|
+| Detecção de DER olhava só o primeiro byte | assinatura ECDSA **RAW** cujo `r` começa em `0x30` — uma em 256 — era decodificada como DER, falhava, e uma assinatura válida verificava como `false`. Medido: 3 casos em 600 assinaturas |
+| `PdfCatalog.pageMode` era `final` | `prepare()` reescreve `/PageMode` a cada save, então definir o modo de abertura era descartado |
+| `PdfNames._dests` era privado | não havia como remover ou reapontar um destino nomeado cuja página saiu |
+
+### O que continua fora, e por quê
+
+- **Substituir texto (F4 do roteiro original)** e **redação segura (F9)**. O
+  levantamento da §13 se confirma: em aberto só o MuPDF entrega os dois, sob
+  AGPL; o resto é SDK comercial. Uma versão parcial que às vezes corrompe o
+  content stream seria pior que a ausência.
+- **Síntese de aparência** de campo de formulário: `/NeedAppearances true` com
+  `/V` e sem `/AP` continua avisando, não desenhando.
+- **F2 (sessão de edição)**: cada módulo ainda materializa objeto por conta
+  própria. `PdfLoadedObjectMutator` e o re-registro que a coleção de páginas faz
+  são os candidatos naturais a virar o `PdfMutationContext`.
+- **Writer unificado**: modo `auto`, object streams na saída e `prepare()`
+  idempotente continuam pendentes — é o que falta para fechar F10.
+- **Anexos** (`/Names /EmbeddedFiles`) para leitura e escrita em documento
+  carregado.

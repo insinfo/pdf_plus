@@ -3,9 +3,7 @@ import 'dart:typed_data';
 
 import '../format/array.dart';
 import '../format/dict.dart';
-import '../format/name.dart';
 import '../format/null_value.dart';
-import '../format/num.dart';
 import '../obj/page_label.dart';
 import '../parsing/parser_objects.dart';
 import '../parsing/parser_tokens.dart';
@@ -14,8 +12,8 @@ import '../pdf_names.dart';
 import 'pdf_import_context.dart';
 import 'pdf_object_importer.dart';
 
-/// Mescla o que vive no catálogo do documento: camadas, numeração de páginas,
-/// metadados e anexos.
+/// Merges what lives in the document catalog: layers, page numbering,
+/// metadata and attachments.
 class PdfCatalogMerger {
   PdfCatalogMerger(this.context, this.objects);
 
@@ -30,26 +28,44 @@ class PdfCatalogMerger {
     if (context.options.importPageLabels) _mergePageLabels(root);
     if (context.options.importAttachments) _mergeAttachments(root);
     if (context.options.dropStructureTree) {
-      // Nada a fazer: `/StructParents` já foi removido das páginas e a árvore
-      // não é copiada. O aviso vale uma vez por documento marcado.
+      // Nothing to do: `/StructParents` was already removed from the pages
+      // and the tree is not copied. The warning is worth one per tagged
+      // document.
       if (root.values.containsKey(PdfNameTokens.structTreeRoot)) {
         context.warn(
           'árvore de marcação estrutural (tagged PDF) descartada',
         );
       }
+    } else if (isFirstSource) {
+      // The pages kept `/StructParents`; without the root of the tree those
+      // keys would point nowhere.
+      _copyOnce(root, PdfNameTokens.structTreeRoot);
+      _copyOnce(root, PdfNameTokens.markInfo);
+    } else if (root.values.containsKey(PdfNameTokens.structTreeRoot)) {
+      context.warn(
+        'árvore de marcação estrutural descartada: só a da primeira origem é '
+        'preservada',
+      );
     }
 
     if (isFirstSource) {
       _copyOnce(root, PdfNameTokens.lang);
+      if (context.options.importXmpMetadata) {
+        _copyOnce(root, PdfNameTokens.metadata);
+      }
       if (context.options.copyDocumentInfoFromFirst) _copyInfo();
     }
   }
 
-  /// Chamado uma vez, no fim da mesclagem.
+  /// Hook called once, at the end of the merge.
+  ///
+  /// Empty today: every catalog structure is resolved as each source is
+  /// imported. It stays as the place for anything that ever needs all the
+  /// sources at once.
   void finish() {}
 
   // ---------------------------------------------------------------------------
-  // Camadas (grupos de conteúdo opcional)
+  // Layers (optional content groups)
   // ---------------------------------------------------------------------------
 
   void _mergeOptionalContent(PdfDictToken root) {
@@ -90,7 +106,8 @@ class PdfCatalogMerger {
       );
     }
 
-    // O nome da configuração é do destino; herdar o da origem confundiria.
+    // The configuration name belongs to the destination; inheriting the
+    // source one would be confusing.
     defaultConfig.values.remove(PdfNameTokens.name);
   }
 
@@ -112,7 +129,7 @@ class PdfCatalogMerger {
   }
 
   // ---------------------------------------------------------------------------
-  // Numeração de páginas
+  // Page numbering
   // ---------------------------------------------------------------------------
 
   void _mergePageLabels(PdfDictToken root) {
@@ -127,7 +144,8 @@ class PdfCatalogMerger {
     final target = context.destination.pageLabels;
     final first = _firstImportedSourcePage();
 
-    // As faixas vêm ordenadas por índice de página inicial.
+    // The ranges are indexed by their starting page; the source order is not
+    // trusted, they are sorted below.
     final ranges = <int, PdfDictToken>{};
     for (var i = 0; i + 1 < nums.values.length; i += 2) {
       final index = PdfParserObjects.asInt(nums.values[i]);
@@ -139,10 +157,10 @@ class PdfCatalogMerger {
 
     final starts = ranges.keys.toList()..sort();
 
-    // A faixa que já estava valendo na primeira página importada é recortada:
-    // ela passa a começar nessa página, com a numeração avançada pelo tanto que
-    // ficou de fora. Sem isso, importar um intervalo do meio do documento
-    // deixaria as primeiras páginas sem rótulo.
+    // The range already in effect on the first imported page is clipped: it
+    // now starts on that page, with the numbering advanced by however much was
+    // left out. Without this, importing a range from the middle of the document
+    // would leave the first pages without a label.
     int? covering;
     for (final start in starts) {
       if (start <= first) {
@@ -175,10 +193,10 @@ class PdfCatalogMerger {
     return context.importedSourcePages.reduce((a, b) => a < b ? a : b);
   }
 
-  /// Converte uma entrada de `/Nums` para o modelo de rótulo.
+  /// Converts a `/Nums` entry into the page label model.
   ///
-  /// [skipped] é quantas páginas da faixa ficaram fora da importação: a
-  /// numeração começa adiantada por esse tanto.
+  /// [skipped] is how many pages of the range were left out of the import: the
+  /// numbering starts that much further ahead.
   PdfPageLabel? _pageLabelFrom(PdfDictToken entry, {int skipped = 0}) {
     final style = PdfParserObjects.asName(entry.values[PdfNameTokens.s]);
     final prefixToken = context.source.resolve(entry.values[PdfNameTokens.p]);
@@ -205,7 +223,7 @@ class PdfCatalogMerger {
   }
 
   // ---------------------------------------------------------------------------
-  // Anexos e metadados
+  // Attachments and metadata
   // ---------------------------------------------------------------------------
 
   void _mergeAttachments(PdfDictToken root) {
@@ -236,8 +254,9 @@ class PdfCatalogMerger {
   void _copyOnce(PdfDictToken root, String key) {
     final catalogParams = context.destination.catalog.params;
     if (catalogParams.containsKey(key)) return;
-    // A chave ausente na origem não vira `null` no destino: `convert(null)`
-    // devolve `PdfNull`, e gravar isso só acrescentaria ruído ao catálogo.
+    // A key missing in the source does not become `null` in the destination:
+    // `convert(null)` returns `PdfNull`, and writing that would only add noise
+    // to the catalog.
     if (!root.values.containsKey(key)) return;
     final converted = objects.convert(root.values[key]);
     if (converted == null || converted is PdfNull) return;
@@ -276,8 +295,4 @@ class PdfCatalogMerger {
   }
 }
 
-/// Mantido para leitura: as chaves numéricas de `/PageLabels` usam [PdfNum].
-typedef PdfPageLabelIndex = PdfNum;
 
-/// Mantido para leitura: nomes de estilo de numeração.
-typedef PdfPageLabelStyle = PdfName;

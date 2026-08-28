@@ -13,11 +13,12 @@ import '../pdf_names.dart';
 import 'pdf_import_context.dart';
 import 'pdf_object_importer.dart';
 
-/// Importa a árvore de bookmarks (`/Outlines`) de uma origem.
+/// Imports the bookmark tree (`/Outlines`) of a source.
 ///
-/// Os nós são **recriados** pelo modelo [PdfOutline] em vez de clonados: o
-/// modelo é dono de `/First`, `/Last`, `/Prev`, `/Next` e `/Count` e reescreve
-/// essas chaves ao salvar, então uma árvore enxertada à mão seria sobrescrita.
+/// The nodes are **recreated** through the [PdfOutline] model instead of being
+/// cloned: the model owns `/First`, `/Last`, `/Prev`, `/Next` and `/Count` and
+/// rewrites those keys on save, so a tree grafted in by hand would be
+/// overwritten.
 class PdfOutlineImporter {
   PdfOutlineImporter(this.context, this.objects);
 
@@ -64,7 +65,7 @@ class PdfOutlineImporter {
     for (var guard = 0; guard < 100000; guard++) {
       final ref = PdfParserObjects.asRef(current);
       if (ref != null && !visited.add(ref.obj)) {
-        // Cadeia `/Next` circular: um arquivo malformado não pode travar.
+        // Circular `/Next` chain: a malformed file must not hang.
         break;
       }
 
@@ -107,7 +108,8 @@ class PdfOutlineImporter {
     return outline;
   }
 
-  /// Resolve o destino de um bookmark, seja `/Dest` ou `/A << /S /GoTo >>`.
+  /// Resolves the destination of a bookmark, be it `/Dest` or
+  /// `/A << /S /GoTo >>`.
   _OutlineDestination? _resolveDestination(PdfDictToken node) {
     try {
       dynamic dest = node.values[PdfNameTokens.dest];
@@ -124,8 +126,8 @@ class PdfOutlineImporter {
       if (dest == null) return null;
       return _explicitDestination(dest);
     } catch (error) {
-      // Ler a árvore de nomes de um arquivo malformado pode falhar de várias
-      // formas; nenhuma delas justifica derrubar a mesclagem.
+      // Reading the name tree of a malformed file can fail in many ways;
+      // none of them justifies bringing the merge down.
       context.warn('destino de bookmark não pôde ser lido: $error');
       return null;
     }

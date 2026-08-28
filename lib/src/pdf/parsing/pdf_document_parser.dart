@@ -24,10 +24,10 @@ import 'parser_scan.dart';
 import 'parser_tokens.dart';
 import 'package:pdf_plus/src/pdf/pdf_names.dart';
 
-/// Parser concreto para leitura de PDF existente.
+/// Concrete parser for reading an existing PDF.
 ///
-/// Foco: robustez com PDFs do mundo real, incluindo arquivos com problemas
-/// estruturais comuns (ex.: saídas antigas do iText).
+/// Focus: robustness with real-world PDFs, including files with common
+/// structural problems (e.g. old iText output).
 class PdfDocumentParser extends PdfDocumentParserBase {
   PdfDocumentParser(
     Uint8List bytes, {
@@ -183,10 +183,10 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     );
   }
 
-  /// Extrai imagens do PDF com suporte a faixa de páginas.
+  /// Extracts images from the PDF with page range support.
   ///
-  /// Se [includeUnusedXObjects] for true, considera todos os XObjects da
-  /// página, sem checar se foram usados no content stream.
+  /// If [includeUnusedXObjects] is true, every XObject of the page is
+  /// considered, without checking whether it was used in the content stream.
   List<PdfImageInfo> extractImages({
     int? fromPage,
     int? toPage,
@@ -390,28 +390,28 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     }
   }
 
-  /// Lê os bytes brutos do stream de um objeto indireto.
-  /// Útil para extração de imagens (retorna o stream sem decodificar filtros).
+  /// Reads the raw stream bytes of an indirect object.
+  /// Useful for image extraction (returns the stream with filters undecoded).
   Uint8List? readStreamData(PdfIndirectRef ref) {
     final obj = _getObject(ref.obj);
     return obj?.streamData;
   }
 
   // ---------------------------------------------------------------------------
-  // Acesso público ao grafo de objetos.
+  // Public access to the object graph.
   //
-  // Necessário para quem precisa percorrer o documento inteiro — a mesclagem,
-  // por exemplo — e não apenas extrair um resumo.
+  // Needed by whoever has to walk the whole document — merging, for example —
+  // and not just extract a summary.
   // ---------------------------------------------------------------------------
 
-  /// Lê um objeto indireto pelo número, com os dados de stream quando houver.
+  /// Reads an indirect object by number, with the stream data when present.
   ///
-  /// Devolve `null` quando o objeto não existe ou não pôde ser lido.
+  /// Returns `null` when the object does not exist or could not be read.
   ParsedIndirectObject? getObject(int objId) => _getObject(objId);
 
-  /// Resolve [value] até um valor direto, seguindo referências indiretas.
+  /// Resolves [value] down to a direct value, following indirect references.
   ///
-  /// Cadeias de referência são seguidas até [maxDepth] níveis.
+  /// Reference chains are followed up to [maxDepth] levels.
   dynamic resolve(dynamic value, {int maxDepth = 32}) {
     var current = value;
     for (var depth = 0; depth < maxDepth; depth++) {
@@ -423,27 +423,27 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     return current;
   }
 
-  /// Números de objeto conhecidos pela tabela de referências cruzadas.
+  /// Object numbers known to the cross-reference table.
   List<int> get objectIds {
     _ensureXrefParsed();
     return _xrefEntries.keys.toList()..sort();
   }
 
-  /// Como o objeto está armazenado: direto no arquivo, dentro de um object
-  /// stream, ou livre. `null` quando a tabela não o conhece.
+  /// How the object is stored: directly in the file, inside an object stream,
+  /// or free. `null` when the table does not know about it.
   XrefType? storageOf(int objId) {
     _ensureXrefParsed();
     return _xrefEntries[objId]?.type;
   }
 
-  /// Informações do trailer (`/Root`, `/Info`, `/ID`, `/Size`).
+  /// Trailer information (`/Root`, `/Info`, `/ID`, `/Size`).
   TrailerInfo get trailer {
     _ensureXrefParsed();
     return _trailerInfo ??
         PdfParserXref.readTrailerInfoFromReader(reader, xrefOffset);
   }
 
-  /// Referência do catálogo (`/Root`), quando localizável.
+  /// Reference of the catalog (`/Root`), when it can be located.
   PdfRefToken? get rootRef {
     final rootObjId = trailer.rootObj;
     if (rootObjId == null) return null;
@@ -451,7 +451,7 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     return PdfRefToken(rootObjId, entry?.gen ?? 0);
   }
 
-  /// Dicionário do catálogo do documento.
+  /// The document catalog dictionary.
   PdfDictToken? get rootDict {
     final rootObjId = trailer.rootObj;
     if (rootObjId == null) return null;
@@ -460,10 +460,10 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     return obj.value as PdfDictToken;
   }
 
-  /// Referências das páginas, em ordem do documento.
+  /// Page references, in document order.
   ///
-  /// O resultado é memorizado: percorrer a árvore `/Pages` de um documento
-  /// grande é caro e o arquivo não muda.
+  /// The result is memoized: walking the `/Pages` tree of a large document is
+  /// expensive and the file does not change.
   List<PdfRefToken> get pageRefs => _pageRefsCache ??= _collectAllPageRefs();
 
   List<PdfRefToken>? _pageRefsCache;
@@ -482,10 +482,10 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     return refs;
   }
 
-  /// Quantidade de páginas do documento.
+  /// Number of pages in the document.
   int get pageCount => pageRefs.length;
 
-  /// Dicionário de uma página pelo índice (base zero).
+  /// Dictionary of a page by index (zero-based).
   PdfDictToken? pageDictAt(int pageIndex) {
     final refs = pageRefs;
     if (pageIndex < 0 || pageIndex >= refs.length) return null;
@@ -494,19 +494,19 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     return obj.value as PdfDictToken;
   }
 
-  /// `/Resources` efetivo da página, já mesclado com o que ela herda dos nós
-  /// ancestrais da árvore `/Pages`.
+  /// Effective `/Resources` of the page, already merged with what it inherits
+  /// from the ancestor nodes of the `/Pages` tree.
   PdfDictToken? resolvePageResources(PdfDictToken pageDict) =>
       _resolvePageResources(pageDict);
 
-  /// `/MediaBox` efetivo da página, considerando herança.
+  /// Effective `/MediaBox` of the page, taking inheritance into account.
   List<double>? resolvePageMediaBox(PdfDictToken pageDict) =>
       _resolvePageMediaBox(pageDict);
 
-  /// Valor de um atributo herdável da página (`/Rotate`, `/CropBox`, …),
-  /// procurando na própria página e depois nos ancestrais.
+  /// Value of an inheritable page attribute (`/Rotate`, `/CropBox`, …),
+  /// looked up on the page itself and then on its ancestors.
   ///
-  /// Devolve o valor bruto (ainda pode ser uma referência indireta).
+  /// Returns the raw value (it may still be an indirect reference).
   dynamic inheritedPageAttribute(PdfDictToken pageDict, String key) {
     final direct = pageDict.values[key];
     if (direct != null) return direct;
@@ -526,10 +526,10 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     return null;
   }
 
-  /// Se o documento declara criptografia (`/Encrypt` no trailer).
+  /// Whether the document declares encryption (`/Encrypt` in the trailer).
   ///
-  /// A leitura de documentos criptografados não é suportada: os streams sairiam
-  /// embaralhados.
+  /// Reading encrypted documents is not supported: the streams would come out
+  /// scrambled.
   bool get isEncrypted {
     _ensureXrefParsed();
     final root = rootDict;
@@ -543,7 +543,7 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     }
   }
 
-  /// Extrai informações de campos de assinatura (/FT /Sig).
+  /// Extracts information about signature fields (/FT /Sig).
   List<PdfSignatureFieldInfo> extractSignatureFields() {
     final editContext = extractSignatureFieldEditContext();
     if (editContext.fields.isNotEmpty) {
@@ -591,10 +591,10 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     }
   }
 
-  /// Extrai informações completas para edição de campos de assinatura.
+  /// Extracts complete information for editing signature fields.
   ///
-  /// Retorna referências e dicionários para permitir operações como renomear
-  /// e remover campos usando update incremental.
+  /// Returns references and dictionaries so that operations such as renaming
+  /// and removing fields can be done with an incremental update.
   PdfSignatureFieldEditContext extractSignatureFieldEditContext() {
     try {
       _ensureXrefParsed();
@@ -1847,9 +1847,9 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     );
 
     if (pagesRef != null) {
-      // O construtor de `PdfPage` já registra a página em
-      // `pdfDocument.pdfPageList`. Acrescentar o resultado de novo duplicava
-      // cada página: um documento de duas páginas saía com
+      // The `PdfPage` constructor already registers the page in
+      // `pdfDocument.pdfPageList`. Appending the result again duplicated
+      // every page: a two-page document came out with
       // `/Kids [3 0 R 22 0 R 3 0 R 22 0 R] /Count 4`.
       _loadPages(pagesRef, pdfDocument);
     }
@@ -1989,9 +1989,9 @@ class PdfDocumentParser extends PdfDocumentParserBase {
       rotate: rotate,
     );
 
-    // `PdfPageFormat` só guarda largura e altura. Sem a caixa explícita, uma
-    // página cuja origem não é (0,0) seria regravada como `[0 0 w h]` e o
-    // conteúdo sairia deslocado ao salvar.
+    // `PdfPageFormat` only holds width and height. Without the explicit box,
+    // a page whose origin is not (0,0) would be rewritten as `[0 0 w h]` and
+    // the content would come out shifted on save.
     if (mediaBox != null &&
         mediaBox.length == 4 &&
         (mediaBox[0] != 0 || mediaBox[1] != 0)) {
@@ -2008,7 +2008,7 @@ class PdfDocumentParser extends PdfDocumentParserBase {
       },
     );
 
-    // Resolve /Annots se for referência indireta para permitir append
+    // Resolve /Annots when it is an indirect reference, to allow appending
     final annotsValue = dict.values[PdfNameTokens.annots];
     if (annotsValue is PdfRefToken) {
       final annotsObj = _getObject(annotsValue.obj);
