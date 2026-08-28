@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:pdf_plus/signing.dart';
 import 'package:pdf_plus/pdf.dart';
 import 'package:test/test.dart';
 

@@ -63,10 +63,10 @@ class PdfPageLabel {
         s = const PdfName(PdfNameTokens.r);
         break;
       case PdfPageLabelStyle.romanLower:
-        s = const PdfName(PdfNameTokens.r);
+        s = const PdfName(PdfNameTokens.rLower);
         break;
       case PdfPageLabelStyle.lettersUpper:
-        s = const PdfName(PdfNameTokens.a);
+        s = const PdfName(PdfNameTokens.aUpper);
         break;
       case PdfPageLabelStyle.lettersLower:
         s = const PdfName(PdfNameTokens.a);

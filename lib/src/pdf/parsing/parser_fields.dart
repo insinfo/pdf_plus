@@ -174,6 +174,12 @@ class PdfParserFields {
     return null;
   }
 
+  /// Prende [value] dentro do arquivo.
+  static int _clamp(int value, int length) {
+    if (value < 0) return 0;
+    return value > length ? length : value;
+  }
+
   static List<PdfSignatureFieldInfo> extractSignatureFieldsFromBytes(
     Uint8List bytes,
   ) {
@@ -182,13 +188,18 @@ class PdfParserFields {
 
     final out = <PdfSignatureFieldInfo>[];
     for (final range in ranges) {
-      final gapStart = range[0] + range[1];
-      final gapEnd = range[2];
+      // O /ByteRange pode não descrever este arquivo: é o caso de um documento
+      // mesclado, que reescreve os bytes que a assinatura cobria. A janela é
+      // limitada ao arquivo real para que a leitura ainda descreva o campo em
+      // vez de estourar.
+      final gapStart = _clamp(range[0] + range[1], bytes.length);
+      final gapEnd = _clamp(range[2], bytes.length);
       const windowSize = 524288;
       final windowStart = gapStart - windowSize >= 0 ? gapStart - windowSize : 0;
       final windowEnd = gapEnd + windowSize <= bytes.length
           ? gapEnd + windowSize
           : bytes.length;
+      if (windowEnd <= windowStart) continue;
       final window = bytes.sublist(windowStart, windowEnd);
 
       final fieldName = PdfParserMisc.scanPdfStringValue(window, const <int>[

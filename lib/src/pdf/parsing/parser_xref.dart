@@ -5,6 +5,7 @@ import 'package:archive/archive.dart';
 import '../io/pdf_random_access_reader.dart';
 import 'parser_misc.dart';
 import 'parser_objects.dart';
+import 'parser_predictor.dart';
 import 'parser_scan.dart';
 import 'parser_tokens.dart';
 
@@ -518,6 +519,7 @@ class PdfParserXref {
         );
       }
       data = Uint8List.fromList(ZLibDecoder().decodeBytes(stream));
+      data = PdfParserPredictor.apply(data, dict.predictor);
     }
 
     final w = dict.w;
@@ -749,6 +751,7 @@ class PdfParserXref {
         );
       }
       data = Uint8List.fromList(ZLibDecoder().decodeBytes(stream));
+      data = PdfParserPredictor.apply(data, dict.predictor);
     }
 
     final w = dict.w;
@@ -890,6 +893,34 @@ class PdfParserXref {
       filter: filter,
       w: w,
       index: index,
+      predictor: readPredictorParams(m[_decodeParms]),
+    );
+  }
+
+  static const _decodeParms = '/DecodeParms';
+  static const _predictor = '/Predictor';
+  static const _colors = '/Colors';
+  static const _bitsPerComponent = '/BitsPerComponent';
+  static const _columns = '/Columns';
+
+  /// Lê `/DecodeParms`, aceitando tanto o dicionário direto quanto o array com
+  /// um dicionário por filtro.
+  static PdfPredictorParams readPredictorParams(dynamic value) {
+    dynamic parms = value;
+    if (parms is PdfArrayToken) {
+      parms = parms.values.firstWhere(
+        (e) => e is PdfDictToken,
+        orElse: () => null,
+      );
+    }
+    if (parms is! PdfDictToken) return const PdfPredictorParams();
+
+    return PdfPredictorParams(
+      predictor: PdfParserObjects.asInt(parms.values[_predictor]) ?? 1,
+      colors: PdfParserObjects.asInt(parms.values[_colors]) ?? 1,
+      bitsPerComponent:
+          PdfParserObjects.asInt(parms.values[_bitsPerComponent]) ?? 8,
+      columns: PdfParserObjects.asInt(parms.values[_columns]) ?? 1,
     );
   }
 

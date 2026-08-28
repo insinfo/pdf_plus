@@ -72,6 +72,13 @@ class PdfPage extends PdfObject<PdfDict> with PdfGraphicStream {
   /// The page rotation.
   PdfPageRotation rotate;
 
+  /// Explicit `/MediaBox`, as `[llx, lly, urx, ury]`.
+  ///
+  /// [pageFormat] only carries a width and a height, so it cannot express a
+  /// box whose origin is not `(0, 0)`. Set this to preserve the original box
+  /// of an imported page; otherwise the box is derived from [pageFormat].
+  List<double>? mediaBoxOverride;
+
   /// Content streams for the page.
   final contents = <PdfObject>[];
 
@@ -108,8 +115,10 @@ class PdfPage extends PdfObject<PdfDict> with PdfGraphicStream {
     }
 
     // the /MediaBox for the page size
-    params[PdfNameTokens.mediaBox] =
-        PdfArray.fromNum(<double>[0, 0, pageFormat.width, pageFormat.height]);
+    final box = mediaBoxOverride;
+    params[PdfNameTokens.mediaBox] = box != null && box.length == 4
+        ? PdfArray.fromNum(box)
+        : PdfArray.fromNum(<double>[0, 0, pageFormat.width, pageFormat.height]);
 
     for (final content in contents) {
       if (!_contentGraphics[content]!.altered) {

@@ -2,6 +2,7 @@
 import 'dart:typed_data';
 
 import '../document.dart';
+import '../editing/pdf_coordinate_transformer.dart';
 import '../graphics.dart';
 import '../obj/page.dart';
 import '../point.dart';
@@ -52,9 +53,15 @@ class PdfSignatureBounds {
     if (tl == null) {
       throw StateError('Bounds top-left nao informados.');
     }
-    final pageHeight = page.pageFormat.height;
-    final bottom = pageHeight - tl.top - tl.height;
-    return PdfRect(tl.left, bottom, tl.width, tl.height);
+    // A conversão passa pelo transformador comum: a fórmula anterior só
+    // subtraía a altura da página, então errava a posição em página com caixa
+    // deslocada e em página rotacionada.
+    return PdfCoordinateTransformer.forPage(page).rectFromTopLeft(
+      left: tl.left,
+      top: tl.top,
+      width: tl.width,
+      height: tl.height,
+    );
   }
 }
 

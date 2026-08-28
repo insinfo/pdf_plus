@@ -15,6 +15,9 @@ class PdfCachedRandomAccessReader implements PdfRandomAccessReader {
   final int blockSize;
   final int maxBlocks;
 
+  /// Leitor embrulhado por este cache.
+  PdfRandomAccessReader get inner => _inner;
+
   final _cache = LinkedHashMap<int, Uint8List>();
 
   @override

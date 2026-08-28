@@ -27,7 +27,9 @@ class PdfXObject extends PdfObjectStream {
     }
   }
 
-  String get name => 'X$objser';
+  /// Name used to reference this object from a resource dictionary and from a
+  /// content stream, including the leading slash a PDF name requires.
+  String get name => '/X$objser';
 }
 
 

@@ -17,6 +17,7 @@
 import '../color.dart';
 import '../document.dart';
 import '../format/array.dart';
+import '../format/base.dart';
 import '../format/dict.dart';
 import '../format/name.dart';
 import '../format/num.dart';
@@ -114,6 +115,13 @@ class PdfOutline extends PdfObject<PdfDict> {
   /// External level for this outline
   int? effectiveLevel;
 
+  /// Explicit destination array to write instead of the derived one.
+  ///
+  /// The first entry is replaced by the reference of [dest], so an imported
+  /// bookmark keeps its original view — `/XYZ left top zoom`, `/FitH`, … —
+  /// instead of being normalized to `/Fit`.
+  PdfArray? destinationOverride;
+
   /// This method creates an outline, and attaches it to this one.
   /// When the outline is selected, the supplied region is displayed.
   void add(PdfOutline outline) {
@@ -127,7 +135,9 @@ class PdfOutline extends PdfObject<PdfDict> {
 
     // These are for kids only
     if (parent != null) {
-      params[PdfNameTokens.title] = PdfString.fromString(title!);
+      if (title != null) {
+        params[PdfNameTokens.title] = PdfString.fromString(title!);
+      }
 
       if (color != null) {
         params[PdfNameTokens.c] = PdfArray.fromColor(color!);
@@ -137,9 +147,15 @@ class PdfOutline extends PdfObject<PdfDict> {
         params[PdfNameTokens.f] = PdfNum(style.index);
       }
 
+      final override = destinationOverride;
       if (anchor != null) {
         params[PdfNameTokens.dest] = PdfString.fromString(anchor!);
-      } else {
+      } else if (override != null && dest != null) {
+        params[PdfNameTokens.dest] = PdfArray(<PdfDataType>[
+          dest!.ref(),
+          ...override.values.skip(1),
+        ]);
+      } else if (dest != null) {
         final dests = PdfArray();
         dests.add(dest!.ref());
 

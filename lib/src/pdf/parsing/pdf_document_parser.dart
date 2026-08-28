@@ -397,6 +397,152 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     return obj?.streamData;
   }
 
+  // ---------------------------------------------------------------------------
+  // Acesso público ao grafo de objetos.
+  //
+  // Necessário para quem precisa percorrer o documento inteiro — a mesclagem,
+  // por exemplo — e não apenas extrair um resumo.
+  // ---------------------------------------------------------------------------
+
+  /// Lê um objeto indireto pelo número, com os dados de stream quando houver.
+  ///
+  /// Devolve `null` quando o objeto não existe ou não pôde ser lido.
+  ParsedIndirectObject? getObject(int objId) => _getObject(objId);
+
+  /// Resolve [value] até um valor direto, seguindo referências indiretas.
+  ///
+  /// Cadeias de referência são seguidas até [maxDepth] níveis.
+  dynamic resolve(dynamic value, {int maxDepth = 32}) {
+    var current = value;
+    for (var depth = 0; depth < maxDepth; depth++) {
+      if (current is! PdfRefToken) return current;
+      final obj = _getObject(current.obj);
+      if (obj == null) return null;
+      current = obj.value;
+    }
+    return current;
+  }
+
+  /// Números de objeto conhecidos pela tabela de referências cruzadas.
+  List<int> get objectIds {
+    _ensureXrefParsed();
+    return _xrefEntries.keys.toList()..sort();
+  }
+
+  /// Como o objeto está armazenado: direto no arquivo, dentro de um object
+  /// stream, ou livre. `null` quando a tabela não o conhece.
+  XrefType? storageOf(int objId) {
+    _ensureXrefParsed();
+    return _xrefEntries[objId]?.type;
+  }
+
+  /// Informações do trailer (`/Root`, `/Info`, `/ID`, `/Size`).
+  TrailerInfo get trailer {
+    _ensureXrefParsed();
+    return _trailerInfo ??
+        PdfParserXref.readTrailerInfoFromReader(reader, xrefOffset);
+  }
+
+  /// Referência do catálogo (`/Root`), quando localizável.
+  PdfRefToken? get rootRef {
+    final rootObjId = trailer.rootObj;
+    if (rootObjId == null) return null;
+    final entry = _xrefEntries[rootObjId];
+    return PdfRefToken(rootObjId, entry?.gen ?? 0);
+  }
+
+  /// Dicionário do catálogo do documento.
+  PdfDictToken? get rootDict {
+    final rootObjId = trailer.rootObj;
+    if (rootObjId == null) return null;
+    final obj = _getObject(rootObjId);
+    if (obj == null || obj.value is! PdfDictToken) return null;
+    return obj.value as PdfDictToken;
+  }
+
+  /// Referências das páginas, em ordem do documento.
+  ///
+  /// O resultado é memorizado: percorrer a árvore `/Pages` de um documento
+  /// grande é caro e o arquivo não muda.
+  List<PdfRefToken> get pageRefs => _pageRefsCache ??= _collectAllPageRefs();
+
+  List<PdfRefToken>? _pageRefsCache;
+
+  List<PdfRefToken> _collectAllPageRefs() {
+    final root = rootDict;
+    if (root == null) {
+      return _allowRepair ? _collectPageRefsByScan() : <PdfRefToken>[];
+    }
+    final pagesRef = PdfParserObjects.asRef(root.values[PdfNameTokens.pages]);
+    var refs =
+        pagesRef != null ? _collectPageRefs(pagesRef) : <PdfRefToken>[];
+    if (refs.isEmpty && _allowRepair) {
+      refs = _collectPageRefsByScan();
+    }
+    return refs;
+  }
+
+  /// Quantidade de páginas do documento.
+  int get pageCount => pageRefs.length;
+
+  /// Dicionário de uma página pelo índice (base zero).
+  PdfDictToken? pageDictAt(int pageIndex) {
+    final refs = pageRefs;
+    if (pageIndex < 0 || pageIndex >= refs.length) return null;
+    final obj = _getObject(refs[pageIndex].obj);
+    if (obj == null || obj.value is! PdfDictToken) return null;
+    return obj.value as PdfDictToken;
+  }
+
+  /// `/Resources` efetivo da página, já mesclado com o que ela herda dos nós
+  /// ancestrais da árvore `/Pages`.
+  PdfDictToken? resolvePageResources(PdfDictToken pageDict) =>
+      _resolvePageResources(pageDict);
+
+  /// `/MediaBox` efetivo da página, considerando herança.
+  List<double>? resolvePageMediaBox(PdfDictToken pageDict) =>
+      _resolvePageMediaBox(pageDict);
+
+  /// Valor de um atributo herdável da página (`/Rotate`, `/CropBox`, …),
+  /// procurando na própria página e depois nos ancestrais.
+  ///
+  /// Devolve o valor bruto (ainda pode ser uma referência indireta).
+  dynamic inheritedPageAttribute(PdfDictToken pageDict, String key) {
+    final direct = pageDict.values[key];
+    if (direct != null) return direct;
+
+    var parentVal = pageDict.values[PdfNameTokens.parent];
+    for (var depth = 0; depth < 32; depth++) {
+      final parentRef = PdfParserObjects.asRef(parentVal);
+      if (parentRef == null) return null;
+      final parentObj =
+          _getObjectNoStream(parentRef.obj) ?? _getObject(parentRef.obj);
+      if (parentObj == null || parentObj.value is! PdfDictToken) return null;
+      final parentDict = parentObj.value as PdfDictToken;
+      final value = parentDict.values[key];
+      if (value != null) return value;
+      parentVal = parentDict.values[PdfNameTokens.parent];
+    }
+    return null;
+  }
+
+  /// Se o documento declara criptografia (`/Encrypt` no trailer).
+  ///
+  /// A leitura de documentos criptografados não é suportada: os streams sairiam
+  /// embaralhados.
+  bool get isEncrypted {
+    _ensureXrefParsed();
+    final root = rootDict;
+    if (root != null && root.values.containsKey(PdfNameTokens.encrypt)) {
+      return true;
+    }
+    try {
+      return PdfParserFields.hasEncryptDictionary(reader.readAll());
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Extrai informações de campos de assinatura (/FT /Sig).
   List<PdfSignatureFieldInfo> extractSignatureFields() {
     final editContext = extractSignatureFieldEditContext();
@@ -1701,8 +1847,11 @@ class PdfDocumentParser extends PdfDocumentParserBase {
     );
 
     if (pagesRef != null) {
-      final pages = _loadPages(pagesRef, pdfDocument);
-      pageList.pages.addAll(pages);
+      // O construtor de `PdfPage` já registra a página em
+      // `pdfDocument.pdfPageList`. Acrescentar o resultado de novo duplicava
+      // cada página: um documento de duas páginas saía com
+      // `/Kids [3 0 R 22 0 R 3 0 R 22 0 R] /Count 4`.
+      _loadPages(pagesRef, pdfDocument);
     }
   }
 
@@ -1839,6 +1988,15 @@ class PdfDocumentParser extends PdfDocumentParserBase {
       pageFormat: format ?? PdfPageFormat.standard,
       rotate: rotate,
     );
+
+    // `PdfPageFormat` só guarda largura e altura. Sem a caixa explícita, uma
+    // página cuja origem não é (0,0) seria regravada como `[0 0 w h]` e o
+    // conteúdo sairia deslocado ao salvar.
+    if (mediaBox != null &&
+        mediaBox.length == 4 &&
+        (mediaBox[0] != 0 || mediaBox[1] != 0)) {
+      page.mediaBoxOverride = mediaBox;
+    }
 
     final filtered = PdfParserObjects.toPdfDict(
       dict,

@@ -15,11 +15,16 @@
  */
 
 import '../document.dart';
+import '../editing/object_graph/pdf_object_converter.dart';
+import '../editing/object_graph/pdf_object_store.dart';
 import '../format/array.dart';
 import '../format/bool.dart';
 import '../format/dict.dart';
+import '../format/indirect.dart';
 import '../format/name.dart';
 import '../graphic_state.dart';
+import '../parsing/pdf_document_parser.dart';
+import '../parsing/pdf_parser_types.dart';
 import 'font.dart';
 import 'object.dart';
 import 'pattern.dart';
@@ -155,10 +160,59 @@ mixin PdfGraphicStream on PdfObject<PdfDict> {
           res.merge(resources);
           return;
         }
+        if (res is PdfIndirect) {
+          // Página importada cujos recursos são um objeto indireto: mesclar
+          // dentro dele preserva as fontes e imagens que já estavam lá.
+          // Sobrescrever a referência, como se fazia antes, as perderia.
+          final target = _resolveResourceDict(res);
+          if (target != null) {
+            target.merge(resources);
+            return;
+          }
+
+          // Documento carregado cujos recursos continuam só nos bytes
+          // originais: materializa uma cópia rasa na própria página antes de
+          // mesclar. As entradas seguem apontando para os mesmos objetos, que
+          // continuam no arquivo.
+          final original = _readSourceResourceDict(res);
+          if (original != null) {
+            original.merge(resources);
+            params[PdfNameTokens.resources] = original;
+            return;
+          }
+        }
       }
 
       params[PdfNameTokens.resources] = resources;
     }
+  }
+
+  /// Localiza o dicionário de recursos apontado por [ref] entre os objetos já
+  /// materializados neste documento.
+  ///
+  /// O store é criado sem parser de propósito: aqui só interessam os objetos
+  /// materializados, que são os que ainda podem receber a mesclagem de
+  /// recursos.
+  PdfDict? _resolveResourceDict(PdfIndirect ref) {
+    final object = PdfObjectStore.of(pdfDocument).lookup(ref);
+    if (object == null) return null;
+    final params = object.params;
+    return params is PdfDict ? params : null;
+  }
+
+  /// Lê o dicionário de recursos que só existe nos bytes do arquivo carregado e
+  /// devolve uma cópia direta, pronta para receber o merge.
+  ///
+  /// A leitura é feita pelo parser sem materializar objeto nenhum: `prepare()`
+  /// roda durante a iteração de `PdfDocument.objects`, e criar um objeto ali
+  /// quebraria a serialização. As entradas continuam sendo referências para os
+  /// mesmos objetos, que seguem no arquivo original.
+  PdfDict? _readSourceResourceDict(PdfIndirect ref) {
+    final parser = pdfDocument.prev;
+    if (parser is! PdfDocumentParser) return null;
+    final token = parser.resolve(PdfRefToken(ref.ser, ref.gen));
+    if (token is! PdfDictToken) return null;
+    return PdfObjectConverter.preserving.convertDict(token);
   }
 }
 

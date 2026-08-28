@@ -35,6 +35,7 @@ import 'obj/image.dart';
 import 'obj/page.dart';
 import 'obj/pattern.dart';
 import 'obj/shading.dart';
+import 'obj/xobject.dart';
 import 'rect.dart';
 
 /// Shape to be used at the corners of paths that are stroked
@@ -375,6 +376,41 @@ class PdfGraphics {
       if (_page.settings.verbose) {
         _buf.putString(' ' * math.max(0, _commentIndent - _buf.offset + o));
         _buf.putComment('drawImage(${img.ref()}, x: $x, y: $y, w: $w, h: $h)');
+      }
+      return true;
+    }());
+  }
+
+  /// Paints a Form XObject onto the page.
+  ///
+  /// The object is registered in the page resources and painted through
+  /// `q <matrix> cm /Name Do Q`, so it cannot leak graphics state into what
+  /// comes next. [matrix] is the six-value PDF transform `[a b c d e f]`;
+  /// omitted, the object is painted in the page coordinate system.
+  void drawFormXObject(PdfXObject object, {List<double>? matrix}) {
+    var o = 0;
+    assert(() {
+      if (_page.settings.verbose) {
+        o = _buf.offset;
+        _buf.putString(' ' * (_indent));
+      }
+      return true;
+    }());
+
+    _page.addXObject(object);
+
+    _buf.putString('q ');
+    if (matrix != null && matrix.length == 6) {
+      PdfNumList(matrix).output(_page, _buf);
+      _buf.putString(' cm ');
+    }
+    _buf.putString('${object.name} Do Q ');
+    _page.altered = true;
+
+    assert(() {
+      if (_page.settings.verbose) {
+        _buf.putString(' ' * math.max(0, _commentIndent - _buf.offset + o));
+        _buf.putComment('drawFormXObject(${object.ref()})');
       }
       return true;
     }());

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../document.dart';
+import '../editing/object_graph/pdf_object_store.dart';
 import '../format/array.dart';
 import '../format/base.dart';
 import '../format/dict.dart';
@@ -21,7 +22,9 @@ class PdfAcroForm {
 
   Map<String, PdfAcroField> _fields = {};
   bool _fieldsLoaded = false;
-  Map<int, PdfObject>? _objectMap;
+
+  /// Resolução de objetos indiretos do documento, indexada por (obj, gen).
+  late final PdfObjectStore _store = PdfObjectStore.of(document);
 
   /// Retrieves the form fields (AcroFields) from the document.
   Map<String, PdfAcroField> get fields {
@@ -45,14 +48,11 @@ class PdfAcroForm {
     final root = document.catalog.params;
     if (!root.containsKey(PdfNameTokens.acroForm)) return;
 
-    final acroForm = _resolveDict(root[PdfNameTokens.acroForm]);
+    final acroForm = _store.resolveDict(root[PdfNameTokens.acroForm]);
     if (acroForm == null || !acroForm.containsKey(PdfNameTokens.fields)) return;
 
-    final fieldsArray = _resolveArray(acroForm[PdfNameTokens.fields]);
+    final fieldsArray = _store.resolveArray(acroForm[PdfNameTokens.fields]);
     if (fieldsArray == null) return;
-
-    // Cache objects for faster resolution
-    _objectMap = {for (var o in document.objects) o.objser: o};
 
     for (final fieldVal in fieldsArray.values) {
       _processField(fieldVal, null, null);
@@ -105,7 +105,7 @@ class PdfAcroForm {
 
   void _processField(
       PdfDataType fieldVal, PdfAcroField? parent, String? parentName) {
-    final fieldDict = _resolveDict(fieldVal);
+    final fieldDict = _store.resolveDict(fieldVal);
     final fieldRef = _resolveRef(fieldVal);
 
     if (fieldDict == null) return;
@@ -132,7 +132,7 @@ class PdfAcroForm {
     }
 
     if (fieldDict.containsKey(PdfNameTokens.kids)) {
-      final kids = _resolveArray(fieldDict[PdfNameTokens.kids]);
+      final kids = _store.resolveArray(fieldDict[PdfNameTokens.kids]);
       if (kids != null) {
         for (final kid in kids.values) {
           _processField(kid, parent, fullName);
@@ -147,7 +147,7 @@ class PdfAcroForm {
     PdfDict acroForm;
     if (root.containsKey(PdfNameTokens.acroForm)) {
       final val = root[PdfNameTokens.acroForm];
-      acroForm = _resolveDict(val) ?? PdfDict();
+      acroForm = _store.resolveDict(val) ?? PdfDict();
     } else {
       acroForm = PdfDict();
       root[PdfNameTokens.acroForm] = acroForm;
@@ -155,7 +155,8 @@ class PdfAcroForm {
 
     PdfArray fieldsArray;
     if (acroForm.containsKey(PdfNameTokens.fields)) {
-      fieldsArray = _resolveArray(acroForm[PdfNameTokens.fields]) ?? PdfArray();
+      fieldsArray =
+          _store.resolveArray(acroForm[PdfNameTokens.fields]) ?? PdfArray();
     } else {
       fieldsArray = PdfArray();
       acroForm[PdfNameTokens.fields] = fieldsArray;
@@ -179,7 +180,8 @@ class PdfAcroForm {
         final pageDict = page.params as PdfDict;
         PdfArray annots;
         if (pageDict.containsKey(PdfNameTokens.annots)) {
-          annots = _resolveArray(pageDict[PdfNameTokens.annots]) ?? PdfArray();
+          annots =
+              _store.resolveArray(pageDict[PdfNameTokens.annots]) ?? PdfArray();
         } else {
           annots = PdfArray();
           pageDict[PdfNameTokens.annots] = annots;
@@ -187,39 +189,6 @@ class PdfAcroForm {
         annots.add(fieldRef);
       }
     }
-  }
-
-  PdfObject? _resolveObject(PdfIndirect ref) {
-    if (_objectMap != null && _objectMap!.containsKey(ref.ser)) {
-      return _objectMap![ref.ser];
-    }
-    // Fallback: search in document.objects
-    for (final obj in document.objects) {
-      if (obj.objser == ref.ser) return obj;
-    }
-    return null;
-  }
-
-  PdfDict? _resolveDict(PdfDataType? val) {
-    if (val is PdfDict) return val;
-    if (val is PdfIndirect) {
-      final obj = _resolveObject(val);
-      if (obj != null && obj.params is PdfDict) {
-        return obj.params as PdfDict;
-      }
-    }
-    return null;
-  }
-
-  PdfArray? _resolveArray(PdfDataType? val) {
-    if (val is PdfArray) return val;
-    if (val is PdfIndirect) {
-      final obj = _resolveObject(val);
-      if (obj != null && obj.params is PdfArray) {
-        return obj.params as PdfArray;
-      }
-    }
-    return null;
   }
 
   PdfIndirect? _resolveRef(PdfDataType? val) {

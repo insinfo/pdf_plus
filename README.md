@@ -25,7 +25,7 @@ In your project's `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  pdf_plus: ^3.16.0
+  pdf_plus: ^4.0.0
 ```
 
 Then run:
@@ -103,6 +103,58 @@ instead of looping. When you hit it, do one of:
 Note that manually slicing a long string into several fixed-size `Text` chunks
 does **not** avoid the problem: each chunk is still an unbreakable widget unless
 it is marked with `overflow: TextOverflow.span`.
+
+## Mesclagem de PDFs
+
+`PdfDocument.merge` junta vários arquivos em um documento novo: renumera todos
+os objetos e traz conteúdo, recursos, anotações, links, campos de formulário,
+bookmarks, camadas e numeração de páginas.
+
+```dart
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:pdf_plus/pdf.dart';
+
+Future<void> main() async {
+  final bytes = await PdfDocument.merge(<Uint8List>[
+    File('a.pdf').readAsBytesSync(),
+    File('b.pdf').readAsBytesSync(),
+  ]);
+  await File('merged.pdf').writeAsBytes(bytes);
+}
+```
+
+Para escolher páginas, rotular cada origem e ver o que se perdeu no caminho, use
+`PdfDocumentMerger` diretamente:
+
+```dart
+final destino = PdfDocument();
+final merger = PdfDocumentMerger(destino);
+
+merger.append(PdfDocumentParser(bytesA, allowRepair: true), label: 'a.pdf');
+merger.importPageRange(
+  PdfDocumentParser(bytesB, allowRepair: true),
+  0,
+  2,
+  label: 'b.pdf',
+);
+merger.finish();
+
+for (final aviso in merger.warnings) {
+  print(aviso);
+}
+
+await File('merged.pdf').writeAsBytes(await destino.save());
+```
+
+Mesclar reescreve o arquivo inteiro, então **toda assinatura digital existente
+deixa de conferir**. No padrão os campos `/FT /Sig` são removidos e o carimbo
+visual permanece como anotação somente-leitura, de modo que nenhum validador
+acuse assinatura quebrada. `PdfMergeOptions` controla o desfecho com
+`keepInvalidSignatures`, `removeSignatureAppearance` e `rejectSignedSources`.
+
+Detalhes dos dois modos (`objectImport` e `flatten`) e de todas as opções em
+`doc.md`; exemplo executável em `example/merge_documents.dart`.
 
 ## Basic example: sign an existing PDF (PAdES)
 

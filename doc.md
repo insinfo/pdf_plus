@@ -404,6 +404,147 @@ final rootCert = PkiBuilder.createRootCertificate(
 final rootPem = rootCert.toPem();
 ```
 
+### 5. Mesclando PDFs (merge)
+
+`PdfDocument.merge` junta N arquivos em um documento novo. Cada entrada é lida
+por um `PdfDocumentParser` com reparo habilitado, todos os objetos alcançáveis a
+partir das páginas são materializados no destino com numeração nova, e as
+referências são remapeadas.
+
+```dart
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:pdf_plus/pdf.dart';
+
+final bytes = await PdfDocument.merge(<Uint8List>[
+	File('processo.pdf').readAsBytesSync(),
+	File('anexo.pdf').readAsBytesSync(),
+]);
+await File('merged.pdf').writeAsBytes(bytes);
+```
+
+#### Controle fino com PdfDocumentMerger
+
+`PdfDocumentMerger` dá acesso a cada origem individualmente e expõe os avisos.
+O destino precisa ser um `PdfDocument` novo: mesclar dentro de um documento
+carregado de arquivo produziria um incremental update com objetos de outro
+arquivo dentro, o que não é um PDF válido (lança `PdfMergeException`).
+
+```dart
+final destino = PdfDocument();
+final merger = PdfDocumentMerger(destino);
+
+// Documento inteiro.
+merger.append(PdfDocumentParser(bytesA, allowRepair: true), label: 'processo');
+
+// Intervalo de páginas, inclusive nas duas pontas (índice base zero).
+merger.importPageRange(
+	PdfDocumentParser(bytesB, allowRepair: true),
+	0,
+	2,
+	label: 'anexo',
+);
+
+// Uma única página.
+merger.importPage(PdfDocumentParser(bytesC, allowRepair: true), 0);
+
+merger.finish();                // idempotente
+for (final aviso in merger.warnings) {
+	print(aviso);                 // '[processo] assinatura digital invalidada...'
+}
+final saida = await destino.save();
+```
+
+Atalhos equivalentes existem em `PdfDocument`: `appendDocument`, `importPage` e
+`importPageRange`.
+
+#### Os dois modos
+
+| Modo | O que faz | Fidelidade |
+|---|---|---|
+| `PdfMergeMode.objectImport` (padrão) | Importa o grafo de objetos da página | Conteúdo, recursos, anotações, links, campos de formulário, bookmarks, camadas e page labels |
+| `PdfMergeMode.flatten` | Envolve o conteúdo da página em um Form XObject e o desenha na página nova | Somente o conteúdo gráfico |
+
+No modo `objectImport` o content stream é copiado verbatim (com o `/Filter`
+original preservado), os atributos herdados do nó `/Pages` da origem
+(`/Resources`, `/MediaBox`, `/CropBox`, `/Rotate`) são materializados na página,
+e os destinos nomeados de links e bookmarks são resolvidos para destinos
+explícitos.
+
+No modo `flatten` a página de origem vira um XObject desenhado na página nova.
+É o modo previsível para documentos exóticos, ao custo de perder tudo que não
+seja pintura: anotações, links e campos ficam pelo caminho.
+
+```dart
+final bytes = await PdfDocument.merge(
+	documentos,
+	options: const PdfMergeOptions(mode: PdfMergeMode.flatten),
+);
+```
+
+#### Assinaturas digitais: as três chaves
+
+Mesclar invalida **toda** assinatura digital existente. A assinatura cobre os
+bytes exatos do documento em que foi aplicada, e a mesclagem reescreve o arquivo
+inteiro; não há como contornar. Nenhuma ferramenta de mercado (PDF24, iLovePDF,
+PDFsam, Acrobat, PDFBox, iText) recusa documentos assinados, e o `pdf_plus`
+segue o mesmo comportamento, com três chaves independentes:
+
+| Opção | Padrão | Efeito |
+|---|---|---|
+| `rejectSignedSources` | `false` | `true` lança `PdfMergeException` ao encontrar uma origem assinada |
+| `keepInvalidSignatures` | `false` | `true` mantém os campos `/FT /Sig` com o CMS e os certificados; o visualizador reporta assinatura inválida |
+| `removeSignatureAppearance` | `false` | `true` remove também o carimbo visual. Sem efeito quando `keepInvalidSignatures` está ligado |
+
+A precedência é nessa ordem: `rejectSignedSources` > `keepInvalidSignatures` >
+`removeSignatureAppearance`.
+
+No padrão (as três em `false`) o campo de assinatura é removido e o carimbo
+visual é mantido como anotação `/Subtype /Stamp` somente-leitura: a página
+continua parecendo assinada e nenhum validador acusa assinatura quebrada,
+porque não sobrou assinatura para conferir. Toda perda entra em
+`PdfDocumentMerger.warnings`.
+
+```dart
+// Mantém os campos de assinatura, aceitando que apareçam como inválidos.
+final bytes = await PdfDocument.merge(
+	documentos,
+	options: const PdfMergeOptions(keepInvalidSignatures: true),
+);
+```
+
+Assinar **depois** de mesclar funciona normalmente: o documento mesclado é um
+arquivo novo, sem revisão anterior, e o fluxo de assinatura opera sobre os bytes
+salvos.
+
+#### Demais opções
+
+`PdfMergeOptions` também controla:
+
+- `importAnnotations`, `importFormFields`, `importBookmarks`,
+	`importNamedDestinations`, `importLayers`, `importPageLabels` — ligam e
+	desligam cada subsistema (todos `true` por padrão).
+- `fieldNameConflict` — `renameSuffix` (padrão, gera `nome`, `nome_2`, …),
+	`keepFirst` ou `throwError` quando dois formulários têm campos homônimos.
+- `importAttachments` (`false` por padrão) — anexos em `/Names /EmbeddedFiles`.
+- `dropStructureTree` (`true` por padrão) — descarta a árvore de marcação
+	(tagged PDF) e registra um aviso.
+- `copyDocumentInfoFromFirst` (`false`) e `groupBookmarksPerDocument` (`false`).
+- `deduplicateResources` (`true`) — reaproveita um único objeto para streams
+	idênticos vindos de origens diferentes (fontes embutidas, logotipos).
+
+#### Limites conhecidos
+
+- **Origem criptografada não é suportada**: não há handler de segurança de
+	leitura, e a mesclagem falha com `PdfMergeException` em vez de produzir saída
+	corrompida em silêncio.
+- A árvore de marcação estrutural (`/StructTreeRoot`) é descartada.
+- Metadados XMP e `/ViewerPreferences` são os do destino.
+- Uma faixa de `/PageLabels` cuja página inicial ficou fora do intervalo
+	importado é descartada, e não recortada.
+
+Exemplo executável completo em `example/merge_documents.dart`.
+
 ---
 
 ## Principais Classes e Funções

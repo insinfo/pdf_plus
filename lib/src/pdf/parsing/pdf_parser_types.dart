@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import '../format/string.dart';
+import 'parser_predictor.dart';
 import 'pdf_document_info.dart';
 
 class TrailerInfo {
@@ -119,6 +120,7 @@ class XrefStreamDict {
     this.length,
     this.w,
     this.index,
+    this.predictor = const PdfPredictorParams(),
   });
 
   final String? type;
@@ -131,6 +133,9 @@ class XrefStreamDict {
   final int? length;
   final List<int>? w;
   final List<int>? index;
+
+  /// Parâmetros de `/DecodeParms` aplicados após o inflate.
+  final PdfPredictorParams predictor;
 }
 
 class ObjStmHeader {

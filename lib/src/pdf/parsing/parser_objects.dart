@@ -2,16 +2,13 @@ import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 
+import '../editing/object_graph/pdf_object_converter.dart';
 import '../format/array.dart';
 import '../format/base.dart';
-import '../format/bool.dart';
 import '../format/dict.dart';
-import '../format/indirect.dart';
-import '../format/name.dart';
-import '../format/null_value.dart';
-import '../format/num.dart';
 import '../format/string.dart';
 import '../io/pdf_random_access_reader.dart';
+import '../io/pdf_random_access_reader_cache.dart';
 
 import 'pdf_parser_types.dart';
 import 'parser_tokens.dart';
@@ -20,10 +17,11 @@ import 'package:pdf_plus/src/pdf/pdf_names.dart';
 class PdfParserObjects {
   static const int _maxStreamDecodeSize = 256 * 1024 * 1024;
 
-  static Uint8List? extractStream(
-      Uint8List bytes, int dictEnd, int end, int? length) {
-    int i = dictEnd;
-    i = PdfParserTokens.skipPdfWsAndComments(bytes, i, end);
+  /// Índice do primeiro byte de dados do stream, logo após a palavra-chave
+  /// `stream` e o EOL que a segue. `null` quando não há stream após o
+  /// dicionário que termina em [dictEnd].
+  static int? streamDataStart(Uint8List bytes, int dictEnd, int end) {
+    int i = PdfParserTokens.skipPdfWsAndComments(bytes, dictEnd, end);
     if (!PdfParserTokens.matchToken(
         bytes, i, const <int>[0x73, 0x74, 0x72, 0x65, 0x61, 0x6D])) {
       return null;
@@ -31,8 +29,15 @@ class PdfParserObjects {
     i += 6;
     if (i < end && bytes[i] == 0x0D) i++;
     if (i < end && bytes[i] == 0x0A) i++;
+    return i;
+  }
 
-    if (length != null) {
+  static Uint8List? extractStream(
+      Uint8List bytes, int dictEnd, int end, int? length) {
+    final i = streamDataStart(bytes, dictEnd, end);
+    if (i == null) return null;
+
+    if (length != null && length >= 0) {
       final endPos = i + length;
       if (endPos <= end) {
         return bytes.sublist(i, endPos);
@@ -42,7 +47,109 @@ class PdfParserObjects {
     final endPos = PdfParserTokens.indexOfSequence(
         bytes, PdfParserTokens.endStreamToken, i, end);
     if (endPos == -1) return null;
-    return bytes.sublist(i, endPos);
+    return bytes.sublist(i, _trimEolBefore(bytes, i, endPos));
+  }
+
+  /// Extrai os dados brutos de um stream lendo direto do [reader], sem depender
+  /// de o stream inteiro caber na janela já lida.
+  ///
+  /// [objectOffset] é a posição absoluta do objeto no arquivo e [window] a
+  /// janela lida a partir dela; [dictEnd] é relativo à janela.
+  static Uint8List? extractStreamFromReader(
+    PdfRandomAccessReader reader,
+    int objectOffset,
+    Uint8List window,
+    int dictEnd,
+    int? length,
+  ) {
+    final dataStart = streamDataStart(window, dictEnd, window.length);
+    if (dataStart == null) return null;
+
+    final absStart = objectOffset + dataStart;
+    final fileLength = reader.length;
+    if (absStart >= fileLength) return null;
+
+    // Caminho rápido: o stream inteiro já está na janela.
+    if (length != null && length >= 0 && dataStart + length <= window.length) {
+      return window.sublist(dataStart, dataStart + length);
+    }
+
+    Uint8List? byLength;
+    if (length != null && length >= 0 && absStart + length <= fileLength) {
+      final data = reader.readRange(absStart, length);
+      if (data.length == length &&
+          _endstreamFollows(reader, absStart + length, fileLength)) {
+        return data;
+      }
+      byLength = data.length == length ? data : null;
+    }
+
+    // /Length ausente ou inconsistente: varre por `endstream`.
+    return _scanStreamUntilEndstream(reader, absStart, fileLength) ?? byLength;
+  }
+
+  /// Confere se, ignorando espaços, a palavra `endstream` começa em [position].
+  static bool _endstreamFollows(
+      PdfRandomAccessReader reader, int position, int fileLength) {
+    if (position >= fileLength) return false;
+    final probeLen =
+        (position + 32 > fileLength) ? (fileLength - position) : 32;
+    final probe = reader.readRange(position, probeLen);
+    final i = PdfParserTokens.skipPdfWsAndComments(probe, 0, probe.length);
+    return PdfParserTokens.matchToken(
+        probe, i, PdfParserTokens.endStreamToken);
+  }
+
+  /// Lê do arquivo, em blocos, até encontrar `endstream`.
+  static Uint8List? _scanStreamUntilEndstream(
+    PdfRandomAccessReader reader,
+    int absStart,
+    int fileLength,
+  ) {
+    const chunkSize = 256 * 1024;
+    final tokenLength = PdfParserTokens.endStreamToken.length;
+    final builder = BytesBuilder(copy: false);
+    var position = absStart;
+    // Bytes lidos e ainda não confirmados, para casar `endstream` partido
+    // entre dois blocos.
+    var pending = Uint8List(0);
+
+    while (position < fileLength) {
+      final readLen = (position + chunkSize > fileLength)
+          ? (fileLength - position)
+          : chunkSize;
+      final chunk = reader.readRange(position, readLen);
+      if (chunk.isEmpty) break;
+      position += chunk.length;
+
+      final scan = Uint8List(pending.length + chunk.length)
+        ..setRange(0, pending.length, pending)
+        ..setRange(pending.length, pending.length + chunk.length, chunk);
+
+      final found = PdfParserTokens.indexOfSequence(
+          scan, PdfParserTokens.endStreamToken, 0, scan.length);
+      if (found != -1) {
+        builder.add(scan.sublist(0, found));
+        final data = builder.toBytes();
+        return data.sublist(0, _trimEolBefore(data, 0, data.length));
+      }
+
+      // Só o suficiente para o token não escapar na fronteira dos blocos.
+      final keep =
+          scan.length < tokenLength - 1 ? scan.length : tokenLength - 1;
+      builder.add(scan.sublist(0, scan.length - keep));
+      pending = scan.sublist(scan.length - keep);
+    }
+
+    return null;
+  }
+
+  /// Recua sobre o EOL que precede `endstream`, que não faz parte dos dados.
+  static int _trimEolBefore(Uint8List bytes, int start, int endPos) {
+    var end = endPos;
+    if (end > start && bytes[end - 1] == 0x0A) end--;
+    if (end > start && bytes[end - 1] == 0x0D) end--;
+    return end;
   }
 
   static ParsedIndirectObject? readIndirectObjectAt(
@@ -130,47 +237,198 @@ class PdfParserObjects {
       512 * 1024,
       2 * 1024 * 1024,
     ];
+    ParsedIndirectObject? truncated;
+
     for (final size in windowSizes) {
       if (offset < 0 || offset >= len) return null;
       final windowSize = (offset + size > len) ? (len - offset) : size;
       final window = reader.readRange(offset, windowSize);
+      final isLastWindow = windowSize >= len - offset;
 
       int i = PdfParserTokens.skipPdfWsAndComments(window, 0, window.length);
-      if (i >= window.length || !PdfParserTokens.isDigit(window[i])) continue;
+      if (i >= window.length || !PdfParserTokens.isDigit(window[i])) {
+        if (isLastWindow) return null;
+        continue;
+      }
       final obj = PdfParserTokens.readInt(window, i, window.length);
       i = PdfParserTokens.skipPdfWsAndComments(
           window, obj.nextIndex, window.length);
-      if (i >= window.length || !PdfParserTokens.isDigit(window[i])) continue;
+      if (i >= window.length || !PdfParserTokens.isDigit(window[i])) {
+        if (isLastWindow) return null;
+        continue;
+      }
       final gen = PdfParserTokens.readInt(window, i, window.length);
       i = PdfParserTokens.skipPdfWsAndComments(
           window, gen.nextIndex, window.length);
-      if (!PdfParserTokens.matchToken(window, i, const <int>[0x6F, 0x62, 0x6A]))
+      if (!PdfParserTokens.matchToken(
+          window, i, const <int>[0x6F, 0x62, 0x6A])) {
+        if (isLastWindow) return null;
         continue;
+      }
       i += 3;
       i = PdfParserTokens.skipPdfWsAndComments(window, i, window.length);
 
-      final parsed = parseObject(window, i, window.length);
-      if (parsed == null) continue;
+      ParseResult? parsed;
+      try {
+        parsed = parseObject(window, i, window.length);
+      } catch (_) {
+        // Um valor cortado pela borda da janela — a string hexadecimal de
+        // `/Contents` de uma assinatura, por exemplo — faz o leitor de tokens
+        // falhar. Só significa que a janela é pequena demais.
+        parsed = null;
+      }
+
+      if (parsed == null || _isTruncatedDict(parsed, window.length)) {
+        if (parsed != null) truncated = _build(obj, gen, parsed, null);
+        if (isLastWindow) return truncated;
+        continue;
+      }
 
       Uint8List? streamData;
       if (parsed.value is PdfDictToken && parsed.dictEnd != null) {
         final dict = parsed.value as PdfDictToken;
         final length = resolveLength(dict, getObject);
-        final data =
-            extractStream(window, parsed.dictEnd!, window.length, length);
-        if (data != null) {
-          streamData = data;
-        }
+        // Lê o stream direto do arquivo: ele pode ser bem maior que a janela.
+        streamData = extractStreamFromReader(
+            reader, offset, window, parsed.dictEnd!, length);
       }
 
-      return ParsedIndirectObject(
-        objId: obj.value,
-        gen: gen.value,
-        value: parsed.value,
-        streamData: streamData,
-      );
+      return _build(obj, gen, parsed, streamData);
     }
 
+    // O dicionário não coube na maior janela. Acontece com assinaturas: o
+    // `/Contents` de um PKCS#7 pode ter megabytes de string hexadecimal — e ele
+    // faz parte do dicionário, não de um stream. Aqui a janela é medida pelo
+    // `endobj` do próprio objeto.
+    final wide = _readUntilEndobj(reader, offset);
+    if (wide != null && wide.length > windowSizes.last) {
+      final result = _parseWindow(reader, offset, wide, getObject);
+      if (result != null) return result;
+    }
+
+    return truncated;
+  }
+
+  /// Lê do arquivo a partir de [offset] até o `endobj` que fecha o objeto.
+  static Uint8List? _readUntilEndobj(PdfRandomAccessReader reader, int offset) {
+    const chunkSize = 1024 * 1024;
+    const maxObjectSize = 256 * 1024 * 1024;
+    const token = <int>[0x65, 0x6E, 0x64, 0x6F, 0x62, 0x6A]; // endobj
+
+    final fileLength = reader.length;
+    if (offset < 0 || offset >= fileLength) return null;
+
+    final limit = offset + maxObjectSize < fileLength
+        ? offset + maxObjectSize
+        : fileLength;
+
+    var position = offset;
+    var carry = 0; // bytes já lidos que continuam valendo para o casamento
+    final builder = BytesBuilder(copy: false);
+
+    while (position < limit) {
+      final readLen =
+          (position + chunkSize > limit) ? (limit - position) : chunkSize;
+      final chunk = reader.readRange(position, readLen);
+      if (chunk.isEmpty) break;
+      builder.add(chunk);
+      position += chunk.length;
+
+      final data = builder.toBytes();
+      final from = carry - token.length >= 0 ? carry - token.length : 0;
+      final found =
+          PdfParserTokens.indexOfSequence(data, token, from, data.length);
+      if (found != -1) {
+        return Uint8List.sublistView(data, 0, found + token.length);
+      }
+      carry = data.length;
+      builder
+        ..clear()
+        ..add(data);
+    }
+
+    return null;
+  }
+
+  /// Faz o parse de um objeto indireto já materializado em [window].
+  static ParsedIndirectObject? _parseWindow(
+    PdfRandomAccessReader reader,
+    int offset,
+    Uint8List window,
+    ParsedIndirectObject? Function(int objId) getObject,
+  ) {
+    int i = PdfParserTokens.skipPdfWsAndComments(window, 0, window.length);
+    if (i >= window.length || !PdfParserTokens.isDigit(window[i])) return null;
+    final obj = PdfParserTokens.readInt(window, i, window.length);
+    i = PdfParserTokens.skipPdfWsAndComments(
+        window, obj.nextIndex, window.length);
+    if (i >= window.length || !PdfParserTokens.isDigit(window[i])) return null;
+    final gen = PdfParserTokens.readInt(window, i, window.length);
+    i = PdfParserTokens.skipPdfWsAndComments(
+        window, gen.nextIndex, window.length);
+    if (!PdfParserTokens.matchToken(window, i, const <int>[0x6F, 0x62, 0x6A])) {
+      return null;
+    }
+    i += 3;
+    i = PdfParserTokens.skipPdfWsAndComments(window, i, window.length);
+
+    ParseResult? parsed;
+    try {
+      parsed = parseObject(window, i, window.length);
+    } catch (_) {
+      return null;
+    }
+    if (parsed == null) return null;
+
+    Uint8List? streamData;
+    if (parsed.value is PdfDictToken && parsed.dictEnd != null) {
+      final dict = parsed.value as PdfDictToken;
+      final length = resolveLength(dict, getObject);
+      streamData = extractStreamFromReader(
+          reader, offset, window, parsed.dictEnd!, length);
+    }
+
+    return _build(obj, gen, parsed, streamData);
+  }
+
+  /// Um dicionário que terminou junto com a janela quase certamente foi
+  /// cortado: faltam as chaves que vinham depois.
+  static bool _isTruncatedDict(ParseResult parsed, int windowLength) {
+    if (parsed.value is! PdfDictToken) return false;
+    if (parsed.dictEnd != null) return false;
+    return parsed.nextIndex >= windowLength;
+  }
+
+  static ParsedIndirectObject _build(
+    ({dynamic value, int nextIndex}) obj,
+    ({dynamic value, int nextIndex}) gen,
+    ParseResult parsed,
+    Uint8List? streamData,
+  ) {
+    return ParsedIndirectObject(
+      objId: obj.value,
+      gen: gen.value,
+      value: parsed.value,
+      streamData: streamData,
+    );
+  }
+
+  /// Devolve o leitor de memória por trás de [reader], inclusive quando ele
+  /// está embrulhado em um [PdfCachedRandomAccessReader]; `null` caso o
+  /// conteúdo não esteja inteiro em memória.
+  ///
+  /// Não é usado no caminho de leitura de objetos: lá a janela é o
+  /// comportamento de referência (ver `readIndirectObjectAtFromReader`).
+  static PdfRandomAccessReader? memoryReaderOf(PdfRandomAccessReader reader) {
+    var current = reader;
+    for (var depth = 0; depth < 8; depth++) {
+      if (current is PdfMemoryRandomAccessReader) return current;
+      if (current is PdfCachedRandomAccessReader) {
+        current = current.inner;
+        continue;
+      }
+      return null;
+    }
     return null;
   }
 
@@ -467,55 +725,30 @@ class PdfParserObjects {
     return (value: int.tryParse(text) ?? 0, nextIndex: i);
   }
 
+  /// Conversor único do modelo tokenizado para o modelo de escrita.
+  ///
+  /// A leitura de um documento carregado preserva os números de objeto do
+  /// arquivo, por isso a política de referência é
+  /// [PdfReferencePolicy.preserve].
+  static const PdfObjectConverter _converter = PdfObjectConverter.preserving;
+
   static PdfDict<PdfDataType> toPdfDict(
     PdfDictToken dict, {
     Set<String> ignoreKeys = const {},
-  }) {
-    final values = <String, PdfDataType>{};
-    for (final entry in dict.values.entries) {
-      if (ignoreKeys.contains(entry.key)) continue;
-      final converted = toPdfDataType(entry.value);
-      if (converted != null) values[entry.key] = converted;
-    }
-    return PdfDict.values(values);
-  }
+  }) =>
+      _converter.convertDict(dict, ignoreKeys: ignoreKeys);
 
-  static PdfArray toPdfArray(PdfArrayToken array) {
-    final values = <PdfDataType>[];
-    for (final v in array.values) {
-      final converted = toPdfDataType(v);
-      if (converted != null) values.add(converted);
-    }
-    return PdfArray(values);
-  }
+  static PdfArray toPdfArray(PdfArrayToken array) =>
+      _converter.convertArray(array);
 
-  static PdfDataType? toPdfDataType(dynamic value) {
-    if (value == null) return const PdfNull();
-    if (value is bool) return PdfBool(value);
-    if (value is int || value is double) {
-      return PdfNum(value is int ? value : (value as double));
-    }
-    if (value is PdfNameToken) return PdfName(value.value);
-    if (value is PdfStringToken) {
-      return PdfString(value.bytes, format: value.format, encrypted: false);
-    }
-    if (value is PdfRefToken) return PdfIndirect(value.obj, value.gen);
-    if (value is PdfArrayToken) return toPdfArray(value);
-    if (value is PdfDictToken) return toPdfDict(value);
-    return null;
-  }
+  static PdfDataType? toPdfDataType(dynamic value) => _converter.convert(value);
 
   static void mergeDictIntoPdfDict(
     PdfDict<PdfDataType> target,
     PdfDictToken source, {
     Set<String> ignoreKeys = const {},
-  }) {
-    final converted = toPdfDict(source);
-    for (final entry in converted.values.entries) {
-      if (ignoreKeys.contains(entry.key)) continue;
-      target[entry.key] = entry.value;
-    }
-  }
+  }) =>
+      _converter.mergeDictInto(target, source, ignoreKeys: ignoreKeys);
 
   static PdfRefToken? asRef(dynamic value) {
     if (value is PdfRefToken) return value;

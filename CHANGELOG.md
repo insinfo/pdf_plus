@@ -1,5 +1,116 @@
 # Changelog
 
+## 4.0.0
+
+### PDF merging
+
+- Add PDF merging. `PdfDocument.merge` combines a list of PDF byte arrays into
+  one document; `appendDocument`, `importPage` and `importPageRange` bring pages
+  into a new `PdfDocument`; and `PdfDocumentMerger` drives the same work while
+  collecting warnings. `PdfDocumentParser` is now exported from `pdf.dart`.
+- Two strategies through `PdfMergeOptions.mode`: `objectImport` (default) copies
+  the object graph of each source page, preserving content, resources,
+  annotations, links, form fields, bookmarks, optional content groups and page
+  labels; `flatten` draws each source page as a single form XObject, keeping
+  only graphical content.
+- Page tree attributes a source page inherited (`/Resources`, `/MediaBox`,
+  `/CropBox`, `/Rotate`) are materialized on the imported page, so pages keep
+  their geometry when detached from their original page tree.
+- Link and bookmark destinations are re-targeted at the imported copy of their
+  page; named destinations are resolved to explicit destinations at import time.
+  A destination pointing outside the imported range is dropped and reported
+  through `PdfDocumentMerger.warnings`.
+- Form field hierarchies are flattened onto fully qualified names. Name
+  collisions are resolved by `PdfMergeOptions.fieldNameConflict`. Fields that no
+  page widget leads to — the shape SEI-exported documents use for invisible
+  signatures — are imported too.
+- Merging invalidates every digital signature the sources carry. Signed
+  documents merge anyway, as every PDF tool does, and the loss is reported
+  through `warnings`. Three independent options control the outcome, in this
+  precedence: `rejectSignedSources`, `keepInvalidSignatures` and
+  `removeSignatureAppearance`. By default the field is dropped and the visible
+  mark is kept as a read-only stamp, so no viewer reports a broken signature.
+- Identical streams shared between sources — a font program, an image — are
+  materialized once (`deduplicateResources`).
+- Encrypted sources and loaded destinations are refused with
+  `PdfMergeException` instead of producing corrupt output.
+- `PdfDocumentParser` gained the public API the importer needs: `getObject`,
+  `resolve`, `objectIds`, `storageOf`, `trailer`, `rootRef`, `rootDict`,
+  `pageRefs`, `pageCount`, `pageDictAt`, `resolvePageResources`,
+  `resolvePageMediaBox` and `inheritedPageAttribute`.
+- `PdfGraphics.drawFormXObject` is now public.
+- See `doc/roteiro_merge_pdf.md` for the design, the measurements and the
+  comparison against the SEI output; `example/merge_documents.dart` for usage.
+
+### Parser fixes
+
+These affect any document, not just merging.
+
+- Read streams larger than the read window. The windowed reader returned on the
+  first window whose header parsed, so `extractStream` never found `endstream`
+  and `readStreamData` returned `null` for anything bigger. Stream data is now
+  read straight from the reader, using `/Length` when `endstream` actually
+  follows it and scanning in blocks otherwise.
+- Undo the PNG/TIFF predictor of a cross-reference stream. `/DecodeParms
+  /Predictor 12` — what most PDF 1.5+ writers emit — left every table row
+  filtered, so object offsets pointed outside the file. In `sample3.pdf` that
+  meant 4208 of 4416 objects unreadable and 255 pages read instead of 366.
+- Read objects whose dictionary is larger than the window. A signature
+  `/Contents` holds megabytes of hex string inside the dictionary; the token
+  reader threw or returned a dictionary cut at the window edge, and the object
+  was discarded — which silently dropped `/V` from signature fields. The window
+  now grows on truncation, and falls back to reading up to the object's
+  `endobj`.
+- A stale `/ByteRange` no longer throws in `extractSignatureFieldsFromBytes`.
+  In a rewritten document the declared offsets do not describe the file, and the
+  read window is now clamped to it.
+- `PdfCachedRandomAccessReader` exposes `inner`.
+
+### Other fixes
+
+- **Every page was duplicated when saving a loaded document.**
+  `mergeDocument` appended the pages after `PdfPage`'s constructor had already
+  registered them, so a two-page file was written as
+  `/Kids [3 0 R 22 0 R 3 0 R 22 0 R] /Count 4`.
+- **Drawing on a loaded page erased its fonts and images.** When `/Resources` is
+  an indirect reference that still lives in the original bytes,
+  `PdfGraphicStream.prepare` replaced it with the new resources. The original
+  dictionary is now read and merged into.
+- A loaded page whose `/MediaBox` does not start at (0, 0) kept its origin:
+  `PdfPage.mediaBoxOverride` is filled on load, instead of the box being
+  rewritten as `[0 0 w h]` and the content shifting.
+- Top-left coordinate conversions (`addUriAnnotationTopLeft`,
+  `addSignatureFieldTopLeft`, `PdfSignatureBounds.toPdfRect`) only subtracted
+  the page height. They now go through `PdfCoordinateTransformer`, which honours
+  the box origin, `/CropBox`, `/Rotate` and `/UserUnit`.
+- `PdfXObject.name` returned `X4` without the leading slash, producing an
+  invalid resource key and content stream operand for every non-image XObject.
+- `PdfSignatureFieldEditor.updateFieldMetadata` wrote `/Reason`, `/Location`,
+  `/Name` and `/M` on the field dictionary. Per ISO 32000-1 §12.8.1 they belong
+  to the signature dictionary, which wins on read.
+- `PdfPageLabel` wrote `romanLower` as `/R` and `lettersUpper` as `/a`,
+  colliding with the other two styles.
+- `PdfOutline` accepts a node without a destination instead of throwing on save,
+  and gained `destinationOverride` so an imported bookmark keeps its original
+  view instead of being normalized to `/Fit`.
+
+### Editing infrastructure
+
+First part of `doc/roteiro_edicao_pdf.md`.
+
+- `PdfObjectStore`: indirect reference resolution by `(objser, objgen)` in O(1),
+  with an optional fallback to the parser. `PdfAcroForm` and `PdfGraphicStream`
+  no longer scan `document.objects` linearly, each with its own rule.
+- `PdfObjectConverter`: the single core converting the parser's token model to
+  the writing model, with an injectable reference policy.
+  `PdfParserObjects.toPdfDataType` and the merge importer both delegate to it.
+- `PdfBox` preserves `llx/lly/urx/ury` for every page box, and
+  `PdfCoordinateTransformer` unifies top-left conversions.
+- `PdfPageContentEditor` (`drawOverlay`, `drawUnderlay`, `drawStamp`) wraps
+  existing content with `q` before and `Q` after without touching the original
+  stream, plus `PdfBatesNumbering` for multi-page numbering.
+- `PdfNameTokens` absorbed the vocabulary that lived in local constants.
+
 ## 3.17.4
 
 - Fix `MultiPage` infinite page-creation loop when a non-spanning widget (e.g. a

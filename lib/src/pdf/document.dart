@@ -31,7 +31,10 @@ import 'format/xref.dart';
 import 'format/dict.dart';
 import 'format/indirect.dart';
 import 'format/null_value.dart';
+import 'editing/pdf_coordinate_transformer.dart';
 import 'graphic_state.dart';
+import 'merging/pdf_document_merger.dart';
+import 'merging/pdf_merge_options.dart';
 import 'graphics.dart';
 import 'io/na.dart'
     if (dart.library.io) 'io/vm.dart'
@@ -407,6 +410,85 @@ class PdfDocument {
     return pdfCompute(computation);
   }
 
+  /// Mescla vários PDFs em um documento novo.
+  ///
+  /// ```dart
+  /// final bytes = await PdfDocument.merge(<Uint8List>[docA, docB]);
+  /// ```
+  ///
+  /// Cada entrada é lida por um [PdfDocumentParser] com reparo habilitado, de
+  /// modo que um arquivo com a tabela de referências cruzadas danificada ainda
+  /// possa ser mesclado. Documentos criptografados não são suportados e
+  /// resultam em [PdfMergeException].
+  ///
+  /// Mesclar invalida qualquer assinatura digital existente: ela cobre os bytes
+  /// exatos do documento em que foi aplicada. Ver [PdfMergeOptions] para as
+  /// três chaves que controlam o desfecho, e [PdfDocumentMerger.warnings] —
+  /// acessível pela API não estática — para o relato do que se perdeu.
+  static Future<Uint8List> merge(
+    List<Uint8List> documents, {
+    PdfMergeOptions? options,
+    bool compress = true,
+    bool verbose = false,
+    PdfVersion version = PdfVersion.pdf_1_5,
+    DeflateCallback? deflate,
+    bool useIsolate = false,
+  }) async {
+    final document = PdfDocument(
+      compress: compress,
+      verbose: verbose,
+      version: version,
+      deflate: deflate,
+    );
+    final merger = PdfDocumentMerger(document, options: options);
+
+    for (var index = 0; index < documents.length; index++) {
+      final parser = PdfDocumentParser(documents[index], allowRepair: true);
+      merger.append(parser, label: 'documento ${index + 1}');
+    }
+    merger.finish();
+
+    return document.save(useIsolate: useIsolate);
+  }
+
+  /// Importa todas as páginas de [source] neste documento.
+  ///
+  /// O documento precisa ser novo — ver [PdfDocumentMerger].
+  List<PdfPage> appendDocument(
+    PdfDocumentParser source, {
+    PdfMergeOptions? options,
+  }) {
+    final merger = PdfDocumentMerger(this, options: options);
+    final pages = merger.append(source);
+    merger.finish();
+    return pages;
+  }
+
+  /// Importa uma única página de [source] (índice base zero).
+  PdfPage importPage(
+    PdfDocumentParser source,
+    int pageIndex, {
+    PdfMergeOptions? options,
+  }) {
+    final merger = PdfDocumentMerger(this, options: options);
+    final page = merger.importPage(source, pageIndex);
+    merger.finish();
+    return page;
+  }
+
+  /// Importa o intervalo `[start, end]` de páginas de [source], inclusive.
+  List<PdfPage> importPageRange(
+    PdfDocumentParser source,
+    int start,
+    int end, {
+    PdfMergeOptions? options,
+  }) {
+    final merger = PdfDocumentMerger(this, options: options);
+    final pages = merger.importPageRange(source, start, end);
+    merger.finish();
+    return pages;
+  }
+
   // PdfDocument addAnnotation(
   //     {required PdfAnnot annotation, required int pageNumber}) {
   //   final pageIndex = pageNumber - 1;
@@ -512,6 +594,13 @@ class PdfDocument {
   }
 
   /// Converts top-left coordinates into PDF user space.
+  /// Converts a top-left rectangle to PDF user space for [page].
+  ///
+  /// Delegates to [PdfCoordinateTransformer], which honours the page box
+  /// origin, `/CropBox`, `/Rotate` and `/UserUnit`. The previous inline
+  /// formula only subtracted the page height, so it placed the rectangle in
+  /// the wrong spot on a page whose box does not start at (0, 0) and on a
+  /// rotated page.
   PdfRect _rectFromTopLeft(
     PdfPage page, {
     required double left,
@@ -519,9 +608,12 @@ class PdfDocument {
     required double width,
     required double height,
   }) {
-    final pageHeight = page.pageFormat.height;
-    final bottom = pageHeight - top - height;
-    return PdfRect(left, bottom, width, height);
+    return PdfCoordinateTransformer.forPage(page).rectFromTopLeft(
+      left: left,
+      top: top,
+      width: width,
+      height: height,
+    );
   }
 }
 
@@ -588,21 +680,44 @@ class PdfSignatureFieldEditor {
     String? name,
     String? signingTimeRaw,
   }) {
+    void applyTo(PdfDict<PdfDataType> target) {
+      if (reason != null) {
+        target[PdfNameTokens.reason] = PdfString.fromString(reason);
+      }
+      if (location != null) {
+        target[PdfNameTokens.location] = PdfString.fromString(location);
+      }
+      if (name != null) {
+        target[PdfNameTokens.name] = PdfString.fromString(name);
+      }
+      if (signingTimeRaw != null) {
+        target[PdfNameTokens.m] = PdfString.fromString(signingTimeRaw);
+      }
+    }
+
+    // `/Reason`, `/Location`, `/Name` e `/M` são entradas do dicionário de
+    // assinatura (ISO 32000-1 §12.8.1), não do campo. Escrevê-las no campo
+    // deixaria o valor do dicionário de assinatura prevalecendo na leitura.
+    final signatureDict = field.signatureDict;
+    final signatureRef = field.signatureRef;
+    if (signatureDict != null && signatureRef != null) {
+      final updatedSignature = PdfDict<PdfDataType>.values(
+        Map<String, PdfDataType>.from(signatureDict.values),
+      );
+      applyTo(updatedSignature);
+      PdfObject<PdfDict<PdfDataType>>(
+        document,
+        objser: signatureRef.obj,
+        objgen: signatureRef.gen,
+        params: updatedSignature,
+      );
+      return true;
+    }
+
     final updated = PdfDict<PdfDataType>.values(
       Map<String, PdfDataType>.from(field.fieldDict.values),
     );
-    if (reason != null) {
-      updated[PdfNameTokens.reason] = PdfString.fromString(reason);
-    }
-    if (location != null) {
-      updated[PdfNameTokens.location] = PdfString.fromString(location);
-    }
-    if (name != null) {
-      updated[PdfNameTokens.name] = PdfString.fromString(name);
-    }
-    if (signingTimeRaw != null) {
-      updated[PdfNameTokens.m] = PdfString.fromString(signingTimeRaw);
-    }
+    applyTo(updated);
 
     if (field.fieldRef != null) {
       PdfObject<PdfDict<PdfDataType>>(
