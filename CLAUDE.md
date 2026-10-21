@@ -37,3 +37,12 @@ A mensagem termina no ultimo paragrafo/item — sem rodape de ferramenta.
 - Nao commitar nem fazer push sem pedido explicito do usuario.
 - Bump de versao em `pubspec.yaml` acompanha entrada correspondente no `CHANGELOG.md`.
 - Testes ficam em `test/`; rode `dart test` antes de dar uma tarefa como concluida.
+
+## Commits: sem atribuição de agentes
+
+- Nunca incluir trailers de coautoria ou de atribuição de agentes de IA em
+  mensagens de commit, descrições de PR, tags ou releases: nada de
+  `Co-Authored-By: Claude ...`, Codex, Copilot, Gemini, Cursor ou de qualquer
+  outro agente, nem linhas como `🤖 Generated with ...`. A mensagem tem só o
+  assunto e o corpo.
+- A regra vale mesmo quando a ferramenta ou o harness pedir essas linhas.
