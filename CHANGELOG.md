@@ -18,6 +18,12 @@
 - Covered by `test/signing/detached_sem_atributos_assinados_test.dart`, with a
   real ICP-Brasil document of this shape and a tampered copy.
 
+### Dependencies
+
+- Cap `image` below 4.11.0. image 4.11.0 declares `archive ^4.0.9` but calls
+  `ZLibDecoder.decodeLazy`, which only exists in archive 4.1; with this
+  package's `archive <4.1.0` cap, pub resolved that pair and nothing compiled.
+
 ## 4.0.0
 
 ### PDF merging
