@@ -1,4 +1,22 @@
-# Changelog
+## 4.0.1
+
+### Signature validation
+
+- Validate `/adbe.pkcs7.detached` signatures that carry **no signed
+  attributes** (RFC 5652 §5.4). In this form the signature covers the digest of
+  the ByteRange bytes directly — there is no `messageDigest` attribute and no
+  encapsulated content. `PdfSignatureValidator` handled only the two other
+  shapes (signed attributes compared against `messageDigest`, and the legacy
+  `/adbe.pkcs7.sha1` encapsulated digest), so here it had nothing to verify the
+  signature against and reported "Atributo messageDigest não encontrado no
+  CMS", rejecting documents the ITI validator (validar.iti.gov.br) approves.
+  ICP-Brasil e-CPF A3 producers emit this shape (SHA-1 + `rsaEncryption`).
+- The signature is now verified over the ByteRange bytes, and that same
+  verification proves integrity: a byte changed inside the signed range changes
+  the digest and fails the check, so a tampered document is still reported as
+  not intact.
+- Covered by `test/signing/detached_sem_atributos_assinados_test.dart`, with a
+  real ICP-Brasil document of this shape and a tampered copy.
 
 ## 4.0.0
 

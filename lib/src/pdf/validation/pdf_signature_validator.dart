@@ -785,6 +785,23 @@ class PdfSignatureValidator {
         }
       } else if (messageDigest != null) {
         digestValid = _listEquals(contentDigest, messageDigest);
+      } else if (_extractCmsEncapsulatedContent(contents) == null) {
+        // Detached sem atributos assinados (RFC 5652 §5.4): não há
+        // messageDigest, e a assinatura cobre diretamente o resumo dos bytes
+        // do ByteRange. Conferi-la sobre esses bytes é, ao mesmo tempo, a
+        // prova de autoria e a de integridade: um byte alterado na faixa muda
+        // o resumo e a verificação falha. Produtores ICP-Brasil com e-CPF A3
+        // geram este formato (SHA-1 + rsaEncryption), e o Validar ITI o aprova.
+        final assinadaDireto = await _verifyCmsSignature(
+          contents,
+          detachedContent: _byteRangeBytes(pdfBytes, range),
+        );
+        cmsValid = assinadaDireto;
+        digestValid = assinadaDireto;
+        if (!assinadaDireto) {
+          message =
+              'Assinatura não confere com o conteúdo do ByteRange (sem atributos assinados).';
+        }
       } else {
         message = 'Atributo messageDigest não encontrado no CMS.';
       }
@@ -2223,6 +2240,11 @@ Uint8List _computeByteRangeDigestForOid(
   List<int> range,
   String? digestOid,
 ) {
+  return PdfCrypto.digestForOid(_byteRangeBytes(bytes, range), digestOid);
+}
+
+/// Os bytes cobertos pelo ByteRange `[start1 len1 start2 len2]`, em sequência.
+Uint8List _byteRangeBytes(Uint8List bytes, List<int> range) {
   final start1 = range[0];
   final len1 = range[1];
   final start2 = range[2];
@@ -2230,7 +2252,7 @@ Uint8List _computeByteRangeDigestForOid(
   final data = Uint8List(len1 + len2);
   data.setRange(0, len1, bytes, start1);
   data.setRange(len1, len1 + len2, bytes, start2);
-  return PdfCrypto.digestForOid(data, digestOid);
+  return data;
 }
 
 Uint8List? _extractContentsFromByteRange(
@@ -2483,7 +2505,16 @@ _NormalizeResult? _normalizeElement(Uint8List input, int offset) {
   return _NormalizeResult(out, contentEnd);
 }
 
-Future<bool> _verifyCmsSignature(Uint8List cmsBytes) async {
+/// Verifica a assinatura do CMS.
+///
+/// [detachedContent] é o conteúdo assinado quando ele não está dentro do CMS
+/// — num PDF, os bytes do ByteRange. Só é usado no detached sem atributos
+/// assinados (RFC 5652 §5.4), em que a assinatura cobre diretamente o resumo
+/// desse conteúdo.
+Future<bool> _verifyCmsSignature(
+  Uint8List cmsBytes, {
+  Uint8List? detachedContent,
+}) async {
   try {
     final parsed = _parseCmsSignerInfoAndCert(cmsBytes);
     if (parsed == null || parsed.signerInfo == null || parsed.certs.isEmpty) {
@@ -2501,9 +2532,16 @@ Future<bool> _verifyCmsSignature(Uint8List cmsBytes) async {
     final signatureAlgorithmOid = parsedSigner.signatureAlgorithmOid;
 
     final signedAttrsTagged = parsedSigner.signedAttrsTagged;
-    final candidates = signedAttrsTagged == null
+    var candidates = signedAttrsTagged == null
         ? _extractEncapsulatedContentCandidates(cmsBytes)
         : _extractSignedAttrsCandidates(signedAttrsTagged);
+    if (candidates.isEmpty &&
+        signedAttrsTagged == null &&
+        detachedContent != null) {
+      // Sem atributos assinados e sem conteúdo encapsulado: o dado assinado
+      // é o próprio conteúdo destacado.
+      candidates = <Uint8List>[detachedContent];
+    }
     if (candidates.isEmpty) {
       return false;
     }
