@@ -9,326 +9,196 @@ import 'keystore_binary_utils.dart';
 
 final PlatformCrypto _pkiCrypto = createPlatformCrypto();
 
-/// A class representing a Java KeyStore (JKS).
+const int _jksMagic = 0xFEEDFEED;
+const int _jceksMagic = 0xCECECECE;
+
+const int _tagPrivateKey = 1;
+const int _tagTrustedCert = 2;
+const int _tagSecretKey = 3;
+
+/// `sun.security.provider.KeyProtector` (JKS private keys).
+const String _jksKeyProtectorOid = '1.3.6.1.4.1.42.2.17.1.1';
+
+/// `com.sun.crypto.provider.KeyProtector`, PBEWithMD5AndTripleDES (JCEKS).
+const String _jceksKeyProtectorOid = '1.3.6.1.4.1.42.2.19.1';
+
+/// A Java KeyStore in the JKS (`0xFEEDFEED`) or JCEKS (`0xCECECECE`) format,
+/// as written by `sun.security.provider.JavaKeyStore` and
+/// `com.sun.crypto.provider.JceKeyStore`.
+///
+/// Layout (big-endian):
+///
+///     magic · version (1 or 2) · count · entries · SHA-1 digest
+///
+/// - private key (tag 1): alias · date · protected key · chain
+/// - trusted certificate (tag 2): alias · date · certificate
+/// - certificate: type (version 2 only) · length · DER
+///
+/// The digest is `SHA-1(UTF-16BE(password) · "Mighty Aphrodite" · body)`.
+/// Private keys are kept as loaded (protected) until
+/// [JksPrivateKeyEntry.decrypt] is called, and written back untouched when
+/// they were never decrypted.
 class JksKeyStore extends AbstractKeystore {
-  JksKeyStore._(Map<String, KeystoreEntry> entries) : super('jks', entries);
+  JksKeyStore._(String storeType, Map<String, KeystoreEntry> entries)
+      : super(storeType, entries);
 
-  /// Loads a JKS keystore from bytes.
+  /// An empty store to fill and [save] (`storeType` 'jks' or 'jceks').
+  factory JksKeyStore.empty({String storeType = 'jks'}) {
+    if (storeType != 'jks' && storeType != 'jceks') {
+      throw ArgumentError.value(storeType, 'storeType', "must be 'jks' or 'jceks'");
+    }
+    return JksKeyStore._(storeType, <String, KeystoreEntry>{});
+  }
+
+  /// Loads a JKS or JCEKS keystore from bytes.
+  ///
+  /// With a non-empty [storePassword] the integrity digest is checked, as
+  /// `KeyStore.load` does; with an empty one it is skipped.
   static JksKeyStore load(Uint8List bytes, {String storePassword = ''}) {
-    final entries = <String, KeystoreEntry>{};
-    final data = ByteData.sublistView(bytes);
-    int offset = 0;
+    try {
+      return _load(bytes, storePassword);
+    } on RangeError {
+      throw BadKeystoreFormatException('Truncated JKS keystore');
+    }
+  }
 
-    // Magic
-    if (data.getUint32(offset) != 0xFEEDFEED) {
+  static JksKeyStore _load(Uint8List bytes, String storePassword) {
+    if (bytes.length < 12) {
+      throw BadKeystoreFormatException('JKS keystore too small');
+    }
+    final data = ByteData.sublistView(bytes);
+    final magic = data.getUint32(0);
+    if (magic != _jksMagic && magic != _jceksMagic) {
       throw Exception('Invalid JKS magic number');
     }
-    offset += 4;
+    final storeType = magic == _jceksMagic ? 'jceks' : 'jks';
 
-    // Version
-    final version = data.getUint32(offset);
-    if (version != 2) {
+    final version = data.getUint32(4);
+    if (version != 1 && version != 2) {
       throw Exception('Unsupported JKS version: $version');
     }
-    offset += 4;
+    final count = data.getUint32(8);
+    int offset = 12;
 
-    // Count
-    final count = data.getUint32(offset);
-    offset += 4;
+    String readUtf() {
+      final length = data.getUint16(offset);
+      offset += 2;
+      final text = keystoreModifiedUtf8Decode(
+          Uint8List.sublistView(bytes, offset, offset + length));
+      offset += length;
+      return text;
+    }
 
+    Uint8List readBlob() {
+      final length = data.getUint32(offset);
+      offset += 4;
+      final blob = Uint8List.fromList(bytes.sublist(offset, offset + length));
+      offset += length;
+      return blob;
+    }
+
+    // Version 1 stores have no certificate type: it is always X.509.
+    (String, Uint8List) readCertificate() {
+      final type = version == 2 ? readUtf() : 'X.509';
+      return (type, readBlob());
+    }
+
+    final entries = <String, KeystoreEntry>{};
     for (int i = 0; i < count; i++) {
-      // Tag
       final tag = data.getUint32(offset);
       offset += 4;
-
-      // Alias
-      final aliasLen = data.getUint16(offset);
-      offset += 2;
-      final aliasBytes = bytes.sublist(offset, offset + aliasLen);
-      final alias = utf8.decode(aliasBytes);
-      offset += aliasLen;
-
-      // Timestamp
-      final timestamp = _readUint64BigEndian(data, offset);
+      final alias = readUtf();
+      final timestamp = keystoreReadInt64(data, offset);
       offset += 8;
 
-      if (tag == 1) {
-        // Private Key
-        // Certificate Chain
-        final chainLen = data.getUint32(offset);
+      if (tag == _tagPrivateKey) {
+        final protectedKey = readBlob();
+        final chainLength = data.getUint32(offset);
         offset += 4;
-
-        final certChain = <(String, Uint8List)>[];
-        for (int j = 0; j < chainLen; j++) {
-          // Cert Type
-          final certTypeLen = data.getUint16(offset);
-          offset += 2;
-          final certTypeBytes = bytes.sublist(offset, offset + certTypeLen);
-          final certType = utf8.decode(certTypeBytes);
-          offset += certTypeLen;
-
-          // Cert Data
-          final certLen = data.getUint32(offset);
-          offset += 4;
-          final certData = bytes.sublist(offset, offset + certLen);
-          offset += certLen;
-
-          certChain.add((certType, certData));
-        }
-
-        // Private Key Bytes (Encrypted)
-        final keyLen = data.getUint32(offset);
-        offset += 4;
-        final keyBytes = bytes.sublist(offset, offset + keyLen);
-        offset += keyLen;
-
+        final chain = <(String, Uint8List)>[
+          for (int j = 0; j < chainLength; j++) readCertificate(),
+        ];
         entries[alias] = JksPrivateKeyEntry(
           alias: alias,
           timestamp: timestamp,
-          storeType: 'jks',
-          certChain: certChain,
-          encryptedData: keyBytes,
+          storeType: storeType,
+          certChain: chain,
+          encryptedData: protectedKey,
         );
-      } else if (tag == 2) {
-        // Trusted Cert
-        // Cert Type
-        final certTypeLen = data.getUint16(offset);
-        offset += 2;
-        final certTypeBytes = bytes.sublist(offset, offset + certTypeLen);
-        final certType = utf8.decode(certTypeBytes);
-        offset += certTypeLen;
-
-        // Cert Data
-        final certLen = data.getUint32(offset);
-        offset += 4;
-        final certData = bytes.sublist(offset, offset + certLen);
-        offset += certLen;
-
+      } else if (tag == _tagTrustedCert) {
+        final (certType, certData) = readCertificate();
         entries[alias] = TrustedCertEntry(
           alias: alias,
           timestamp: timestamp,
-          storeType: 'jks',
+          storeType: storeType,
           certType: certType,
           certData: certData,
         );
+      } else if (tag == _tagSecretKey && storeType == 'jceks') {
+        // A Java-serialized SealedObject: its length is not stored, so the
+        // rest of the file cannot be located without a Java deserializer.
+        throw KeystoreException(
+            'JCEKS secret key entry "$alias" is not supported');
       } else {
         throw Exception('Unknown JKS tag: $tag');
       }
     }
 
-    // Integrity Check
     if (storePassword.isNotEmpty) {
-      final passwordBytes = utf16BeEncode(storePassword);
-      final phrase = ascii.encode("Mighty Aphrodite");
-
-      // Hash(password || phrase || data)
-      // Data is everything before the digest.
-      // The digest is the last 20 bytes of the file.
-      // However, we just read 'offset' bytes so far.
-      // If offset < bytes.length, the remaining bytes should be the digest.
-
-      if (bytes.length - offset == 20) {
-        final storedDigest = bytes.sublist(offset);
-        // Calculate digest
-        // The "data" includes the Magic, Version, Count, and all Entries.
-        // Which is everything from 0 to offset.
-        final dataToHash = bytes.sublist(0, offset);
-
-        final input =
-            Uint8List(passwordBytes.length + phrase.length + dataToHash.length);
-        input.setAll(0, passwordBytes);
-        input.setAll(passwordBytes.length, phrase);
-        input.setAll(passwordBytes.length + phrase.length, dataToHash);
-
-        final computedDigest = _pkiCrypto.sha1Sync(input);
-
-        if (!fixedTimeEqual(computedDigest, storedDigest)) {
-          // Java: Keystore was tampered with, or password was incorrect
-          throw Exception('Keystore password incorrect or data corrupted');
-        }
+      // KeyStore.load reads the 20 digest bytes right after the entries; a
+      // missing digest is a corrupt store, not a reason to skip the check.
+      if (bytes.length - offset < 20) {
+        throw Exception(
+            'Keystore password incorrect or data corrupted: digest missing');
+      }
+      final computed = _storeDigest(
+          storePassword, Uint8List.sublistView(bytes, 0, offset));
+      if (!fixedTimeEqual(
+          computed, Uint8List.sublistView(bytes, offset, offset + 20))) {
+        throw Exception('Keystore password incorrect or data corrupted');
       }
     }
 
-    return JksKeyStore._(entries);
+    return JksKeyStore._(storeType, entries);
   }
 
-  /// Saves the keystore to bytes.
+  /// Saves the keystore in the JKS format.
   ///
-  /// [storePassword] is used for integrity checking.
-  /// [keyPassword] is used for private key encryption (defaults to [storePassword] if not provided).
-  Uint8List save(String storePassword, {String? keyPassword}) {
-    final entryList = entries.values.toList();
-    // Sort alias to determine order? KeyStore doesn't strictly require sorting, but deterministic output is nice.
-    // However, Hashtable order is not guaranteed. Java JKS implementation just iterates keys().
+  /// [storePassword] keys the integrity digest. Decrypted private keys are
+  /// protected again with [keyPassword] (default: [storePassword]); keys that
+  /// were never decrypted are written back as loaded.
+  Uint8List save(String storePassword, {String? keyPassword}) =>
+      _encode(_jksMagic, storePassword, keyPassword);
 
+  /// Saves the keystore in the JCEKS format (PBEWithMD5AndTripleDES keys).
+  Uint8List saveJceks(String storePassword, {String? keyPassword}) =>
+      _encode(_jceksMagic, storePassword, keyPassword);
+
+  Uint8List _encode(int magic, String storePassword, String? keyPassword) {
     final body = BytesBuilder();
-
-    // Magic
-    body.add(_int32ToBytes(0xFEEDFEED));
-    // Version
+    body.add(_int32ToBytes(magic));
     body.add(_int32ToBytes(2));
-    // Count
-    body.add(_int32ToBytes(entryList.length));
+    body.add(_int32ToBytes(entries.length));
 
-    for (final entry in entryList) {
-      if (entry is JksPrivateKeyEntry || entry is PrivateKeyEntry) {
-        // Tag (1)
-        body.add(_int32ToBytes(1));
-
-        // Alias
+    for (final entry in entries.values) {
+      if (entry is PrivateKeyEntry) {
+        body.add(_int32ToBytes(_tagPrivateKey));
         _writeJavaUtf(body, entry.alias);
-
-        // Timestamp
         body.add(_int64ToBytes(entry.timestamp));
 
-        // Certificate Chain
-        final pke = entry as PrivateKeyEntry;
-        if (pke.certChain.isEmpty) {
-          // PrivateKeyEntry must have a chain (even if empty? Java says usually accompanied by chain)
-          // If empty, write 0.
-          body.add(_int32ToBytes(0));
-        } else {
-          body.add(_int32ToBytes(pke.certChain.length));
-          for (final cert in pke.certChain) {
-            _writeJavaUtf(body, cert.$1); // One of the chain items is type
-            body.add(_int32ToBytes(cert.$2.length));
-            body.add(cert.$2);
-          }
-        }
-
-        // Private Key
-        // We need to encrypt the Pkcs8 key
-        final kPwd = keyPassword ?? storePassword;
-
-        Uint8List? pkcs8 = pke.pkcs8PrivateKey;
-        if (pkcs8 == null && pke.rawPrivateKey != null) {
-          // Assuming rawPrivateKey IS pkcs8 for now as we don't have a converter here
-          pkcs8 = pke.rawPrivateKey;
-        }
-
-        if (pkcs8 == null) {
-          throw KeystoreException(
-              'Cannot save private key entry ${entry.alias}: no private key loaded');
-        }
-
-        final protectedKey = _jksProtectPrivateKey(pkcs8, kPwd);
-        body.add(_int32ToBytes(protectedKey.length));
-        body.add(protectedKey);
-      } else if (entry is TrustedCertEntry) {
-        // Tag (2)
-        body.add(_int32ToBytes(2));
-
-        // Alias
-        _writeJavaUtf(body, entry.alias);
-
-        // Timestamp
-        body.add(_int64ToBytes(entry.timestamp));
-
-        // Cert
-        _writeJavaUtf(body, entry.certType);
-        body.add(_int32ToBytes(entry.certData.length));
-        body.add(entry.certData);
-      } else {
-        // Skip or throw?
-        throw KeystoreException('Unsupported entry type: ${entry.runtimeType}');
-      }
-    }
-
-    final bodyBytes = body.toBytes();
-
-    // Integrity Hash
-    final passwordBytes = utf16BeEncode(storePassword);
-    final phrase = ascii.encode("Mighty Aphrodite");
-
-    // According to JavaKeyStore.java (engineStore):
-    // MessageDigest md = getPreKeyedHash(password);
-    // ... writer uses DigestOutputStream(stream, md) ...
-    // ... finally writes md.digest()
-
-    // getPreKeyedHash:
-    // md = SHA1()
-    // md.update(passwordBytes) (utf16be)
-    // md.update("Mighty Aphrodite" as UTF8)
-
-    // Then ALL body data is updated to md.
-
-    // So: Hash = SHA1( passwordUTF16BE || "Mighty Aphrodite" || Body )
-
-    final hashInput = BytesBuilder();
-    hashInput.add(passwordBytes);
-    hashInput.add(phrase);
-    hashInput.add(bodyBytes);
-
-    final computedDigest = _pkiCrypto.sha1Sync(hashInput.toBytes());
-
-    final finalKeystore = BytesBuilder();
-    finalKeystore.add(bodyBytes);
-    finalKeystore.add(computedDigest);
-
-    return finalKeystore.toBytes();
-  }
-
-  /// Saves the keystore to JCEKS format bytes (version 2 with JCEKS magic).
-  ///
-  /// JCEKS uses a different private key protection mechanism (PBEWithMD5AndTripleDES)
-  /// and includes the magic 0xCECECECE.
-  Uint8List saveJceks(String storePassword, {String? keyPassword}) {
-    final entryList = entries.values.toList();
-    final body = BytesBuilder();
-
-    // JCEKS Magic: 0xCECECECE
-    body.add(_int32ToBytes(0xCECECECE));
-    // Version
-    body.add(_int32ToBytes(2));
-    // Count
-    body.add(_int32ToBytes(entryList.length));
-
-    for (final entry in entryList) {
-      if (entry is JksPrivateKeyEntry || entry is PrivateKeyEntry) {
-        // Tag (1) - Private Key
-        body.add(_int32ToBytes(1));
-
-        // Alias
-        _writeJavaUtf(body, entry.alias);
-
-        // Timestamp
-        body.add(_int64ToBytes(entry.timestamp));
-
-        // Private Key Protection (JCEKeyProtector: PBEWithMD5AndTripleDES)
-        // Note: JCEKS stores EncryptedPrivateKeyInfo DER structure.
-        final pke = entry as PrivateKeyEntry;
-        final kPwd = keyPassword ?? storePassword;
-
-        Uint8List? pkcs8 = pke.pkcs8PrivateKey;
-        if (pkcs8 == null && pke.rawPrivateKey != null) {
-          pkcs8 = pke.rawPrivateKey; // Simplify assumption
-        }
-
-        if (pkcs8 == null) {
-          throw KeystoreException(
-              'Cannot save private key entry ${entry.alias}: no private key loaded');
-        }
-
-        // Encrypt to EncryptedPrivateKeyInfo (DER)
-        final protectedKey = _jceksProtectPrivateKey(pkcs8, kPwd);
+        final protectedKey = entry.encryptedDataBytes ??
+            _protect(entry, magic, keyPassword ?? storePassword);
         body.add(_int32ToBytes(protectedKey.length));
         body.add(protectedKey);
 
-        // Certificate Chain
-        if (pke.certChain.isEmpty) {
-          body.add(_int32ToBytes(0));
-        } else {
-          body.add(_int32ToBytes(pke.certChain.length));
-          for (final cert in pke.certChain) {
-            _writeJavaUtf(body, cert.$1);
-            body.add(_int32ToBytes(cert.$2.length));
-            body.add(cert.$2);
-          }
+        body.add(_int32ToBytes(entry.certChain.length));
+        for (final (certType, certData) in entry.certChain) {
+          _writeJavaUtf(body, certType);
+          body.add(_int32ToBytes(certData.length));
+          body.add(certData);
         }
       } else if (entry is TrustedCertEntry) {
-        // Tag (2) - Trusted Cert
-        body.add(_int32ToBytes(2));
-
+        body.add(_int32ToBytes(_tagTrustedCert));
         _writeJavaUtf(body, entry.alias);
         body.add(_int64ToBytes(entry.timestamp));
         _writeJavaUtf(body, entry.certType);
@@ -336,75 +206,55 @@ class JksKeyStore extends AbstractKeystore {
         body.add(entry.certData);
       } else {
         throw KeystoreException(
-            'Unsupported entry type for JCEKS: ${entry.runtimeType}');
+            'Unsupported entry type: ${entry.runtimeType}');
       }
     }
 
     final bodyBytes = body.toBytes();
-
-    // Integrity Hash (Same logic as JKS: SHA1 of password+whitener+body)
-    final passwordBytes = utf16BeEncode(storePassword);
-    final phrase = ascii.encode("Mighty Aphrodite");
-
-    final hashInput = BytesBuilder();
-    hashInput.add(passwordBytes);
-    hashInput.add(phrase);
-    hashInput.add(bodyBytes);
-
-    final computedDigest = _pkiCrypto.sha1Sync(hashInput.toBytes());
-
-    final finalKeystore = BytesBuilder();
-    finalKeystore.add(bodyBytes);
-    finalKeystore.add(computedDigest);
-
-    return finalKeystore.toBytes();
+    return (BytesBuilder()
+          ..add(bodyBytes)
+          ..add(_storeDigest(storePassword, bodyBytes)))
+        .toBytes();
   }
+
+  static Uint8List _protect(PrivateKeyEntry entry, int magic, String password) {
+    final pkcs8 = entry.pkcs8PrivateKey ?? entry.rawPrivateKey;
+    if (pkcs8 == null) {
+      throw KeystoreException(
+          'Cannot save private key entry ${entry.alias}: no private key loaded');
+    }
+    return magic == _jksMagic
+        ? _jksProtectPrivateKey(pkcs8, password)
+        : _jceksProtectPrivateKey(pkcs8, password);
+  }
+}
+
+/// `SHA-1(UTF-16BE(password) · "Mighty Aphrodite" · data)`, from
+/// `JavaKeyStore.getPreKeyedHash`.
+Uint8List _storeDigest(String password, Uint8List data) {
+  final input = BytesBuilder()
+    ..add(utf16BeEncode(password))
+    ..add(ascii.encode('Mighty Aphrodite'))
+    ..add(data);
+  return _pkiCrypto.sha1Sync(input.toBytes());
 }
 
 /// JCEKS Protection (PBEWithMD5AndTripleDES)
 Uint8List _jceksProtectPrivateKey(Uint8List plainPkcs8, String password) {
-  // 1. Generate Salt (20 bytes? JCEKS usually 8 bytes)
-  // The user snippet says "salt8". Standard JCEKS salt is 8 bytes.
-  final salt = _pkiCrypto.randomBytes(8);
+  // 8-byte salt. Salts with equal halves get special treatment in the JDK
+  // key derivation; drawing again keeps this writer out of that corner.
+  Uint8List salt;
+  do {
+    salt = _pkiCrypto.randomBytes(8);
+  } while (fixedTimeEqual(salt.sublist(0, 4), salt.sublist(4)));
 
-  final int iterationCount = 200000; // Standard for JCEKS
-
-  // 2. Derive Key
-  // Logic similar to decryptJCEKSPrivateKey but inversed?
-  // Wait, decryptJCEKSPrivateKey logic:
-  //   digest1 = derive(password, salt_half1, iter)
-  //   digest2 = derive(password, salt_half2, iter)
-  //   key = digest1 + digest2[0..8]
-  //   iv = digest2[8..16]
-  //
-  // We need to do the same derivation to get the KEY and IV for encryption.
-
-  final half1 = salt.sublist(0, 4);
-  final half2 = salt.sublist(4);
-
-  // Apply the "invert" logic if halves are equal (very unlikely for random, but strict spec)
-  // But wait, the decrypt logic INVERTS half2 if they are equal relative to the STORED salt.
-  // So if we generate random salt, we just use it.
-  // But if we generated a salt where halves are equal (1 in 2^32), we would need to handle it.
-  // The decrypt logic says: "if stored halves equal, invert half2 for derivation".
-  // So if we generated equal halves, we should invert for derivation so that decrypt sees equal halves and inverts back.
-  // OR we just ensure we don't generate equal halves?
-  // Let's rely on standard derivation logic provided previously.
-
-  // BUT WAIT: The decrypt logic provided previously had:
-  // if (equal(half1, half2)) invert half2.
-  // This implies the STORED salt has equal halves, but the derivation uses different halves.
-  // Actually, it usually means the salt used for derivation is modified from the stored salt.
-  // So:
-  Uint8List saltForDerivationHalf2 = Uint8List.fromList(half2);
-  if (fixedTimeEqual(half1, half2)) {
-    for (int i = 0; i < 4; i++) saltForDerivationHalf2[i] ^= 0xFF;
-  }
+  const int iterationCount = 200000; // JDK's JceKeyStore default
 
   final passwordBytes = Uint8List.fromList(password.codeUnits); // ASCII
-  final digest1 = _jceksDerivePart(passwordBytes, half1, iterationCount);
+  final digest1 =
+      _jceksDerivePart(passwordBytes, salt.sublist(0, 4), iterationCount);
   final digest2 =
-      _jceksDerivePart(passwordBytes, saltForDerivationHalf2, iterationCount);
+      _jceksDerivePart(passwordBytes, salt.sublist(4), iterationCount);
 
   final key = Uint8List(24);
   key.setAll(0, digest1);
@@ -412,30 +262,17 @@ Uint8List _jceksProtectPrivateKey(Uint8List plainPkcs8, String password) {
 
   final iv = digest2.sublist(8, 16);
 
-  // 3. Encrypt (3DES-CBC-PKCS7)
+  // 3DES-CBC-PKCS7
   final params = ParametersWithIV<KeyParameter>(KeyParameter(key), iv);
-  final cipher = CBCBlockCipher(DESedeEngine())
-    ..init(true, params); // true = encrypt
+  final cipher = CBCBlockCipher(DESedeEngine())..init(true, params);
   final paddedCipher = PaddedBlockCipherImpl(PKCS7Padding(), cipher);
 
   final encryptedData = paddedCipher.process(plainPkcs8);
 
-  // 4. Construct DER Structure (EncryptedPrivateKeyInfo)
   // EncryptedPrivateKeyInfo ::= SEQUENCE {
-  //   encryptionAlgorithm  AlgorithmIdentifier,
-  //   encryptedData        OCTET STRING
-  // }
-  // AlgorithmIdentifier ::= SEQUENCE {
-  //   algorithm OBJECT IDENTIFIER (1.3.6.1.4.1.42.2.19.1),
-  //   parameters SEQUENCE {
-  //      salt OCTET STRING,
-  //      iterationCount INTEGER
-  //   }
-  // }
-
-  // OID: 1.3.6.1.4.1.42.2.19.1
-  // 1.3.6.1.4.1.42.2.19.1 -> 2B 06 01 04 01 2A 02 13 01 (verified below)
-
+  //   SEQUENCE { OID 1.3.6.1.4.1.42.2.19.1,
+  //              SEQUENCE { salt OCTET STRING, iterationCount INTEGER } },
+  //   encryptedData OCTET STRING }
   final paramsDer = _DerWriter()
       .writeSequence(
           (w) => w.writeOctetString(salt).writeInteger(iterationCount))
@@ -448,12 +285,10 @@ Uint8List _jceksProtectPrivateKey(Uint8List plainPkcs8, String password) {
           .writeBytes(paramsDer))
       .toBytes();
 
-  final epkiDer = _DerWriter()
+  return _DerWriter()
       .writeSequence(
           (w) => w.writeBytes(algIdDer).writeOctetString(encryptedData))
       .toBytes();
-
-  return epkiDer;
 }
 
 // Minimal DER Writer
@@ -481,6 +316,13 @@ class _DerWriter {
     _b.addByte(0x04); // OCTET STRING
     _writeLength(data.length);
     _b.add(data);
+    return this;
+  }
+
+  _DerWriter writeNull() {
+    _b
+      ..addByte(0x05)
+      ..addByte(0x00);
     return this;
   }
 
@@ -546,14 +388,8 @@ Uint8List _int64ToBytes(int value) {
   return keystoreInt64ToBytesBigEndian(value);
 }
 
-int _readUint64BigEndian(ByteData data, int offset) {
-  final hi = data.getUint32(offset, Endian.big);
-  final lo = data.getUint32(offset + 4, Endian.big);
-  return (hi * 0x100000000) + lo;
-}
-
 void _writeJavaUtf(BytesBuilder b, String s) {
-  final encoded = utf8.encode(s);
+  final encoded = keystoreModifiedUtf8Encode(s);
   if (encoded.length > 65535) {
     throw KeystoreException('String too long for JKS format');
   }
@@ -563,53 +399,58 @@ void _writeJavaUtf(BytesBuilder b, String s) {
   b.add(encoded);
 }
 
+/// `sun.security.provider.KeyProtector.protect`: a 20-byte salt, the key
+/// XORed with an SHA-1 keystream and the plain SHA-1 of password and key,
+/// wrapped in an EncryptedPrivateKeyInfo under the KeyProtector OID.
 Uint8List _jksProtectPrivateKey(Uint8List plainKey, String password) {
-  // Salt (20 bytes)
   final salt = _pkiCrypto.randomBytes(20);
-
   final passwordBE = utf16BeEncode(password);
 
-  // Digest: SHA1(password || plaintext)
-  // digest is calculated on the PLAIN key
-  final integInput = Uint8List(passwordBE.length + plainKey.length);
-  integInput.setAll(0, passwordBE);
-  integInput.setAll(passwordBE.length, plainKey);
-  final digestBytes = _pkiCrypto.sha1Sync(integInput);
+  final encrypted = _jksXor(plainKey, passwordBE, salt);
+  final integrity = _pkiCrypto.sha1Sync(
+      (BytesBuilder()
+            ..add(passwordBE)
+            ..add(plainKey))
+          .toBytes());
 
-  // Create the blob to encrypt: Key || Digest
-  final blobToEncrypt = Uint8List(plainKey.length + digestBytes.length);
-  blobToEncrypt.setAll(0, plainKey);
-  blobToEncrypt.setAll(plainKey.length, digestBytes);
+  final protectedKey = (BytesBuilder()
+        ..add(salt)
+        ..add(encrypted)
+        ..add(integrity))
+      .toBytes();
 
-  // Encrypt (XOR)
-  // Keystream gen
+  final algIdDer = _DerWriter()
+      .writeSequence((w) => w
+          .writeOidContent(Uint8List.fromList(
+              [0x2B, 0x06, 0x01, 0x04, 0x01, 0x2A, 0x02, 0x11, 0x01, 0x01]))
+          .writeNull())
+      .toBytes();
 
-  Uint8List currentDigest = salt;
-  final keystream = Uint8List(blobToEncrypt.length);
+  return _DerWriter()
+      .writeSequence(
+          (w) => w.writeBytes(algIdDer).writeOctetString(protectedKey))
+      .toBytes();
+}
+
+/// XOR with the KeyProtector keystream: `d0 = salt`,
+/// `d(i) = SHA-1(UTF-16BE(password) · d(i-1))`.
+Uint8List _jksXor(Uint8List input, Uint8List passwordBE, Uint8List salt) {
+  Uint8List digest = salt;
+  final out = Uint8List(input.length);
   int offset = 0;
-
-  while (offset < blobToEncrypt.length) {
-    final input = Uint8List(passwordBE.length + currentDigest.length);
-    input.setAll(0, passwordBE);
-    input.setAll(passwordBE.length, currentDigest);
-
-    currentDigest = _pkiCrypto.sha1Sync(input);
-
-    final len = min(currentDigest.length, blobToEncrypt.length - offset);
-    keystream.setAll(offset, currentDigest.sublist(0, len));
+  while (offset < input.length) {
+    digest = _pkiCrypto.sha1Sync(
+        (BytesBuilder()
+              ..add(passwordBE)
+              ..add(digest))
+            .toBytes());
+    final len = min(digest.length, input.length - offset);
+    for (int i = 0; i < len; i++) {
+      out[offset + i] = input[offset + i] ^ digest[i];
+    }
     offset += len;
   }
-
-  final ciphertext = Uint8List(blobToEncrypt.length);
-  for (int i = 0; i < blobToEncrypt.length; i++) {
-    ciphertext[i] = blobToEncrypt[i] ^ keystream[i];
-  }
-
-  final result = BytesBuilder();
-  result.add(salt);
-  result.add(ciphertext);
-
-  return result.toBytes();
+  return out;
 }
 
 class JksPrivateKeyEntry extends PrivateKeyEntry {
@@ -626,87 +467,76 @@ class JksPrivateKeyEntry extends PrivateKeyEntry {
     if (isDecrypted()) return;
 
     try {
-      if (encryptedDataBytes == null) {
-        throw DecryptionFailureException('No encrypted data');
-      }
-
-      // Check if it's JCEKS (DER Sequence 0x30) or JKS (Proprietary)
-      if (encryptedDataBytes!.isNotEmpty && encryptedDataBytes![0] == 0x30) {
-        // JCEKS (EncryptedPrivateKeyInfo)
-        final plaintext = _jceksDecrypt(encryptedDataBytes!, password);
-
-        // JCEKS stores a parsed PrivateKeyInfo (PKCS#8) directly as plaintext?
-        // Or EncryptedPrivateKeyInfo decrypts TO PrivateKeyInfo?
-        // Yes, decrypting EncryptedPrivateKeyInfo gives PrivateKeyInfo.
-
-        // PrivateKeyInfo structure (PKCS#8):
-        // Sequence
-        //   Version (0)
-        //   AlgorithmIdentifier
-        //   PrivateKey (OctetString)
-        //   [Attributes]
-
-        // We need to parse this to get the raw private key (for rawPrivateKey)
-        // or just store the whole thing as pkcs8PrivateKey.
-        pkcs8PrivateKey = plaintext;
-
-        // Extract raw key?
-        // Let's crudely extract it or leave it.
-        // User wants "rawPrivateKey" usually for BouncyCastle.
-        // But PrivateKeyEntry has pkcs8PrivateKey.
-        // rawPrivateKey is usually valid if we can parse it.
-        // For now, let's try to extract the OctetString if possible using our DER reader.
-        try {
-          final reader = _DerReader(plaintext);
-          reader.readSequence(); // Top sequence
-          final v = reader.readInt(); // Version
-          if (v == 0) {
-            reader.readSequence(); // AlgorithmIdentifier
-            final octet = reader.readOctetString(); // PrivateKey
-            rawPrivateKey = octet;
-          }
-        } catch (_) {
-          // If parsing fails, just leave rawPrivateKey null or same as pkcs8
-          rawPrivateKey = plaintext;
+      final protectedKey = encryptedDataBytes!;
+      final Uint8List plaintext;
+      if (protectedKey.isNotEmpty && protectedKey[0] == 0x30) {
+        // EncryptedPrivateKeyInfo, in JKS and in JCEKS: the OID says which.
+        final top = _DerReader(protectedKey).readSequence();
+        final oid = top.readSequence().readOid();
+        if (oid == _jksKeyProtectorOid) {
+          plaintext = _jksRecover(top.readOctetString(), password,
+              digestEncrypted: false);
+        } else if (oid == _jceksKeyProtectorOid) {
+          plaintext = _jceksDecrypt(protectedKey, password);
+        } else {
+          throw DecryptionFailureException(
+              'Unsupported key protection algorithm: $oid');
         }
       } else {
-        // JKS (Legacy JDKKeyProtector)
-        if (encryptedDataBytes!.length < 40) {
-          throw DecryptionFailureException('Invalid JKS key data length');
-        }
-
-        final salt = encryptedDataBytes!.sublist(0, 20);
-        final ciphertext =
-            encryptedDataBytes!.sublist(20, encryptedDataBytes!.length - 20);
-        final storedDigest =
-            encryptedDataBytes!.sublist(encryptedDataBytes!.length - 20);
-
-        // Decrypt
-        final plaintext = _jksDecrypt(ciphertext, password, salt);
-
-        // Verify integrity: SHA1(passwordBE || plaintext)
-        final passwordBE = utf16BeEncode(password);
-        final input = Uint8List(passwordBE.length + plaintext.length);
-        input.setAll(0, passwordBE);
-        input.setAll(passwordBE.length, plaintext);
-
-        final computedDigest = _pkiCrypto.sha1Sync(input);
-
-        if (!fixedTimeEqual(computedDigest, storedDigest)) {
-          throw DecryptionFailureException(
-              'Password incorrect or integrity check failed');
-        }
-
-        // Success
-        // JKS proprietary format decrypts to the raw private key (PKCS#8 encoded usually)
-        rawPrivateKey = plaintext;
-        pkcs8PrivateKey = plaintext;
+        // Written by pdf_plus before 4.0.2: no EncryptedPrivateKeyInfo and
+        // the integrity digest XORed together with the key.
+        plaintext = _jksRecover(protectedKey, password, digestEncrypted: true);
       }
 
+      pkcs8PrivateKey = plaintext;
+      rawPrivateKey = _privateKeyOctets(plaintext) ?? plaintext;
       encryptedDataBytes = null;
     } catch (e) {
       if (e is KeystoreException) rethrow;
       throw DecryptionFailureException('Decryption failed: $e');
+    }
+  }
+
+  /// `KeyProtector.recover`: `salt[20] · encrypted · digest[20]`.
+  static Uint8List _jksRecover(Uint8List blob, String password,
+      {required bool digestEncrypted}) {
+    if (blob.length < 40) {
+      throw DecryptionFailureException('Invalid JKS key data length');
+    }
+    final passwordBE = utf16BeEncode(password);
+    final salt = blob.sublist(0, 20);
+    final Uint8List plainKey;
+    final Uint8List storedDigest;
+    if (digestEncrypted) {
+      final all = _jksXor(blob.sublist(20), passwordBE, salt);
+      plainKey = all.sublist(0, all.length - 20);
+      storedDigest = all.sublist(all.length - 20);
+    } else {
+      plainKey =
+          _jksXor(blob.sublist(20, blob.length - 20), passwordBE, salt);
+      storedDigest = blob.sublist(blob.length - 20);
+    }
+    final computed = _pkiCrypto.sha1Sync(
+        (BytesBuilder()
+              ..add(passwordBE)
+              ..add(plainKey))
+            .toBytes());
+    if (!fixedTimeEqual(computed, storedDigest)) {
+      throw DecryptionFailureException(
+          'Password incorrect or integrity check failed');
+    }
+    return plainKey;
+  }
+
+  /// The privateKey OCTET STRING of a PKCS#8 PrivateKeyInfo, if it parses.
+  static Uint8List? _privateKeyOctets(Uint8List pkcs8) {
+    try {
+      final reader = _DerReader(pkcs8).readSequence();
+      if (reader.readInt() != 0) return null;
+      reader.readSequence(); // AlgorithmIdentifier
+      return reader.readOctetString();
+    } catch (_) {
+      return null;
     }
   }
 }
@@ -722,44 +552,6 @@ Uint8List utf16BeEncode(String s) {
   return bytes;
 }
 
-/// Raw JKS Decryption (XOR with Keystream)
-Uint8List _jksDecrypt(
-  Uint8List ciphertext,
-  String password,
-  Uint8List salt,
-) {
-  final passwordBE = utf16BeEncode(password);
-
-  // Keystream generation (JKS compliant)
-  // digest_0 = salt
-  // digest_i = SHA1(password || digest_{i-1})
-
-  Uint8List currentDigest = salt;
-  final keystream = Uint8List(ciphertext.length);
-  int offset = 0;
-
-  while (offset < ciphertext.length) {
-    // Hash (password || currentDigest)
-    final input = Uint8List(passwordBE.length + currentDigest.length);
-    input.setAll(0, passwordBE);
-    input.setAll(passwordBE.length, currentDigest);
-
-    currentDigest = _pkiCrypto.sha1Sync(input);
-
-    final len = min(currentDigest.length, ciphertext.length - offset);
-    keystream.setAll(offset, currentDigest.sublist(0, len));
-    offset += len;
-  }
-
-  // XOR
-  final plaintext = Uint8List(ciphertext.length);
-  for (int i = 0; i < ciphertext.length; i++) {
-    plaintext[i] = ciphertext[i] ^ keystream[i];
-  }
-
-  return plaintext;
-}
-
 /// JCEKS Decryption (PBEWithMD5AndTripleDES)
 Uint8List _jceksDecrypt(Uint8List encryptedPrivateKeyInfo, String password) {
   try {
@@ -768,35 +560,16 @@ Uint8List _jceksDecrypt(Uint8List encryptedPrivateKeyInfo, String password) {
     //   encryptionAlgorithm  AlgorithmIdentifier,
     //   encryptedData        OCTET STRING
     // }
-    reader.readSequence(); // top sequence
+    final top = reader.readSequence();
+    final algReader = top.readSequence();
+    algReader.readOid();
 
-    // AlgorithmIdentifier ::= SEQUENCE {
-    //   algorithm OBJECT IDENTIFIER,
-    //   parameters ANY DEFINED BY algorithm OPTIONAL
-    // }
-    final algReader = reader.readSequence();
-    final oid = algReader.readOid();
-
-    if (oid != '1.3.6.1.4.1.42.2.19.1') {
-      // 1.3.6.1.4.1.42.2.19.1 = JCEKeyProtector?
-      // User mentions "JAVASOFT_JCEKeyProtector"
-      // Actually the OID for PBEWithMD5AndTripleDES is 1.2.840.113549.1.12.1.3 (pbeWithSHAAnd3-KeyTripleDES-CBC)
-      // OR 1.3.6.1.4.1.42.2.19.1 (PBE_WITH_MD5_AND_DES3_CBC_OID - older Sun one)
-      // Let's just proceed assuming it's supported PBE if it's JCEKS.
-    }
-
-    // Parameters (Sequence -> Salt, Iterations)
-    // Sometimes parameters is just the Sequence directly
+    // Parameters: SEQUENCE { salt OCTET STRING, iterationCount INTEGER }
     final paramReader = algReader.readSequence();
     final salt = paramReader.readOctetString();
     final iterations = paramReader.readInt();
 
-    final encryptedData = reader.readOctetString();
-
-    // Key Derivation (SunJCE style)
-    if (salt.length != 8) {
-      // Warn or allow? Standard is 8 bytes.
-    }
+    final encryptedData = top.readOctetString();
 
     // Split salt
     final half1 = salt.sublist(0, 4);

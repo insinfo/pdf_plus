@@ -80,7 +80,7 @@ class TruststoreAssetsLoader {
     final matches = re.allMatches(pem);
     final out = <Uint8List>[];
     for (final m in matches) {
-      final body = (m.group(1) ?? '').replaceAll(RegExp(r'\\s+'), '');
+      final body = (m.group(1) ?? '').replaceAll(RegExp(r'\s+'), '');
       if (body.isEmpty) continue;
       try {
         out.add(Uint8List.fromList(base64.decode(body)));

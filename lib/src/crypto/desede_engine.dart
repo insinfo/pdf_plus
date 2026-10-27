@@ -31,9 +31,12 @@ class DESedeEngine implements BlockCipher {
     final k2 = key.sublist(8, 16);
     final k3 = key.length == 24 ? key.sublist(16, 24) : k1;
 
-    _k1 = DESEngine.generateWorkingKey(true, k1);
-    _k2 = DESEngine.generateWorkingKey(false, k2);
-    _k3 = DESEngine.generateWorkingKey(true, k3);
+    // EDE: the middle stage runs in the opposite direction. The subkeys must
+    // follow the requested direction, as in Bouncy Castle's DESedeEngine;
+    // fixing them to (encrypt, decrypt, encrypt) made every decryption wrong.
+    _k1 = DESEngine.generateWorkingKey(forEncryption, k1);
+    _k2 = DESEngine.generateWorkingKey(!forEncryption, k2);
+    _k3 = DESEngine.generateWorkingKey(forEncryption, k3);
   }
 
   @override

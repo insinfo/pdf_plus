@@ -120,24 +120,8 @@ class BksSealedKeyEntry extends KeystoreEntry {
     // Iteration Count (4 bytes)
     // Ciphertext (Rest)
 
-    if (_encryptedData == null || _encryptedData!.length < 24) {
-      throw DecryptionFailureException('Invalid sealed key data length');
-    }
-
-    final data = ByteData.sublistView(_encryptedData!);
-    int pos = 0;
-
-    // Read salt (20 bytes)
-    // Note: BKS V2 sometimes stores salt length?
-    // BC implementation usually fixed 20 bytes for this specific internal structure
-    final salt = _encryptedData!.sublist(pos, pos + 20);
-    pos += 20;
-
-    // Read iteration count
-    final iterationCount = data.getUint32(pos);
-    pos += 4;
-
-    final ciphertext = _encryptedData!.sublist(pos);
+    final (salt, iterationCount, ciphertext) =
+        _parseSealedData(_encryptedData!);
 
     try {
       // Derive Key (192 bits = 24 bytes) and IV (64 bits = 8 bytes)
@@ -181,7 +165,53 @@ class BksSealedKeyEntry extends KeystoreEntry {
       throw DecryptionFailureException('BKS decryption failed: $e');
     }
   }
+
+  /// The sealed blob as stored in the keystore, or `null` once decrypted.
+  /// [BksKeyStore.save] writes it back untouched when the key was not opened.
+  Uint8List? get encryptedData => _encryptedData;
+
+  /// Splits a sealed blob into salt, iteration count and ciphertext.
+  ///
+  /// BcKeyStoreSpi writes `int saltLength · salt · int iterationCount ·
+  /// ciphertext`. Before 4.0.2 this package read and wrote the salt without
+  /// its length (`salt[20] · int iterationCount · ciphertext`); such blobs are
+  /// still accepted. A declared salt length outside 1..64 identifies them,
+  /// since BC always uses 20.
+  static (Uint8List, int, Uint8List) _parseSealedData(Uint8List sealed) {
+    final view = ByteData.sublistView(sealed);
+    int pos = 0;
+    Uint8List salt;
+    final declaredSaltLength = sealed.length >= 4 ? view.getUint32(0) : 0;
+    if (declaredSaltLength >= 1 &&
+        declaredSaltLength <= 64 &&
+        sealed.length > 8 + declaredSaltLength) {
+      pos = 4;
+      salt = sealed.sublist(pos, pos + declaredSaltLength);
+      pos += declaredSaltLength;
+    } else if (sealed.length > 24) {
+      salt = sealed.sublist(0, 20);
+      pos = 20;
+    } else {
+      throw DecryptionFailureException('Invalid sealed key data length');
+    }
+
+    final iterationCount = view.getUint32(pos);
+    pos += 4;
+    // Without a ceiling a malformed blob turns the PKCS#12 KDF into billions
+    // of SHA-1 rounds and load() never returns.
+    if (iterationCount < 1 || iterationCount > _maxIterations) {
+      throw DecryptionFailureException(
+          'Invalid sealed key iteration count: $iterationCount');
+    }
+    return (salt, iterationCount, sealed.sublist(pos));
+  }
 }
+
+/// Highest iteration count accepted on load. Bouncy Castle writes 1024..2047
+/// and this package 10000; BC itself sets no limit for BKS (its `1024 << 6`
+/// check belongs to the UBER store), so the ceiling is generous and only
+/// stops a corrupt count from hanging the key derivation.
+const int _maxIterations = 1 << 20;
 
 /// Represents a secret value entry in a BKS keystore.
 /// This stores arbitrary pre-protected data.
@@ -260,6 +290,12 @@ class BksKeyStore extends AbstractKeystore {
     // Read iteration count
     final iterationCount = view.getUint32(pos);
     pos += 4;
+    // A corrupt count would otherwise keep the HMAC key derivation running
+    // for hours (see _maxIterations).
+    if (iterationCount < 1 || iterationCount > _maxIterations) {
+      throw BadKeystoreFormatException(
+          'Key store corrupted: iteration count $iterationCount');
+    }
 
     const storeType = 'bks';
 
@@ -278,9 +314,12 @@ class BksKeyStore extends AbstractKeystore {
     if (storePassword != null) {
       const hmacDigestSize = 20; // SHA-1
 
-      // For V1, HMAC key is same size as digest
-      // For V2, HMAC key is 160 bits (20 bytes)
-      final hmacKeySize = version == 1 ? hmacDigestSize : 20;
+      // BcKeyStoreSpi derives the key with
+      // generateDerivedMacParameters(hMac.getMacSize()) for V1 and
+      // generateDerivedMacParameters(hMac.getMacSize() * 8) for V2. The
+      // argument is in bits, so the key is 2 bytes in V1 and 20 bytes in V2.
+      final hmacKeySize =
+          version == 1 ? hmacDigestSize ~/ 8 : hmacDigestSize;
 
       // Derive HMAC key using PKCS#12 KDF
       final hmacKey = _derivePkcs12Key(
@@ -343,7 +382,7 @@ class BksKeyStore extends AbstractKeystore {
       pos = newPos1;
 
       // Read timestamp
-      final timestamp = _readInt64BigEndian(view, pos);
+      final timestamp = keystoreReadInt64(view, pos);
       pos += 8;
 
       // Read certificate chain
@@ -705,12 +744,15 @@ class BksKeyStore extends AbstractKeystore {
             _writeData(b, c.$2);
           }
           _writeData(b, sealed);
+        } else if (entry is BksSealedKeyEntry && !entry.isDecrypted()) {
+          // Not opened on load (tryDecryptKeys: false or another key
+          // password): the sealed blob is still valid, write it back as is.
+          b.addByte(bksEntryTypeSealed);
+          _writeUtf(b, entry.alias);
+          b.add(_int64ToBytes(entry.timestamp));
+          _writeChain(b, entry.certChain);
+          _writeData(b, entry.encryptedData!);
         } else if (entry is BksSealedKeyEntry) {
-          if (!entry.isDecrypted()) {
-            throw KeystoreException(
-              "Cannot save undecrypted BksSealedKeyEntry ${entry.alias}",
-            );
-          }
           final nested = entry.nestedEntry;
           final inner = BytesBuilder();
           inner.addByte(nested.keyType);
@@ -724,12 +766,30 @@ class BksKeyStore extends AbstractKeystore {
           b.addByte(bksEntryTypeSealed);
           _writeUtf(b, entry.alias);
           b.add(_int64ToBytes(entry.timestamp));
-          b.add(_int32ToBytes(nested.certChain.length));
-          for (final c in nested.certChain) {
-            _writeUtf(b, c.certType);
-            _writeData(b, c.certData);
-          }
+          _writeChain(b, nested.certChain);
           _writeData(b, sealed);
+        } else if (entry is BksKeyEntry) {
+          // KEY: chain, then encodeKey() in the clear.
+          b.addByte(bksEntryTypeKey);
+          _writeUtf(b, entry.alias);
+          b.add(_int64ToBytes(entry.timestamp));
+          _writeChain(b, entry.certChain);
+          b.addByte(entry.keyType);
+          _writeUtf(b, entry.format);
+          _writeUtf(b, entry.algorithm);
+          _writeData(b, entry.encoded);
+        } else if (entry is BksSecretEntry) {
+          // SECRET: chain, then the opaque bytes.
+          b.addByte(bksEntryTypeSecret);
+          _writeUtf(b, entry.alias);
+          b.add(_int64ToBytes(entry.timestamp));
+          _writeChain(b, entry.certChain);
+          _writeData(b, entry.secretData);
+        } else {
+          // Dropping it would silently lose data on a load/save round trip.
+          throw KeystoreException(
+            'Cannot save ${entry.runtimeType} ${entry.alias} as BKS',
+          );
         }
       }
       b.addByte(0);
@@ -777,6 +837,14 @@ class BksKeyStore extends AbstractKeystore {
     b.add(data);
   }
 
+  void _writeChain(BytesBuilder b, List<BksTrustedCertEntry> chain) {
+    b.add(_int32ToBytes(chain.length));
+    for (final c in chain) {
+      _writeUtf(b, c.certType);
+      _writeData(b, c.certData);
+    }
+  }
+
   Uint8List _seal(Uint8List data, String password) {
     final salt = _pkiCrypto.randomBytes(20);
 
@@ -793,25 +861,15 @@ class BksKeyStore extends AbstractKeystore {
 
     final ciphertext = paddedCipher.process(data);
 
+    // Same layout as BcKeyStoreSpi: the salt goes with its length, otherwise
+    // Bouncy Castle (and Java's KeyStore "BKS") cannot open the key.
     final res = BytesBuilder();
+    res.add(_int32ToBytes(salt.length));
     res.add(salt);
     res.add(_int32ToBytes(iterationCount));
     res.add(ciphertext);
     return res.toBytes();
   }
-}
-
-int _readInt64BigEndian(ByteData view, int offset) {
-  final hi = view.getUint32(offset, Endian.big);
-  final lo = view.getUint32(offset + 4, Endian.big);
-  if ((hi & 0x80000000) == 0) {
-    return (hi * 0x100000000) + lo;
-  }
-
-  final invHi = (~hi) & 0xFFFFFFFF;
-  final invLo = (~lo) & 0xFFFFFFFF;
-  final magnitude = (invHi * 0x100000000) + invLo + 1;
-  return -magnitude;
 }
 
 Uint8List _int64ToBytesBigEndian(int value) {

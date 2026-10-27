@@ -7,6 +7,7 @@ import '../crypto/pdf_crypto.dart';
 
 import 'package:pdf_plus/src/crypto/rsa_keys.dart';
 import 'package:pdf_plus/src/pdf/io/pdf_http_fetcher_base.dart';
+import 'package:pdf_plus/src/pki/x509_certificate.dart';
 
 import '../parsing/pdf_document_parser.dart';
 import '../parsing/pdf_document_info.dart';
@@ -1377,6 +1378,15 @@ void _mergeCertificateInfos(
   }
 }
 
+/// Builds the signer's chain and decides whether it reaches a trusted root.
+///
+/// Trust requires a path where every link is a verified signature: each
+/// certificate is signed by the next one's key, up to a certificate that is
+/// one of [roots] (same bytes, or same subject and same public key). Names only
+/// select candidate issuers. A matching name, a self-signed certificate that is
+/// not a root, or an issuer whose signature does not verify never makes the
+/// chain trusted — the previous builder accepted all three, so a certificate
+/// forged with the name of an ICP-Brasil CA was reported as trusted.
 Future<_ChainResult> _buildCertificateChainFromCms({
   required Uint8List cmsBytes,
   required List<Uint8List> roots,
@@ -1393,73 +1403,29 @@ Future<_ChainResult> _buildCertificateChainFromCms({
     return _ChainResult(trusted: false, chain: const <Uint8List>[]);
   }
 
-  final pool = <Uint8List>[...parsed.certs, ...roots];
+  final pool = <Uint8List>[...parsed.certs];
   final chain = <Uint8List>[signerCert];
 
   Uint8List current = signerCert;
   for (int depth = 0; depth < 10; depth++) {
+    if (_isTrustedAnchor(current, roots)) {
+      return _ChainResult(trusted: true, chain: chain);
+    }
     final tbs = _readTbsCertificate(current);
     if (tbs == null) break;
+    // Self-signed and not among the roots: the path ends here, untrusted.
+    if (_nameEquals(tbs.issuer, tbs.subject)) break;
 
-    if (_nameEquals(tbs.issuer, tbs.subject)) {
-      if (_isTrustedAnchor(current, roots)) {
-        return _ChainResult(trusted: true, chain: chain);
-      }
-      final selfKey = _rsaPublicKeyFromCert(current);
-      if (selfKey != null && _verifyX509Signature(current, selfKey)) {
-        if (_isTrustedAnchor(current, roots)) {
-          return _ChainResult(trusted: true, chain: chain);
-        }
-      }
-    }
-
-    for (final root in roots) {
-      final rootTbs = _readTbsCertificate(root);
-      if (rootTbs == null) continue;
-      if (!_nameEquals(tbs.issuer, rootTbs.subject)) continue;
-      final rootKey = _rsaPublicKeyFromCert(root);
-      if (rootKey == null) {
-        if (!_containsCert(chain, root)) {
-          chain.add(root);
-        }
-        return _ChainResult(trusted: true, chain: chain);
-      }
-      if (_verifyX509Signature(current, rootKey)) {
-        if (!_containsCert(chain, root)) {
-          chain.add(root);
-        }
-        return _ChainResult(trusted: true, chain: chain);
-      }
-    }
-
-    final authorityKeyId = _readAuthorityKeyIdentifier(current);
-    final issuer = _findIssuerInPool(
-      pool,
+    final issuer = await _findVerifiedIssuer(
+      current,
       tbs.issuer,
-      exclude: current,
-      authorityKeyId: authorityKeyId,
+      <Uint8List>[...roots, ...pool],
+      chain,
     );
     if (issuer != null) {
-      final issuerKey = _rsaPublicKeyFromCert(issuer);
-      if (issuerKey == null && _isTrustedAnchor(issuer, roots)) {
-        if (!_containsCert(chain, issuer)) {
-          chain.add(issuer);
-        }
-        return _ChainResult(trusted: true, chain: chain);
-      }
-      if (issuerKey != null && _verifyX509Signature(current, issuerKey)) {
-        if (!_containsCert(chain, issuer)) {
-          chain.add(issuer);
-        }
-        current = issuer;
-        continue;
-      }
-      if (_isTrustedAnchor(issuer, roots)) {
-        if (!_containsCert(chain, issuer)) {
-          chain.add(issuer);
-        }
-        return _ChainResult(trusted: true, chain: chain);
-      }
+      chain.add(issuer);
+      current = issuer;
+      continue;
     }
 
     if (fetcher != null) {
@@ -1482,65 +1448,84 @@ Future<_ChainResult> _buildCertificateChainFromCms({
     break;
   }
 
-  final signerTbs = _readTbsCertificate(signerCert);
-  final issuerDer = signerTbs?.issuer;
-  String? issuerText;
-  if (issuerDer != null) {
-    issuerText = _formatX509NameFromDer(issuerDer) ??
-        _normalizeX509NameFromDer(issuerDer);
+  return _ChainResult(trusted: false, chain: chain);
+}
+
+/// The first of [candidates] named [issuerName] whose key verifies the
+/// signature of [cert]; certificates already in [chain] are skipped.
+Future<Uint8List?> _findVerifiedIssuer(
+  Uint8List cert,
+  Uint8List issuerName,
+  List<Uint8List> candidates,
+  List<Uint8List> chain,
+) async {
+  for (final candidate in candidates) {
+    if (_containsCert(chain, candidate)) continue;
+    final candidateTbs = _readTbsCertificate(candidate);
+    if (candidateTbs == null) continue;
+    if (!_nameEquals(candidateTbs.subject, issuerName)) continue;
+    // An end-entity certificate (an e-CPF, say) has a valid signature from
+    // its CA, but must not vouch for anyone else.
+    if (!_canIssueCertificates(candidate)) continue;
+    if (await _verifyCertificateIssuedBy(cert, candidate)) return candidate;
   }
-  final issuerNorm = _normalizeNameText(issuerText);
-  if (issuerNorm != null) {
-    for (final root in roots) {
-      final rootTbs = _readTbsCertificate(root);
-      final rootDer = rootTbs?.subject;
-      if (rootDer == null) continue;
-      final rootText =
-          _formatX509NameFromDer(rootDer) ?? _normalizeX509NameFromDer(rootDer);
-      final rootNorm = _normalizeNameText(rootText);
-      if (rootNorm != null &&
-          (rootNorm == issuerNorm ||
-              rootNorm.contains(issuerNorm) ||
-              issuerNorm.contains(rootNorm))) {
-        if (!_containsCert(chain, root)) {
-          chain.add(root);
+  return null;
+}
+
+/// Whether [certDer] may sign other certificates (RFC 5280 §4.2.1.9 and
+/// §4.2.1.3): basicConstraints with cA = TRUE and, when keyUsage is present,
+/// keyCertSign.
+bool _canIssueCertificates(Uint8List certDer) {
+  try {
+    bool isCa = false;
+    for (final extension in X509Certificate.fromDer(certDer).extensions) {
+      if (extension.oid == '2.5.29.19') {
+        final constraints = ASN1Parser(extension.value).nextObject();
+        if (constraints is ASN1Sequence &&
+            constraints.elements.isNotEmpty &&
+            constraints.elements.first is ASN1Boolean) {
+          // Any non-zero octet: some issuers write BER TRUE (0x01), not 0xFF.
+          isCa = constraints.elements.first.encodedBytes.last != 0;
         }
-        return _ChainResult(trusted: true, chain: chain);
+      } else if (extension.oid == '2.5.29.15') {
+        final usage = ASN1Parser(extension.value).nextObject();
+        if (usage is! ASN1BitString) return false;
+        final bits = usage.stringValue;
+        // keyCertSign is bit 5, 0x04 in the first octet.
+        if (bits.isEmpty || bits.first & 0x04 == 0) return false;
       }
     }
+    return isCa;
+  } catch (_) {
+    return false;
   }
-
-  final trusted = chain.any((cert) => _isTrustedAnchor(cert, roots)) ||
-      _chainHasSelfSigned(chain);
-  return _ChainResult(trusted: trusted, chain: chain);
 }
 
-String? _normalizeNameText(String? name) {
-  if (name == null) return null;
-  final upper = name.toUpperCase();
-  final buffer = StringBuffer();
-  for (int i = 0; i < upper.length; i++) {
-    final c = upper.codeUnitAt(i);
-    if (c >= 0x30 && c <= 0x39) {
-      buffer.writeCharCode(c);
-      continue;
-    }
-    if (c >= 0x41 && c <= 0x5A) {
-      buffer.writeCharCode(c);
-      continue;
-    }
+/// Whether [certDer] is signed by the key of [issuerDer] (RSA, ECDSA on a
+/// named curve or Ed25519).
+Future<bool> _verifyCertificateIssuedBy(
+    Uint8List certDer, Uint8List issuerDer) async {
+  final spki = _spkiInfoFromCert(issuerDer);
+  if (spki == null) return false;
+  try {
+    final certSeqObj = ASN1Parser(certDer).nextObject();
+    final certSeq = certSeqObj is ASN1Sequence ? certSeqObj : null;
+    if (certSeq == null || certSeq.elements.length < 3) return false;
+    final tbs = _asAsn1Sequence(certSeq.elements[0]);
+    if (tbs == null) return false;
+    final signatureAlgorithmOid =
+        _readCertSignatureAlgorithmOid(certSeq.elements[1]);
+    final signature = certSeq.elements[2] as ASN1BitString;
+    return await _verifyWithSignerAlgorithm(
+      spki: spki,
+      data: tbs.encodedBytes,
+      signature: Uint8List.fromList(signature.stringValue),
+      digestOid: _signatureOidToDigestOid(signatureAlgorithmOid),
+      signatureAlgorithmOid: signatureAlgorithmOid,
+    );
+  } catch (_) {
+    return false;
   }
-  final normalized = buffer.toString();
-  return normalized.isEmpty ? null : normalized;
-}
-
-bool _chainHasSelfSigned(List<Uint8List> chain) {
-  for (final cert in chain) {
-    final tbs = _readTbsCertificate(cert);
-    if (tbs == null) continue;
-    if (_nameEquals(tbs.subject, tbs.issuer)) return true;
-  }
-  return false;
 }
 
 bool _containsCert(List<Uint8List> list, Uint8List cert) {
@@ -1550,59 +1535,25 @@ bool _containsCert(List<Uint8List> list, Uint8List cert) {
   return false;
 }
 
+/// Whether [cert] is one of [roots]: the same bytes, or the same subject and
+/// the same public key (a root re-issued with new validity dates). A matching
+/// name alone is not enough — anyone can put that name in a certificate.
 bool _isTrustedAnchor(Uint8List cert, List<Uint8List> roots) {
   if (_containsCert(roots, cert)) return true;
   final tbs = _readTbsCertificate(cert);
-  final certSubjectText = _parseCertificateInfo(cert)?.subject;
+  final spki = _spkiInfoFromCert(cert);
+  if (tbs == null || spki == null) return false;
   for (final root in roots) {
     final rootTbs = _readTbsCertificate(root);
-    if (tbs != null && rootTbs != null) {
-      if (_nameEquals(tbs.subject, rootTbs.subject)) return true;
+    if (rootTbs == null || !_nameEquals(tbs.subject, rootTbs.subject)) {
+      continue;
     }
-    if (certSubjectText != null) {
-      final rootSubjectText = _parseCertificateInfo(root)?.subject;
-      if (rootSubjectText != null && rootSubjectText == certSubjectText) {
-        return true;
-      }
+    final rootSpki = _spkiInfoFromCert(root);
+    if (rootSpki != null && _listEquals(rootSpki.spkiDer, spki.spkiDer)) {
+      return true;
     }
   }
   return false;
-}
-
-Uint8List? _findIssuerInPool(
-  List<Uint8List> pool,
-  Uint8List issuerName, {
-  Uint8List? exclude,
-  Uint8List? authorityKeyId,
-}) {
-  final issuerNameText = _formatX509NameFromDer(issuerName);
-  final issuerNameNormalized = _normalizeX509NameFromDer(issuerName);
-  for (final cert in pool) {
-    if (exclude != null && _listEquals(cert, exclude)) continue;
-    final tbs = _readTbsCertificate(cert);
-    if (tbs != null) {
-      if (_nameEquals(tbs.subject, issuerName)) return cert;
-      if (issuerNameNormalized != null) {
-        final subjectNormalized = _normalizeX509NameFromDer(tbs.subject);
-        if (subjectNormalized != null &&
-            subjectNormalized == issuerNameNormalized) {
-          return cert;
-        }
-      }
-      if (authorityKeyId != null) {
-        final subjectKeyId = _readSubjectKeyIdentifier(cert);
-        if (subjectKeyId != null && _listEquals(subjectKeyId, authorityKeyId)) {
-          return cert;
-        }
-      }
-      continue;
-    }
-    if (issuerNameText != null) {
-      final info = _parseCertificateInfo(cert);
-      if (info?.subject == issuerNameText) return cert;
-    }
-  }
-  return null;
 }
 
 bool _nameEquals(Uint8List a, Uint8List b) {
@@ -1724,33 +1675,6 @@ _TbsInfo? _readTbsCertificate(Uint8List certDer) {
     );
   } catch (_) {
     return null;
-  }
-}
-
-bool _verifyX509Signature(Uint8List certDer, RSAPublicKey key) {
-  try {
-    final certSeqObj = ASN1Parser(certDer).nextObject();
-    final certSeq = certSeqObj is ASN1Sequence ? certSeqObj : null;
-    if (certSeq == null || certSeq.elements.length < 3) return false;
-    final tbs = _asAsn1Sequence(certSeq.elements[0]);
-    if (tbs == null) return false;
-    final sigAlgOid = _readCertSignatureAlgorithmOid(certSeq.elements[1]);
-    final digestOid = _signatureOidToDigestOid(sigAlgOid);
-    final sigBitString = certSeq.elements[2] as ASN1BitString;
-
-    var sigBytes = sigBitString.valueBytes();
-    if (sigBytes.isNotEmpty && sigBytes.first == 0x00) {
-      sigBytes = sigBytes.sublist(1);
-    }
-
-    return _signatureAdapter.rsaPkcs1v15VerifyData(
-      publicKey: key,
-      data: tbs.encodedBytes,
-      signature: sigBytes,
-      digestOid: digestOid,
-    );
-  } catch (_) {
-    return false;
   }
 }
 
@@ -2751,42 +2675,6 @@ Map<String, List<String>> _extractNameAttributes(ASN1Sequence nameSeq) {
     }
   }
   return map;
-}
-
-Uint8List? _readSubjectKeyIdentifier(Uint8List certDer) {
-  const oidSki = '2.5.29.14';
-  final extBytes = _findExtensionValue(certDer, oidSki);
-  if (extBytes == null || extBytes.isEmpty) return null;
-  try {
-    final obj = ASN1Parser(extBytes).nextObject();
-    if (obj is ASN1OctetString) return obj.valueBytes();
-    final bytes = _readTaggedValueBytes(obj);
-    if (bytes != null && bytes.isNotEmpty) return bytes;
-  } catch (_) {}
-  return null;
-}
-
-Uint8List? _readAuthorityKeyIdentifier(Uint8List certDer) {
-  const oidAki = '2.5.29.35';
-  final extBytes = _findExtensionValue(certDer, oidAki);
-  if (extBytes == null || extBytes.isEmpty) return null;
-  try {
-    final obj = ASN1Parser(extBytes).nextObject();
-    final seq = obj is ASN1Sequence ? obj : _asAsn1Sequence(obj);
-    if (seq == null) return null;
-    for (final el in seq.elements) {
-      final tag = _readTagNumber(el);
-      if (tag == 0) {
-        final unwrapped = _unwrapTagged(el);
-        if (unwrapped is ASN1OctetString) return unwrapped.valueBytes();
-        if (unwrapped is ASN1Object) {
-          final bytes = _readTaggedValueBytes(unwrapped);
-          if (bytes != null && bytes.isNotEmpty) return bytes;
-        }
-      }
-    }
-  } catch (_) {}
-  return null;
 }
 
 String _asn1ValueToString(ASN1Object obj) {

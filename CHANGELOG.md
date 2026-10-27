@@ -1,3 +1,101 @@
+## 4.0.2
+
+### Signature validation: chain of trust (security)
+
+`chainTrusted` could be `true` for certificates that do not chain to any
+trusted root. The chain builder accepted, without any signature check:
+
+- an issuer whose name merely contained, or was contained in, a root's name
+  (`AC OAB` taken as the issuer of `AC OAB G4`);
+- any self-signed certificate in the chain, even one carried by the PDF and
+  absent from the roots;
+- an issuer found in the pool whose signature did not verify, when its name
+  matched a root, and a root with a non-RSA key when the names matched;
+- a trust anchor matched by subject name alone.
+
+A certificate forged with the name of an ICP-Brasil CA, or a self-made root
+embedded in the PDF, was therefore reported as trusted. The builder now
+requires a path where every link is a verified signature (RSA, ECDSA on named
+curves, Ed25519), every issuer is a CA (basicConstraints `cA`, and
+`keyCertSign` when keyUsage is present - otherwise an end-entity e-CPF could
+issue certificates for anyone), and the path ends in a certificate that is one
+of the roots by bytes, or by subject and public key. Names only pick
+candidates. Covered by `test/signing/cadeia_confianca_forjada_test.dart` (the
+three attacks pass on 4.0.1 and fail now) and by
+`test/signing/memo_507_26_raiz_v12_test.dart`, a real AC OAB G4 signature
+(Raiz Brasileira v12) validated against the BKS, the JKS and the
+`cadeia_icp_brasil` truststores, with a negative case without the v12
+hierarchy.
+
+- Test helper `pki_asset_loader.dart` stripped PEM whitespace with
+  `r'\\s+'`, which matches a backslash, so PEM `.crt` files were handed to
+  the validator as raw text instead of DER.
+- Test truststores refreshed from the ITI package (Raiz v12 hierarchy):
+  `cadeia_icp_brasil/`, `cadeiasicpbrasil.bks`, `keystore_ICP_Brasil.jks`.
+
+### Keystores (BKS) and 3DES
+
+All four checked against Bouncy Castle's `BcKeyStoreSpi` and `DESedeEngine`
+(`referencias/bc-java-main`), with the `v1BKS`/`v2BKS` samples from its
+`KeyStoreTest` as fixtures.
+
+- `DESedeEngine` decrypted with the wrong subkeys: they were always generated
+  for encryption, so every 3DES decryption returned garbage. Sealed BKS keys
+  and JCEKS private keys could not be opened. Encryption was already right.
+- `BksKeyStore.load` hung on any BKS holding a private key: the sealed blob
+  was read without its salt length (`int saltLength · salt · int iterations`),
+  so salt bytes became an iteration count in the billions. The layout now
+  follows BC, blobs written by earlier versions of this package are still
+  accepted, and iteration counts above `1 << 20` are rejected instead of
+  running the KDF for hours (BC writes 1024..2047).
+- `BksKeyStore.load` with a password rejected every BKS V1 file: the HMAC key
+  is 2 bytes in V1 (20 bits), not 20 bytes.
+- `BksKeyStore.save` wrote sealed keys without the salt length (Bouncy Castle
+  and Java could not open them), silently dropped plain key (type 2) and
+  secret (type 3) entries, and threw on sealed keys not decrypted at load.
+  It now writes every entry type, keeps unopened sealed keys as they are, and
+  throws on entry types it cannot write instead of losing them.
+- Covered by `test/pki/bks_amostras_bouncy_castle_test.dart` and
+  `test/crypto/desede_engine_test.dart` (OpenSSL reference vector).
+
+### Keystores (JKS and JCEKS)
+
+Checked against keystores written by Java's own `keytool` (Java 8 and 25),
+and in the other direction by having `keytool` open what this package writes.
+
+- Private key entries were read and written with the certificate chain before
+  the key; `JavaKeyStore` stores the key first. Any JKS holding a private key
+  was misparsed.
+- JKS key protection did not match `sun.security.provider.KeyProtector`: the
+  key must be wrapped in an EncryptedPrivateKeyInfo under
+  `1.3.6.1.4.1.42.2.17.1.1`, with the integrity digest in the clear. Decryption
+  told JKS from JCEKS by the first byte, which is `0x30` in both; it now goes by
+  the OID. Keys written the old way are still recovered.
+- JCEKS keys never decrypted: besides the 3DES bug, the EncryptedPrivateKeyInfo
+  reader skipped past the outer sequence.
+- `load` now opens JCEKS (`0xCECECECE`) and version 1 stores, uses Java's
+  modified UTF-8 for aliases, and no longer skips the integrity check when the
+  20 digest bytes are missing.
+- `save` keeps private keys that were never decrypted exactly as loaded, so a
+  load/save round trip reproduces the file byte for byte (also checked on the
+  ITI ICP-Brasil keystore). `JksKeyStore.empty()` starts a store from scratch.
+- Covered by `test/pki/jks_keytool_fixtures_test.dart`.
+
+### Browser (dart2js)
+
+- `DESEngine` permuted bit by bit on 64-bit integers, so DES and 3DES gave
+  wrong output when compiled to JavaScript: BKS sealed keys and JCEKS keys
+  failed with a padding error in the browser. It is now a port of Bouncy
+  Castle's table-driven `DESEngine`, kept within 32 bits; on the VM it is about
+  15 times faster than before (1 MB: ~27 ms against ~400 ms).
+- Keystore entry dates are 64-bit. In the browser `>> 32` truncated them on
+  save (a 2026 date came back as 1998637568). `keystore_int64.dart` picks a
+  native `ByteData.getInt64`/`setInt64` implementation on the VM and a
+  two-halves one on the web, by conditional export.
+- `test/pki/keystore_navegador_test.dart` runs JKS, JCEKS and BKS with the
+  keytool and Bouncy Castle fixtures embedded, no `dart:io`:
+  `dart test -p vm,chrome test/pki/keystore_navegador_test.dart`.
+
 ## 4.0.1
 
 ### Signature validation
