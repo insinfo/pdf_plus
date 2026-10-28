@@ -260,10 +260,13 @@ class SignatureAdapter {
         return 32;
       case 'P-384':
       case 'SECP384R1':
+      case 'BRAINPOOLP384R1':
         return 48;
+      case 'BRAINPOOLP512R1':
+        // 512 bits = 64 bytes; os 66 são da P-521, que tem 521 bits.
+        return 64;
       case 'P-521':
       case 'SECP521R1':
-      case 'BRAINPOOLP512R1':
         return 66;
       default:
         throw UnsupportedError('Curva ECDSA não suportada: $namedCurve');

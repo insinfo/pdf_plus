@@ -5,6 +5,10 @@ import 'dart:typed_data';
 
 import 'platform_crypto.dart';
 import 'platform_crypto_common.dart';
+import 'pure_ecdsa.dart';
+
+/// Curvas que o WebCrypto implementa.
+const Set<String> _curvasWebCrypto = <String>{'P-256', 'P-384', 'P-521'};
 
 class WebPlatformCrypto extends PlatformCrypto {
   const WebPlatformCrypto();
@@ -582,6 +586,17 @@ class WebPlatformCrypto extends PlatformCrypto {
     required Uint8List data,
     required Uint8List signature,
   }) async {
+    // O WebCrypto só conhece P-256, P-384 e P-521; as Brainpool (RFC 5639)
+    // vão para a implementação em Dart puro, como na VM.
+    if (!_curvasWebCrypto.contains(namedCurve.toUpperCase())) {
+      return PureEcDsa.verify(
+        namedCurve: namedCurve,
+        hashAlgorithm: hashAlgorithm,
+        spkiPublicKey: spkiPublicKey,
+        data: data,
+        signature: signature,
+      );
+    }
     final subtle = html.window.crypto?.subtle;
     if (subtle == null) {
       throw UnsupportedError('ECDSA indisponivel sem SubtleCrypto');

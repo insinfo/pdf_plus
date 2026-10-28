@@ -1,3 +1,21 @@
+## 4.0.3
+
+### ECDSA: Brainpool curves were verified on the wrong curve
+
+`PureEcDsa` mapped brainpoolP256r1, brainpoolP384r1 and brainpoolP512r1 to the
+NIST curves of the same size (P-256, P-384, P-521), so every Brainpool
+signature was checked against the wrong curve and rejected. The signature
+validator also mapped the brainpoolP384r1 OID (`1.3.36.3.3.2.8.1.1.11`) to
+`P-384`, and `SignatureAdapter.curveCoordinateLength` gave brainpoolP512r1 the
+66-byte coordinate of P-521 (it is 64) and had no brainpoolP384r1.
+
+- The three curves now use their RFC 5639 parameters.
+- In the browser, WebCrypto has no Brainpool curve: verification of curves
+  other than P-256/P-384/P-521 falls back to `PureEcDsa`, as on the VM.
+- Covered by `test/crypto/brainpool_ecdsa_test.dart`, with keys and
+  signatures generated and checked with OpenSSL (6 of its 9 cases fail on
+  4.0.2).
+
 ## 4.0.2
 
 ### Signature validation: chain of trust (security)

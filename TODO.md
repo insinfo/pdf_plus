@@ -28,10 +28,3 @@ correspondente.
 Não vale a pena: o defeito é dos certificados, e documento assinado pelo MRE é
 raríssimo para quem usa esta biblioteca. Testado em 28/10/2026 com os
 certificados do pacote de cadeias ICP-Brasil do ITI.
-
-## Conferir: OID da brainpoolP384r1 mapeado para P-384
-
-Em `_curveNameFromOid` (`lib/src/pdf/validation/pdf_signature_validator.dart`),
-o OID `1.3.36.3.3.2.8.1.1.11` é a **brainpoolP384r1**, mas devolve `'P-384'`
-(secp384r1), que é outra curva. Uma assinatura brainpoolP384r1 seria conferida
-com a curva errada e reprovada. Encontrado em 28/10/2026, sem teste ainda.

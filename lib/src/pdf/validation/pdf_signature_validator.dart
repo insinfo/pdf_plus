@@ -3619,7 +3619,7 @@ String? _curveNameFromOid(String? curveOid) {
     case '1.3.36.3.3.2.8.1.1.7':
       return 'BRAINPOOLP256R1';
     case '1.3.36.3.3.2.8.1.1.11':
-      return 'P-384';
+      return 'BRAINPOOLP384R1';
     case '1.3.36.3.3.2.8.1.1.13':
       return 'BRAINPOOLP512R1';
     default:
